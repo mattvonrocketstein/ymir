@@ -22,7 +22,7 @@ logging.captureWarnings(True)
 ################################################################################
 
 DEBUG = False
-SPORT = 9001 # supervisor WUI port
+DEFAULT_SUPERVISOR_PORT = 9001 # supervisor WUI port
 PROJECT_ROOT = os.path.dirname(__file__)
 STATUS_DEAD = ['terminated', 'shutting-down']
 
@@ -168,8 +168,10 @@ class AbstractStack(object):
             result = dict(
                 instance=inst,
                 supervisor='http://{0}:{1}@{2}:{3}/'.format(
-                    self.supervisor_user, self.supervisor_pass,
-                    inst.ip_address, SPORT),
+                    self.SUPERVISOR_USER,
+                    self.SUPERVISOR_PASS,
+                    inst.ip_address,
+                    DEFAULT_SUPERVISOR_PORT),
                 tags=inst.tags,
                 status=inst.update(),
                 ip=inst.ip_address)
