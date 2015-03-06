@@ -1,7 +1,9 @@
 """ ymir:
 
     this is a module containing utility functions/classes for working
-    with EC2 leveraging a combination of fabric, boto, & puppet.
+    with EC2. A common interface for typical devops commands is created
+    (create, setup, provision, etc) by leveraging a combination of fabric,
+    boto, & puppet.
 
     TODO: support elastic IP's
 """
@@ -9,7 +11,7 @@ import os, time
 import socket
 import shutil, webbrowser
 import fabric
-import boto.ec2
+
 import requests
 
 from fabric.contrib.files import exists
@@ -18,138 +20,34 @@ from fabric.api import lcd, local, settings, run, put, cd
 import logging
 logging.captureWarnings(True)
 
-# begin data
-################################################################################
-
-DEBUG = False
-DEFAULT_SUPERVISOR_PORT = 9001 # supervisor WUI port
-PROJECT_ROOT = os.path.dirname(__file__)
-STATUS_DEAD = ['terminated', 'shutting-down']
-
-# begin ec2 utility functions
-################################################################################
-
-class Util(object):
-    """ this class basically masquerades as a module,
-        every function could be a staticmethod
-    """
-    def _run_puppet(self, _fname):
-        """ must be run within a fabric ssh context """
-        run("sudo puppet apply {0} --modulepath={1}/modules {2}".format(
-            '--debug' if DEBUG else '',
-            os.path.dirname(_fname),
-            _fname))
-
-    def shell(self, conn=None, **namespace):
-        conn = conn or util.get_conn()
-        try:
-            from smashlib import embed; embed(user_ns=namespace)
-        except ImportError:
-            print 'you need smashlib or ipython installed to run the shell'
-
-    def connect(self, ip, username='ubuntu', pem=None):
-        cmd = "ssh -l {0} {1}".format(username, ip)
-        if pem is not None:
-            cmd += ' -i {0}'.format(pem)
-        with settings(warn_only=True):
-            local(cmd)
-
-    def ssh_ctx(self, ip, user='ubuntu', pem=None):
-        """ context manager for use with fabric """
-        ctx = dict(user=user, host_string=ip)
-        if pem is not None:
-            ctx.update(key_filename=pem)
-        return settings(**ctx)
-
-    def get_instance_by_id(self, id, conn):
-        """ returns the id for the instance"""
-        tmp = conn.get_only_instances([id])
-        if not tmp:
-            return
-        else:
-            # WARNING: do NOT use STATUS_DEAD here,
-            #          block_while_terminating depends
-            #          on this working as written
-            if tmp[0].update() not in ['terminated']:
-                return tmp
-
-    def get_conn(self, key_name=None, region='us-east-1'):
-        #print 'creating ec2 connection'
-        conn = boto.ec2.connect_to_region("us-east-1")
-        if key_name is not None:
-            keypair = conn.get_key_pair(key_name)
-            if keypair is None:
-                print "WARNING: could not retrieve default keypair '{0}'!!".format(key_name)
-        return conn
-
-    def show_instances(self, conn):
-        for i, tags in util.get_tags(None, conn).items():
-            print i
-            for k in tags:
-                print '  ', k, tags[k]
-
-    def get_instance_by_name(self, name, conn):
-        """ returns the id for the instance"""
-        for i, tags in util.get_tags(None, conn).items():
-            if tags.get('Name') == name and tags['status'] not in STATUS_DEAD:
-                return conn.get_only_instances([i.id])[0]
-
-    def get_tags(self, instance, conn):
-        """ returns { instance_id: instance_tags }"""
-        assert conn is not None
-        if instance is None:
-            reservations = conn.get_only_instances()
-        else:
-            reservations = conn.get_only_instances([instance.id])
-        out = {}
-        for inst in reservations:
-            tags = inst.tags.copy()
-            tags.update(status=inst.update())
-            out[inst] = tags
-        return out
-
-    def _block_while_pending(self, instance):
-        # Check up on its status every so often
-        status = instance.update()
-        while status == 'pending':
-            print '  polling reservation [status is "pending"]'
-            time.sleep(4)
-            status = instance.update()
-
-    def _block_while_terminating(self, instance, conn):
-        print '  terminating instance:', instance
-        assert util.get_instance_by_id(instance.id, conn) is not None
-        conn.terminate_instances([instance.id])
-        time.sleep(2)
-        while util.get_instance_by_id(instance.id, conn):
-            print '  polling for terminate completion'
-            time.sleep(3)
-        print '  terminated successfully'
-
-util = Util()
-
+from ymir import util
+from ymir.data import DEFAULT_SUPERVISOR_PORT
 
 class AbstractStack(object):
 
-    WEBPAGES = ['supervisor']
-    INSTANCE_TYPE = 't1.micro'
-    STACK_ROOT = None
-    PEM = None
-    USERNAME = None
+    SUPERVISOR_USER = ''
+    SUPERVISOR_PASS = ''
+    INSTANCE_TYPE   = 't1.micro'
+    SERVICE_ROOT    = None
+    PEM             = None
+    USERNAME        = None
     SECURITY_GROUPS = None
+    WEBPAGES        = ['supervisor']
 
     def __init__(self, conn=None):
         self.conn = conn or util.get_conn()
-        assert self.STACK_ROOT is not None, 'subclassers must override STACK_ROOT'
-        assert self.PEM is not None, 'subclassers must override PEM'
-        assert self.USERNAME is not None, 'subclassers must override USERNAME'
-        assert self.SECURITY_GROUPS is not None, 'subclassers must override SECURITY_GROUPS'
+        required_class_vars = 'PEM USERNAME SECURITY_GROUPS SERVICE_ROOT'
+        required_class_vars =required_class_vars.split()
+        for var in required_class_vars:
+            err = 'subclassers must override '+var
+            assert getattr(self,var) is not None, err
 
     def _bootstrap_dev(self):
         run('sudo apt-get install -y git build-essential')
         run('sudo apt-get install -y puppet ruby-dev')
 
     def report(self, msg, *args, **kargs):
+        """ 'print' shortcut that includes some color and formatting """
         if 'section' in kargs:
             print '-'*80
         template = '\x1b[31;01m{0}-Stack:\x1b[39;49;00m {1} {2}'
@@ -198,7 +96,7 @@ class AbstractStack(object):
     def setup(self):
         self.report('setting up')
         cm_data = self.status()
-        if cm_data['status']=='running':
+        if cm_data['status'] == 'running':
             self.setup_ip(cm_data['ip'])
         else:
             self.report('no instance is running for this stack, create it first')
@@ -272,12 +170,12 @@ class AbstractStack(object):
 
     def provision_ip(self, ip):
         self.report('installing build-essentials & puppet', section=True)
-        tdir = os.path.join(self.STACK_ROOT, 'puppet', '.tmp')
+        tdir = os.path.join(self.SERVICE_ROOT, 'puppet', '.tmp')
         if os.path.exists(tdir):
             #'<root>/puppet/.tmp should be nixed'
             shutil.rmtree(tdir)
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
-            with lcd(self.STACK_ROOT):
+            with lcd(self.SERVICE_ROOT):
                 put('puppet', '/home/ubuntu')
                 self.report("custom config for this stack: ",
                             self.PUPPET, section=True)
@@ -290,20 +188,20 @@ class AbstractStack(object):
                     result = restart()
                     count = 0
                     while result!=0 and count<retries:
-                        msg = 'failed to restart supervisor.  trying again [{0}]'
-                        msg = msg.format(count)
+                        msg = ('failed to restart supervisor.'
+                               '  trying again [{0}]').format(count)
                         print msg
                         result = restart()
                         count += 1
 
     def setup_ip(self, ip):
         self.report('installing build-essentials & puppet', section=True)
-        tdir = os.path.join(self.STACK_ROOT, 'puppet', '.tmp')
+        tdir = os.path.join(self.SERVICE_ROOT, 'puppet', '.tmp')
         if os.path.exists(tdir):
             #'<root>/puppet/.tmp should be nixed'
             shutil.rmtree(tdir)
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
-            with lcd(self.STACK_ROOT):
+            with lcd(self.SERVICE_ROOT):
                 run('sudo apt-get update')
                 self.report('  flushing remote puppet codes and refreshing')
                 run("rm -rf puppet")
@@ -318,7 +216,8 @@ class AbstractStack(object):
         if data['status']=='running':
             return self.check_ip(data['ip'], data)
         else:
-            self.report('no instance is running for this stack, create it first')
+            self.report('no instance is running for this'
+                        ' stack, create it first')
 
     def check_ip(self, ip, data):
         for x in self.WEBPAGES:
@@ -341,3 +240,27 @@ class AbstractStack(object):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         result = sock.connect_ex((host, port))
         return result == 0
+
+class EBStack(AbstractStack):
+    """ This is a wrapper so that elasticbeanstalk-managed stuff
+        can look like the usual service definition.  The 'eb'
+        commandline tool mostly just does it's own thing, but
+        we want to keep the familiar create/setup/provision
+        interface, regardless.  This implementation is only
+        half complete because I haven't worked out how to do
+        fabric-based authentication for the eb-instance yet.
+    """
+    def setup(self):
+        with lcd(self.SERVICE_ROOT):
+            local('eb deploy')
+
+    def provision(self):
+        self.report("provisioning is not supported for elastic beanstalk yet")
+
+    def check(self):
+        with lcd(self.SERVICE_ROOT):
+            local('eb status')
+
+    def ssh(self):
+        with lcd(self.SERVICE_ROOT):
+            local('eb ssh')
