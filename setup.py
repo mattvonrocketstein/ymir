@@ -28,9 +28,8 @@ setup(
     download_url = base_url+'/tarball/master',
     packages     = ['ymir'],
     keywords     = ['ymir'],
-    #entry_points = {
-    #    'console_scripts': \
-    #    ['pkg_script = ymir.bin.module:fxn', ] },
-    install_requires = [
-        'boto', 'fabric'],
+    entry_points = {
+        'console_scripts': \
+        ['ymir = ymir.bin._ymir:entry', ] },
+    install_requires = [],
     )

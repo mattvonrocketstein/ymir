@@ -5,7 +5,7 @@ import boto.ec2
 from fabric.api import local, settings, run
 from ymir.data import STATUS_DEAD, DEBUG
 
-def _run_puppet(self, _fname):
+def _run_puppet(_fname):
     """ must be run within a fabric ssh context """
     run("sudo puppet apply {0} --modulepath={1}/modules {2}".format(
         '--debug' if DEBUG else '',

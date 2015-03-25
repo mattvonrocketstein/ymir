@@ -10,11 +10,10 @@
 #
 #   * fab pypi_repackage: update this package on pypi
 #
-import os, re, sys
+import os, sys
 
-from fabric.api import env, run
 from fabric.colors import red
-from fabric.api import lcd, local, quiet, settings
+from fabric.api import lcd, local, settings
 from fabric.contrib.console import confirm
 from fabric.colors import red
 
