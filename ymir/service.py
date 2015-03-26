@@ -67,6 +67,7 @@ class AbstractService(object):
         return result
 
     def _status(self):
+        """ retrieves service status information """
         inst = util.get_instance_by_name(self.NAME, self.conn)
         if inst:
             result = dict(
@@ -129,7 +130,7 @@ class AbstractService(object):
     def show(self):
         """ open health-check webpages for this service in a browser """
         self.report('showing webpages')
-        data = self.status()
+        data = self._status()
         for page in self.WEBPAGES:
             webbrowser.open(data[page])
 
@@ -139,7 +140,9 @@ class AbstractService(object):
         conn = self.conn
         i = util.get_instance_by_name(self.NAME, conn)
         if i is not None:
-            self.report('  instance already exists: {0} ({1})'.format(i, i.update()))
+            msg = '  instance already exists: {0} ({1})'
+            msg = msg.format(i, i.update())
+            self.report(msg)
             if force:
                 self.report('  force is True, terminating it & rebuilding')
                 util._block_while_terminating(i, conn)
@@ -177,7 +180,10 @@ class AbstractService(object):
         self.provision()
 
     def ssh_ctx(self):
-        return util.ssh_ctx(self._status()['ip'], user=self.USERNAME, pem=self.PEM)
+        return util.ssh_ctx(
+            self._status()['ip'],
+            user=self.USERNAME,
+            pem=self.PEM)
 
     def provision_ip(self, ip):
         self.report('installing build-essentials & puppet', section=True)
@@ -198,7 +204,7 @@ class AbstractService(object):
                 with settings(warn_only=True):
                     result = restart()
                     count = 0
-                    while result!=0 and count<retries:
+                    while result != 0 and count < retries:
                         msg = ('failed to restart supervisor.'
                                '  trying again [{0}]').format(count)
                         print msg
@@ -220,6 +226,16 @@ class AbstractService(object):
                 self._bootstrap_dev()
                 self._bootstrap_puppet(force=True)
                 util._run_puppet(self.PUPPET_SETUP)
+
+    def reboot(self):
+        """ TODO: blocking until reboot is complete? """
+        self.report('rebooting service')
+        data = self._status()
+        if data['status'] == 'running':
+            with util.ssh_ctx(data['ip'], user=self.USERNAME, pem=self.PEM):
+                run('sudo reboot')
+        else:
+            self.report("service does not appear to be running")
 
     def check(self):
         """ reports health for this service """
