@@ -6,7 +6,6 @@ import shutil, webbrowser
 
 import boto
 import fabric
-import requests
 
 from fabric.contrib.files import exists
 from fabric.api import lcd, settings, run, put, cd
@@ -72,8 +71,6 @@ class AbstractService(Reporter):
         run('sudo apt-get install -y git build-essential')
         run('sudo apt-get install -y puppet ruby-dev')
 
-    def _report_name(self):
-        return self.__class__.__name__+'-Service'
 
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """

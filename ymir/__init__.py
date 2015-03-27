@@ -7,5 +7,7 @@
 
     TODO: support elastic IP's
 """
+from ymir import loom
 from .service import AbstractService
 from .beanstalk import ElasticBeanstalkService
+
