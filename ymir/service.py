@@ -44,12 +44,15 @@ class AbstractService(object):
         run('sudo apt-get install -y git build-essential')
         run('sudo apt-get install -y puppet ruby-dev')
 
+    def _report_name(self):
+        return self.__class__.__name__+'-Service'
+
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
         if 'section' in kargs:
             print '-'*80
-        template = '\x1b[31;01m{0}-Service:\x1b[39;49;00m {1} {2}'
-        name = self.__class__.__name__
+        template = '\x1b[31;01m{0}:\x1b[39;49;00m {1} {2}'
+        name = self._report_name()
         # if Service subclasses are embedded directly into fabfiles, there
         # is a need for a lot of private variables to control the namespace
         # fabric publishes as commands.
@@ -112,11 +115,13 @@ class AbstractService(object):
     def provision(self):
         """ provision this service """
         self.report('provisioning')
-        data = self.status()
+        data = self._status()
         if data['status']=='running':
             return self.provision_ip(data['ip'])
         else:
-            self.report('no instance is running for this Service, create it first')
+            self.report('no instance is running for this Service, '
+                        'is the service created?  use "fab status" '
+                        'to check again')
 
     def ssh(self):
         """ connect to this service with ssh """
