@@ -28,7 +28,7 @@ class InitCmd(Reporter):
             ymir = os.path.dirname(ymir_bin)
             example_fabfile = os.path.join(ymir, 'fabfile.py')
             assert os.path.exists(example_fabfile)
-            
+
 init_cmd = InitCmd()
 
 class Settings(BaseSettings):

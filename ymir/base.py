@@ -1,5 +1,6 @@
 """ ymir.base
 """
+
 class Reporter(object):
     def _report_name(self):
         return self.__class__.__name__
