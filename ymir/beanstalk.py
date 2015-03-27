@@ -6,7 +6,7 @@ import logging
 logging.captureWarnings(True)
 
 from boto.s3.connection import Location
-from .service import AbstractService
+from ymir.service import AbstractService
 
 class ElasticBeanstalkService(AbstractService):
     """ This is a wrapper so that elasticbeanstalk-managed stuff
@@ -36,16 +36,6 @@ class ElasticBeanstalkService(AbstractService):
             'http://{0}'.format(data['ip']),
             ]
 
-
-    def _setup_buckets(self):
-        import boto
-        conn = boto.connect_s3()
-        tmp = {}
-        for name in self.S3_BUCKETS:
-            self.report("setting up s3 bucket: {0}".format(name))
-            tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
-        return tmp
-
     def _report_name(self):
         return '{0} [{1}]'.format(
             super(ElasticBeanstalkService,self)._report_name(),
@@ -55,15 +45,15 @@ class ElasticBeanstalkService(AbstractService):
         return prefix('eb use {0}'.format(self.NAME))
 
     def setup(self):
+        """ add any s3 buckets this service requires, etc """
+        self.report("ensuring buckets are created: " + str(self.S3_BUCKETS))
+        self._setup_buckets()
+
+    def provision(self):
         """ same as 'eb deploy' """
         with lcd(self.SERVICE_ROOT):
             with self._eb_ctx():
                 local('eb deploy')
-
-    def provision(self):
-        """ provision this service """
-        self.report("ensuring buckets are created: "+str(self.S3_BUCKETS))
-        self._setup_buckets()
 
     def _status(self):
         """ retrieves service status information """
@@ -72,7 +62,8 @@ class ElasticBeanstalkService(AbstractService):
         out = {}
         out.update(**basics)
         with hide('output'):
-            result = local('eb status 2>&1', capture=True)
+            with self._eb_ctx():
+                result = local('eb status 2>&1', capture=True)
         result = result.split('\n')
         header = 'Environment details for:'
         assert result[0].strip().startswith(header),'weird output: '+str(result)

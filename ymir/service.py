@@ -3,8 +3,9 @@
 import os, time
 import socket
 import shutil, webbrowser
-import fabric
 
+import boto
+import fabric
 import requests
 
 from fabric.contrib.files import exists
@@ -216,7 +217,35 @@ class AbstractService(object):
                         result = restart()
                         count += 1
 
+    def s3(self):
+        """ show summary of s3 information for this service"""
+        buckets = self._setup_buckets(quiet=True).items()
+        if not buckets:
+            self.report("this service is not using S3 buckets")
+        for bname, bucket in buckets:
+            keys = [k for k in bucket]
+            self.report("  {0} ({1} items)".format(bname, len(keys)))
+            for key in keys:
+                print ("  {0} (size {1})".format(
+                    key.name, key.size))
+
+    @property
+    def _s3_conn(self):
+        return boto.connect_s3()
+
+    def _setup_buckets(self, quiet=False):
+        conn = self._s3_conn
+        tmp = {}
+        report = self.report if not quiet else lambda *args, **kargs: None
+        for name in self.S3_BUCKETS:
+            report("setting up s3 bucket: {0}".format(name))
+            tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
+        return tmp
+
     def setup_ip(self, ip):
+        self.report('setting up any s3 buckets this service requires',
+                    section=True)
+        self._setup_buckets()
         self.report('installing build-essentials & puppet', section=True)
         tdir = os.path.join(self.SERVICE_ROOT, 'puppet', '.tmp')
         if os.path.exists(tdir):
