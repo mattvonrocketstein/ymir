@@ -18,6 +18,7 @@ from ymir import util
 from ymir.data import DEFAULT_SUPERVISOR_PORT
 from .base import Reporter
 from ymir import checks
+from fabric.colors import blue
 
 class AbstractService(Reporter):
     S3_BUCKETS      = []
@@ -28,8 +29,8 @@ class AbstractService(Reporter):
     PEM             = None
     USERNAME        = None
     SECURITY_GROUPS = None
-    HEALTH_CHECKS = []
-    INTEGRATION_CHECKS = []
+    HEALTH_CHECKS = {}
+    INTEGRATION_CHECKS = {}
     FABRIC_COMMANDS = ['status', 'ssh', 'create', 'setup',
                        's3', 'provision', 'show', 'check',
                        'test']
@@ -131,7 +132,8 @@ class AbstractService(Reporter):
         _init_puppet("puppet")
 
     def setup(self):
-        """ setup service (operation should be after 'create', before 'provision')"""
+        """ setup service (operation should be after
+        'create', before 'provision')"""
         self.report('setting up')
         cm_data = self.status()
         if cm_data['status'] == 'running':
@@ -324,26 +326,35 @@ class AbstractService(Reporter):
             'eb_cname',
             data.get('ip'))
 
-    def _run_check(self, url):
+    def _run_check(self, check_type, url):
         data = self._status()
-        x = url.format(host=self._host(data), ip=data['ip'])
-        if x.startswith('http'):
-            return x, checks.check_http(x)
-        else:
-            err = "Not sure how to run check: "+str(x)
+        url = url.format(host=self._host(data), ip=data['ip'])
+        try:
+            check = getattr(checks, check_type)
+        except AttributeError:
+            err = 'Not sure how to run "{0}" check on {1}: '.format(
+                check_type, url)
             raise SystemExit(err)
+        else:
+            return check(url)
 
     def _test_data(self, data):
         """ run integration tests given 'status' data """
         out = {}
         ip = data['ip']
         self.check_data(data)
-        for x in self.INTEGRATION_CHECKS:
-            check,result=self._run_check(x)
-            out[check] = result
-        # run tests here, if they are found
-        for x in out:
-            self.report(' .. "{0}": {1}'.format(x, out[x]))
+        for url, check_type in self.INTEGRATION_CHECKS.items():
+            result = self._run_check(check_type, url)
+            out[url] = [check_type, result]
+        self._display_checks(out)
+
+
+    def _display_checks(self, check_data):
+        for url in check_data:
+            check_type, msg = check_data[url]
+            self.report(' .. {0} {1} ": {2}'.format(
+                blue('[?{0}]'.format(check_type)),
+                url, msg))
 
     def check_data(self, data):
         out = {}
@@ -351,13 +362,11 @@ class AbstractService(Reporter):
         # include relevant sections of status results
         for x in 'status eb_health eb_status'.split():
             if x in data:
-                out[x] = data[x]
-        for x in self.HEALTH_CHECKS:
-            check, result=self._run_check(x)
-            out[check] = result
-        for x in out:
-            self.report(' .. "{0}": {1}'.format(x, out[x]))
-
+                out['aws://'+x] = ['read', data[x]]
+        for url, check_type in self.HEALTH_CHECKS.items():
+            result = self._run_check(check_type, url)
+            out[url] = [check_type, result]
+        self._display_checks(out)
     def shell(self):
         return util.shell(conn=self.conn, Service=self)
 

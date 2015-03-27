@@ -1,13 +1,13 @@
 """ ymir.beanstalk
 """
-from fabric.api import lcd, local, prefix, hide
-
 import logging
-logging.captureWarnings(True)
 
 from boto.s3.connection import Location
-from ymir.service import AbstractService
+from fabric.api import lcd, local, prefix, hide
 from goulash.cache import cached
+from ymir.service import AbstractService
+
+logging.captureWarnings(True)
 
 class ElasticBeanstalkService(AbstractService):
     """ This is a wrapper so that elasticbeanstalk-managed stuff
@@ -20,7 +20,8 @@ class ElasticBeanstalkService(AbstractService):
     """
     S3_LOCATION = Location.DEFAULT
     ENVIRONMENT_NAME = None
-    HEALTH_CHECKS = ['http://{host}', 'http://{ip}', ]
+    HEALTH_CHECKS = {'http://{host}' : 'http_200',
+                     'http://{ip}'   : 'http_200' }
 
     def __init__(self, *args, **kargs):
         err = "ElasticBeanstalkService.ENVIRONMENT_NAME must be set"
@@ -34,7 +35,7 @@ class ElasticBeanstalkService(AbstractService):
         basics.pop('supervisor', None)
         out = {}
         out.update(**basics)
-        with hide('output'):
+        with hide('output', 'running'):
             with self._eb_ctx():
                 result = local('eb status 2>&1', capture=True)
         result = result.split('\n')
