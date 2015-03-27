@@ -7,6 +7,7 @@ logging.captureWarnings(True)
 
 from boto.s3.connection import Location
 from ymir.service import AbstractService
+from goulash.cache import cached
 
 class ElasticBeanstalkService(AbstractService):
     """ This is a wrapper so that elasticbeanstalk-managed stuff
@@ -19,23 +20,14 @@ class ElasticBeanstalkService(AbstractService):
     """
     S3_LOCATION = Location.DEFAULT
     ENVIRONMENT_NAME = None
+    HEALTH_CHECKS = ['http://{host}', 'http://{ip}', ]
 
     def __init__(self, *args, **kargs):
         err = "ElasticBeanstalkService.ENVIRONMENT_NAME must be set"
         assert self.ENVIRONMENT_NAME != None, err
         super(ElasticBeanstalkService, self).__init__(*args, **kargs)
 
-    # overrides AbstractService.WEBPAGES for a few reasons:
-    #  1. by default supervisor is used, but has no WUI in beanstalk
-    #  2. extra data from 'eb status' is parsed JIT, i.e. the CNAME
-    @property
-    def WEBPAGES(self):
-        data = self._status()
-        return [
-            'http://{0}'.format(data['eb_cname']),
-            'http://{0}'.format(data['ip']),
-            ]
-
+    @cached('ymir_status', timeout=10)
     def _status(self):
         """ retrieves service status information """
         basics = super(ElasticBeanstalkService, self)._status()
@@ -74,12 +66,6 @@ class ElasticBeanstalkService(AbstractService):
         with lcd(self.SERVICE_ROOT):
             with self._eb_ctx():
                 local('eb deploy')
-
-    def check(self):
-        """ not implemented yet for beanstalk-based Services"""
-        with lcd(self.SERVICE_ROOT):
-            with self._eb_ctx():
-                local('eb status')
 
     def ssh(self):
         """ same as 'eb ssh' """

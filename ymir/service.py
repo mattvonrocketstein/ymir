@@ -17,6 +17,7 @@ logging.captureWarnings(True)
 from ymir import util
 from ymir.data import DEFAULT_SUPERVISOR_PORT
 from .base import Reporter
+from ymir import checks
 
 class AbstractService(Reporter):
     S3_BUCKETS      = []
@@ -27,9 +28,11 @@ class AbstractService(Reporter):
     PEM             = None
     USERNAME        = None
     SECURITY_GROUPS = None
-    WEBPAGES        = ['supervisor']
+    HEALTH_CHECKS = []
+    INTEGRATION_CHECKS = []
     FABRIC_COMMANDS = ['status', 'ssh', 'create', 'setup',
-                       's3', 'provision', 'show', 'check']
+                       's3', 'provision', 'show', 'check',
+                       'test']
 
     def fabric_install(self):
         import fabfile
@@ -160,7 +163,7 @@ class AbstractService(Reporter):
         """ open health-check webpages for this service in a browser """
         self.report('showing webpages')
         data = self._status()
-        for page in self.WEBPAGES:
+        for page in self._webpages():
             webbrowser.open(data[page])
 
     def create(self, force=False):
@@ -227,9 +230,10 @@ class AbstractService(Reporter):
                             self.PUPPET, section=True)
                 for relative_puppet_file in self.PUPPET:
                     util._run_puppet(relative_puppet_file)
-                print '  restarting everything'
+                self.report('  restarting everything')
                 retries = 3
-                restart = lambda: run("sudo /etc/init.d/supervisor restart").return_code
+                cmd = "sudo /etc/init.d/supervisor restart"
+                restart = lambda: run(cmd).return_code
                 with settings(warn_only=True):
                     result = restart()
                     count = 0
@@ -298,24 +302,61 @@ class AbstractService(Reporter):
         """ reports health for this service """
         self.report('checking health')
         data = self._status()
-        if data['status']=='running':
-            return self.check_ip(data['ip'], data)
+        if data['status'] == 'running':
+            return self.check_data(data)
         else:
             self.report('no instance is running for this'
                         ' Service, create it first')
 
-    def check_ip(self, ip, data):
-        for x in self.WEBPAGES:
-            try:
-                resp = requests.get(data[x], timeout=2, verify=False)
-            except requests.exceptions.ConnectionError,e:
-                if 'timed out' in str(e):
-                    msg = 'timed out'
-                else:
-                    msg = str(e)
-            else:
-                msg = str(resp.status_code)
-            self.report(' .. "{0}": {1}'.format(x, msg))
+    def test(self):
+        """ runs integration tests for this service """
+        self.report('running integration tests')
+        data = self._status()
+        if data['status'] == 'running':
+            return self._test_data(data)
+        else:
+            self.report('no instance is running for this'
+                        ' Service, start (or create) it first')
+
+    def _host(self, data):
+        data = self._status()
+        return data.get(
+            'eb_cname',
+            data.get('ip'))
+
+    def _run_check(self, url):
+        data = self._status()
+        x = url.format(host=self._host(data), ip=data['ip'])
+        if x.startswith('http'):
+            return x, checks.check_http(x)
+        else:
+            err = "Not sure how to run check: "+str(x)
+            raise SystemExit(err)
+
+    def _test_data(self, data):
+        """ run integration tests given 'status' data """
+        out = {}
+        ip = data['ip']
+        self.check_data(data)
+        for x in self.INTEGRATION_CHECKS:
+            check,result=self._run_check(x)
+            out[check] = result
+        # run tests here, if they are found
+        for x in out:
+            self.report(' .. "{0}": {1}'.format(x, out[x]))
+
+    def check_data(self, data):
+        out = {}
+        ip = data['ip']
+        # include relevant sections of status results
+        for x in 'status eb_health eb_status'.split():
+            if x in data:
+                out[x] = data[x]
+        for x in self.HEALTH_CHECKS:
+            check, result=self._run_check(x)
+            out[check] = result
+        for x in out:
+            self.report(' .. "{0}": {1}'.format(x, out[x]))
 
     def shell(self):
         return util.shell(conn=self.conn, Service=self)
