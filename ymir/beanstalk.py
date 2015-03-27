@@ -26,8 +26,8 @@ class ElasticBeanstalkService(AbstractService):
         super(ElasticBeanstalkService, self).__init__(*args, **kargs)
 
     # overrides AbstractService.WEBPAGES for a few reasons:
-    #  1. by default supervisor is used but has no WUI in beanstalk
-    #  2. blah blah
+    #  1. by default supervisor is used, but has no WUI in beanstalk
+    #  2. extra data from 'eb status' is parsed JIT, i.e. the CNAME
     @property
     def WEBPAGES(self):
         data = self._status()
@@ -35,25 +35,6 @@ class ElasticBeanstalkService(AbstractService):
             'http://{0}'.format(data['eb_cname']),
             'http://{0}'.format(data['ip']),
             ]
-
-    def _report_name(self):
-        return '{0} [{1}]'.format(
-            super(ElasticBeanstalkService,self)._report_name(),
-             self.ENVIRONMENT_NAME)
-
-    def _eb_ctx(self):
-        return prefix('eb use {0}'.format(self.NAME))
-
-    def setup(self):
-        """ add any s3 buckets this service requires, etc """
-        self.report("ensuring buckets are created: " + str(self.S3_BUCKETS))
-        self._setup_buckets()
-
-    def provision(self):
-        """ same as 'eb deploy' """
-        with lcd(self.SERVICE_ROOT):
-            with self._eb_ctx():
-                local('eb deploy')
 
     def _status(self):
         """ retrieves service status information """
@@ -75,8 +56,27 @@ class ElasticBeanstalkService(AbstractService):
         out.update(**result)
         return out
 
+    def _report_name(self):
+        return '{0} [{1}]'.format(
+            super(ElasticBeanstalkService,self)._report_name(),
+             self.ENVIRONMENT_NAME)
+
+    def _eb_ctx(self):
+        return prefix('eb use {0}'.format(self.NAME))
+
+    def setup(self):
+        """ add any s3 buckets this service requires, etc """
+        self.report("ensuring buckets are created: " + str(self.S3_BUCKETS))
+        self._setup_buckets()
+
+    def provision(self):
+        """ same as 'eb deploy' """
+        with lcd(self.SERVICE_ROOT):
+            with self._eb_ctx():
+                local('eb deploy')
+
     def check(self):
-        """ not implemented yet """
+        """ not implemented yet for beanstalk-based Services"""
         with lcd(self.SERVICE_ROOT):
             with self._eb_ctx():
                 local('eb status')
@@ -86,3 +86,6 @@ class ElasticBeanstalkService(AbstractService):
         with lcd(self.SERVICE_ROOT):
             with self._eb_ctx():
                 local('eb ssh')
+
+    def create(self, force=False):
+        """ not implemented for beanstalk-based services """

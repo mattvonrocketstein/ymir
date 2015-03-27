@@ -13,14 +13,23 @@ COMMANDS = [
     CMD_INIT,
     'create_bucket']
 from ymir.version import __version__
+from ymir.base import Reporter
 
-def init_cmd(target):
-    target = os.path.abspath(os.path.expanduser(target))
-    if os.path.exists(target):
-        print ('cannot initialize ymir for a directory that already exists:', target)
-    else:
-        print ('initializing new project', target)
-        raise Exception,os.path.dirname(__file__)
+class InitCmd(Reporter):
+    def __call__(self, target):
+        target = os.path.abspath(os.path.expanduser(target))
+        if os.path.exists(target):
+            self.report(
+                'cannot initialize ymir for a directory '
+                'that already exists: {0}'.format(target))
+        else:
+            self.report('initializing new project', target)
+            ymir_bin = os.path.dirname(__file__)
+            ymir = os.path.dirname(ymir_bin)
+            example_fabfile = os.path.join(ymir, 'fabfile.py')
+            assert os.path.exists(example_fabfile)
+            
+init_cmd = InitCmd()
 
 class Settings(BaseSettings):
 

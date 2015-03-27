@@ -16,8 +16,9 @@ logging.captureWarnings(True)
 
 from ymir import util
 from ymir.data import DEFAULT_SUPERVISOR_PORT
+from .base import Reporter
 
-class AbstractService(object):
+class AbstractService(Reporter):
     S3_BUCKETS      = []
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
@@ -27,10 +28,32 @@ class AbstractService(object):
     USERNAME        = None
     SECURITY_GROUPS = None
     WEBPAGES        = ['supervisor']
+    FABRIC_COMMANDS = ['status', 'ssh', 'create', 'setup',
+                       's3', 'provision', 'show', 'check']
+
+    def fabric_install(self):
+        import fabfile
+        for x in self.FABRIC_COMMANDS:
+            try:
+                tmp = getattr(fabfile, x)
+            except AttributeError:
+                setattr(fabfile,x,getattr(self,x))
+            else:
+                err = ('Service definition "{0}" attempted'
+                       ' to publish method "{1}" as a fabric '
+                       'command, but "{1}" is already present '
+                       'in globals with value "{2}"').format(
+                    self.__class__.__name__, x, str(tmp))
+                self.report("ERROR:")
+                raise SystemExit(err)
 
     def __call__(self):
         """ ---------------------------------------------------- """
         pass
+
+    def _report_name(self):
+        return super(AbstractService,self)._report_name() + \
+                   +'-Service'
 
     def __init__(self, conn=None):
         self.conn = conn or util.get_conn()
