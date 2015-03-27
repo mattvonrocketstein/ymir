@@ -56,7 +56,7 @@ class AbstractService(Reporter):
 
     def _report_name(self):
         return super(AbstractService,self)._report_name() + \
-                   +'-Service'
+                   '-Service'
 
     def __init__(self, conn=None):
         self.conn = conn or util.get_conn()
