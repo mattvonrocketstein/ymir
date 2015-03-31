@@ -28,7 +28,10 @@ class AbstractService(Reporter):
     PEM             = None
     USERNAME        = None
     SECURITY_GROUPS = None
-    HEALTH_CHECKS = {}
+    HEALTH_CHECKS = {
+        # Supervisor WUI
+        'supervisor://{host}' : 'supervisor',
+        }
     INTEGRATION_CHECKS = {}
     FABRIC_COMMANDS = ['status', 'ssh', 'create', 'setup',
                        's3', 'provision', 'show', 'check',
@@ -162,8 +165,8 @@ class AbstractService(Reporter):
         """ open health-check webpages for this service in a browser """
         self.report('showing webpages')
         data = self._status()
-        for page in self._webpages():
-            webbrowser.open(data[page])
+        for url in self.HEALTH_CHECKS:
+            self._show_url(url)
 
     def create(self, force=False):
         """ create new instance of this service ('force' defaults to False)"""
@@ -252,6 +255,8 @@ class AbstractService(Reporter):
             keys = [k for k in bucket]
             self.report("  {0} ({1} items)".format(bname, len(keys)))
             for key in keys:
+                print 'pr',k.set_acl('public-read')
+
                 print ("  {0} (size {1})".format(
                     key.name, key.size))
 
@@ -317,11 +322,18 @@ class AbstractService(Reporter):
             self.report('no instance is running for this'
                         ' Service, start (or create) it first')
 
-    def _host(self, data):
-        data = self._status()
+    def _host(self, data=None):
+        """ todo: move to beanstalk class """
+        data = data or self._status()
         return data.get(
             'eb_cname',
             data.get('ip'))
+
+    def _show_url(self, url):
+        data = self._status()
+        url = url.format(host=self._host(data), ip=data['ip'])
+        self.report("showing: {0}".format(url))
+        webbrowser.open(url)
 
     def _run_check(self, check_type, url):
         data = self._status()
@@ -333,7 +345,7 @@ class AbstractService(Reporter):
                 check_type, url)
             raise SystemExit(err)
         else:
-            return check(url)
+            return check(self, url)
 
     def _test_data(self, data):
         """ run integration tests given 'status' data """
@@ -341,7 +353,7 @@ class AbstractService(Reporter):
         ip = data['ip']
         self.check_data(data)
         for url, check_type in self.INTEGRATION_CHECKS.items():
-            result = self._run_check(check_type, url)
+            _url, result = self._run_check(check_type, url)
             out[url] = [check_type, result]
         self._display_checks(out)
 
@@ -349,7 +361,7 @@ class AbstractService(Reporter):
     def _display_checks(self, check_data):
         for url in check_data:
             check_type, msg = check_data[url]
-            self.report(' .. {0} {1} ": {2}'.format(
+            self.report(' .. {0} {1} -- {2}'.format(
                 blue('[?{0}]'.format(check_type)),
                 url, msg))
 
@@ -361,14 +373,15 @@ class AbstractService(Reporter):
             if x in data:
                 out['aws://'+x] = ['read', data[x]]
         for url, check_type in self.HEALTH_CHECKS.items():
-            result = self._run_check(check_type, url)
+            _url, result = self._run_check(check_type, url)
             out[url] = [check_type, result]
         self._display_checks(out)
+
     def shell(self):
         return util.shell(conn=self.conn, Service=self)
 
     @staticmethod
     def is_port_open(host, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.connect_ex((host, port))
+        result = sock.connect_ex((host, int(port)))
         return result == 0
