@@ -1,0 +1,2 @@
+recursive-include ymir *.py
+recursive-include ymir/skeleton *

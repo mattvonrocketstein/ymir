@@ -53,5 +53,8 @@ def json(service, url, **kargs):
 def http_200(service, url):
     return http(service, url, codes=[200])
 
+def http_401(service, url):
+    return http(service, url, codes=[401])
+
 def json_200(service, url):
     return json(service, url, codes=[200])

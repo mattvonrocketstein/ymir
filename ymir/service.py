@@ -18,11 +18,12 @@ from ymir.data import DEFAULT_SUPERVISOR_PORT
 from .base import Reporter
 from ymir import checks
 from fabric.colors import blue
-
+from ymir.util import show_instances
 class AbstractService(Reporter):
     S3_BUCKETS      = []
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
+    SUPERVISOR_PORT = '9001' # not DRY, see puppet code
     INSTANCE_TYPE   = 't1.micro'
     SERVICE_ROOT    = None
     PEM             = None
@@ -30,12 +31,12 @@ class AbstractService(Reporter):
     SECURITY_GROUPS = None
     HEALTH_CHECKS = {
         # Supervisor WUI
-        'supervisor://{host}' : 'supervisor',
+        'http://{host}' : 'supervisor',
         }
     INTEGRATION_CHECKS = {}
-    FABRIC_COMMANDS = ['status', 'ssh', 'create', 'setup',
-                       's3', 'provision', 'show', 'check',
-                       'test']
+    FABRIC_COMMANDS = ['status', 'ssh', 'create', 'copy_puppet', 'setup',
+                       's3', 'provision', 'show', 'check', 'run',
+                       'test', 'show_instances']
 
     def fabric_install(self):
         import fabfile
@@ -157,7 +158,9 @@ class AbstractService(Reporter):
         self.report('connecting with ssh')
         cm_data = self.status()
         if cm_data['status'] == 'running':
-            util.connect(cm_data['ip'], username='ubuntu', pem=self.PEM)
+            util.connect(cm_data['ip'],
+                         username=self.USERNAME,
+                         pem=self.PEM)
         else:
             self.report("no instance found")
 
@@ -227,7 +230,7 @@ class AbstractService(Reporter):
             shutil.rmtree(tdir)
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
-                put('puppet', '/home/ubuntu')
+                put('puppet', '/home/'+self.USERNAME)
                 self.report("custom config for this Service: ",
                             self.PUPPET, section=True)
                 for relative_puppet_file in self.PUPPET:
@@ -255,8 +258,6 @@ class AbstractService(Reporter):
             keys = [k for k in bucket]
             self.report("  {0} ({1} items)".format(bname, len(keys)))
             for key in keys:
-                print 'pr',k.set_acl('public-read')
-
                 print ("  {0} (size {1})".format(
                     key.name, key.size))
 
@@ -273,6 +274,27 @@ class AbstractService(Reporter):
             tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
         return tmp
 
+    def run(self, command):
+        """ run command on service host """
+        #raise Exception, command
+        with util.ssh_ctx(
+            self._status()['ip'],
+            user=self.USERNAME,
+            pem=self.PEM):
+            run(command)
+
+    def copy_puppet(self):
+        """ copy puppet code to remote host (refreshes any dependencies) """
+        with util.ssh_ctx(
+            self._status()['ip'],
+            user=self.USERNAME,
+            pem=self.PEM):
+            with lcd(self.SERVICE_ROOT):
+                self.report('  flushing remote puppet codes and refreshing')
+                run("rm -rf puppet")
+                put('puppet', '/home/' + self.USERNAME)
+                self._bootstrap_puppet(force=True)
+
     def setup_ip(self, ip):
         self.report('setting up any s3 buckets this service requires',
                     section=True)
@@ -285,11 +307,8 @@ class AbstractService(Reporter):
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
                 run('sudo apt-get update')
-                self.report('  flushing remote puppet codes and refreshing')
-                run("rm -rf puppet")
-                put('puppet', '/home/ubuntu')
+                self.copy_puppet()
                 self._bootstrap_dev()
-                self._bootstrap_puppet(force=True)
                 util._run_puppet(self.PUPPET_SETUP)
 
     def reboot(self):
@@ -379,6 +398,10 @@ class AbstractService(Reporter):
 
     def shell(self):
         return util.shell(conn=self.conn, Service=self)
+
+    def show_instances(self):
+        """ show all ec2 instances """
+        show_instances(conn=self.conn)
 
     @staticmethod
     def is_port_open(host, port):
