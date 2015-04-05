@@ -1,7 +1,7 @@
-{    // sets the name for this service.
+{   // sets the name for this service.
     // this will be used in AWS tags: choose wisely
     // for readability and any logging you add later
-    "name":"org_name-app_name-env_name",
+    "name" : "org_name-app_name-env_name",
 
     // sets the ami for this service.
     // the default is ubuntu 14.04 amd64 ebs us-east-1
@@ -34,12 +34,12 @@
     // path specifying the file which is the main entry point for puppet code
     // this file will be used only after the dependencies mentioned in
     // metadata.json have been installed.
-    "puppet_setup" : "puppet/install_service.pp",
+    "setup_list" : ["puppet/install_service.pp"],
 
     // a list of names for the AWS security groups this service will belong to
     "security_groups" : ["app_name_sg"],
 
     // a list of extra service-specific puppet files to execute during
     // provisioning.  these will l
-    "puppet":["puppet/demo_service.pp"]
+    "provision_list" : ["puppet/demo_service.pp"]
 }

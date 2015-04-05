@@ -241,8 +241,8 @@ class AbstractService(Reporter):
             with lcd(self.SERVICE_ROOT):
                 put('puppet', '/home/'+self.USERNAME)
                 self.report("custom config for this Service: ",
-                            self.PUPPET, section=True)
-                for relative_puppet_file in self.PUPPET:
+                            PROVISION_LIST, section=True)
+                for relative_puppet_file in PROVISION_LIST:
                     util._run_puppet(relative_puppet_file)
                 self.report('  restarting everything')
                 retries = 3
@@ -318,7 +318,7 @@ class AbstractService(Reporter):
                 run('sudo apt-get update')
                 self.copy_puppet()
                 self._bootstrap_dev()
-                util._run_puppet(self.PUPPET_SETUP)
+                util._run_puppet(self.setup_list)
 
     def reboot(self):
         """ TODO: blocking until reboot is complete? """

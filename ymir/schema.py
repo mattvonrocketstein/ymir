@@ -17,9 +17,9 @@ schema = Schema(
         Required("username") : unicode,
         Required("pem") : unicode,
         Required("key_name") : unicode,
-        Required("puppet_setup") : unicode,
+        Required("setup_list") : list, # list of strings
         Required("security_groups") : list, # list of strings
-        Required("puppet") : list, # list of strings
+        Required("provision_list") : list, # list of strings
         },
     default=dict()
     )
