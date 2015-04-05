@@ -14,6 +14,21 @@ from ymir.service import AbstractService
 
 YMIR_SRC = os.path.dirname(__file__)
 
+#http://stackoverflow.com/questions/1868714/how-do-i-copy-an-entire-directory-of-files-into-an-existing-directory-using-pyth
+def copytree(src, dst, symlinks=False, ignore=None):
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+    for item in os.listdir(src):
+        s = os.path.join(src, item)
+        d = os.path.join(dst, item)
+        if os.path.isdir(s):
+            copytree(s, d, symlinks, ignore)
+        else:
+            if not os.path.exists(d) or \
+                   os.stat(src).st_mtime - os.stat(dst).st_mtime > 1:
+                shutil.copy2(s, d)
+
+
 def ymir_init(args):
     """ responsible for executing the 'ymir init' command """
     init_dir = os.path.abspath(args.init_dir)
@@ -23,13 +38,26 @@ def ymir_init(args):
                ' not already exist.')
         raise SystemExit(err)
     using_dot = init_dir == os.getcwd()
-    if using_dot:
-        os.chdir(os.path.dirname(init_dir))
     if os.path.exists(init_dir) and args.force:
         #if confirm(('you passed --force.  are you sure'
         #            ' you want to delete "{0}"?').format(
         #               init_dir)):
-            shutil.rmtree(init_dir)
+
+        folder = init_dir
+        for the_file in os.listdir(folder):
+            file_path = os.path.join(folder, the_file)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                #elif os.path.isdir(file_path): shutil.rmtree(file_path)
+            except Exception, e:
+                print e
+
+        #if using_dot:
+        #    for x in os.listdir(init_dir):
+        #        os.remove(x)#[shutil.rmtree(x)
+        #else:
+        #    shutil.rmtree(init_dir)
     skeleton_dir = os.path.join(YMIR_SRC, 'skeleton')
     if not os.path.exists(skeleton_dir):
         err = ('cannot find ymir skeleton project.  '
@@ -37,9 +65,8 @@ def ymir_init(args):
         raise SystemExit(err)
     print red('creating directory: ') + init_dir
     print red('copying ymir skeleton: '), skeleton_dir
-    shutil.copytree(skeleton_dir, init_dir)
-    if using_dot:
-        os.path.chdir(init_dir)
+    copytree(skeleton_dir, init_dir)
+
 def _load_json(fname):
     with open(fname) as fhandle:
         return demjson.decode(fhandle.read())
