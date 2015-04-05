@@ -1,5 +1,6 @@
+""" ymir.util
 """
-"""
+
 import os, time
 import boto.ec2
 from fabric.api import local, settings, run
@@ -51,23 +52,26 @@ def get_conn(key_name=None, region='us-east-1'):
     if key_name is not None:
         keypair = conn.get_key_pair(key_name)
         if keypair is None:
-            print "WARNING: could not retrieve default keypair '{0}'!!".format(key_name)
+            msg = "WARNING: could not retrieve default keypair '{0}'!!"
+            msg = msg.format(key_name)
+            print msg
     return conn
 
 def show_instances(conn):
+    """ """
     for i, tags in get_tags(None, conn).items():
         print i
         for k in tags:
             print '  ', k, tags[k]
 
 def get_instance_by_name(name, conn):
-    """ returns the id for the instance"""
+    """ returns the id for the instance """
     for i, tags in get_tags(None, conn).items():
         if tags.get('Name') == name and tags['status'] not in STATUS_DEAD:
             return conn.get_only_instances([i.id])[0]
 
 def get_tags(instance, conn):
-    """ returns { instance_id: instance_tags }"""
+    """ returns { instance_id: instance_tags } """
     assert conn is not None
     if instance is None:
         reservations = conn.get_only_instances()
@@ -81,6 +85,7 @@ def get_tags(instance, conn):
     return out
 
 def _block_while_pending(instance):
+    """ """
     # Check up on its status every so often
     status = instance.update()
     while status == 'pending':
@@ -89,6 +94,7 @@ def _block_while_pending(instance):
         status = instance.update()
 
 def _block_while_terminating(instance, conn):
+    """ """
     print '  terminating instance:', instance
     assert get_instance_by_id(instance.id, conn) is not None
     conn.terminate_instances([instance.id])
