@@ -22,6 +22,9 @@ def ymir_init(args):
                'ymir project, the directory should'
                ' not already exist.')
         raise SystemExit(err)
+    using_dot = init_dir == os.getcwd()
+    if using_dot:
+        os.chdir(os.path.dirname(init_dir))
     if os.path.exists(init_dir) and args.force:
         #if confirm(('you passed --force.  are you sure'
         #            ' you want to delete "{0}"?').format(
@@ -35,7 +38,8 @@ def ymir_init(args):
     print red('creating directory: ') + init_dir
     print red('copying ymir skeleton: '), skeleton_dir
     shutil.copytree(skeleton_dir, init_dir)
-
+    if using_dot:
+        os.path.chdir(init_dir)
 def _load_json(fname):
     with open(fname) as fhandle:
         return demjson.decode(fhandle.read())
