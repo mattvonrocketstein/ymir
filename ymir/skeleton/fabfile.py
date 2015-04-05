@@ -5,21 +5,30 @@
 """
 import os, sys
 
-import addict
-from ymir.commands import ymir_load
+try:
+    import addict
+    from ymir.commands import ymir_load as _load
+except ImportError:
+    err = ('This fabfile requires the ymir automation framework.  '
+           'To continue, please follow the instructions at '
+           'https://github.com/mattvonrocketstein/ymir')
+    raise SystemExit(err)
 
 DEBUG = False
 YMIR_SERVICE_ROOT = os.path.dirname(__file__)
 YMIR_SERVICE_JSON = os.path.join(YMIR_SERVICE_ROOT, 'service.json')
 
 if not os.path.exists(YMIR_SERVICE_JSON):
-    err = ("ymir expects to find 'service.json' alongside the fabfile"
-           "..  please create {0} to continue.").format(
+    err = ("Your ymir service is misconfigured.  Expected "
+           " to find 'service.json' alongside the fabfile, "
+           "please create {0} to continue.").format(
         YMIR_SERVICE_JSON)
     raise SystemExit(err)
 
-
-_service = ymir_load(
+# Create the ymir service from the service description
+_service = _load(
     addict.Dict(service_json=YMIR_SERVICE_JSON),
     interactive=DEBUG)
+
+# Install service operations as fabric commands
 _service.fabric_install()

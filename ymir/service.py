@@ -3,40 +3,49 @@
 import os, time
 import socket
 import shutil, webbrowser
+import logging
 
 import boto
-import fabric
 
+import fabric
+from fabric.colors import blue
 from fabric.contrib.files import exists
 from fabric.api import lcd, settings, run, put, cd
 
-import logging
+from ymir import util
+from ymir import checks
+from ymir.base import Reporter
+from ymir.util import show_instances
+from ymir.data import DEFAULT_SUPERVISOR_PORT
+
 logging.captureWarnings(True)
 
-from ymir import util
-from ymir.data import DEFAULT_SUPERVISOR_PORT
-from .base import Reporter
-from ymir import checks
-from fabric.colors import blue
-from ymir.util import show_instances
 class AbstractService(Reporter):
     S3_BUCKETS      = []
+
+    # not DRY, see also:
+    #  puppet/modules/ymir/templates/ymir_motd.erb
+    #  puppet/modules/ymir/templates/supervisord.conf
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
-    SUPERVISOR_PORT = '9001' # not DRY, see puppet code
+    SUPERVISOR_PORT = '9001'
+
+
     INSTANCE_TYPE   = 't1.micro'
     SERVICE_ROOT    = None
     PEM             = None
     USERNAME        = None
     SECURITY_GROUPS = None
+
     HEALTH_CHECKS = {
         # Supervisor WUI
-        'http://{host}' : 'supervisor',
+        'http://{host}:'+SUPERVISOR_PORT : 'supervisor',
         }
     INTEGRATION_CHECKS = {}
-    FABRIC_COMMANDS = ['status', 'ssh', 'create', 'copy_puppet', 'setup',
-                       's3', 'provision', 'show', 'check', 'run',
-                       'test', 'show_instances']
+    FABRIC_COMMANDS = [ 'status', 'ssh', 'create',
+                        'copy_puppet', 'setup', 's3',
+                        'provision', 'show', 'check',
+                        'run', 'test', 'show_instances' ]
 
     def fabric_install(self):
         import fabfile
