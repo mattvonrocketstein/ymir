@@ -1,6 +1,10 @@
 """ ymir.security_groups
+
     Helpers for security groups.. these are not used currently
 """
+import collections
+
+import boto
 
 def _sg_update(sg=None, conn=None, rules=RULES):
     print '  setting up sg rules'
@@ -12,8 +16,12 @@ def _sg_update(sg=None, conn=None, rules=RULES):
         else: print "  set new rule:",r
     return sg
 
-# begin generic fabfile commands
-################################################################################
+
+#https://gist.github.com/steder/1498451
+SecurityGroupRule = collections.namedtuple(
+    "SecurityGroupRule",
+    ["ip_protocol", "from_port",
+     "to_port", "cidr_ip", "src_group_name"])
 
 def sg_update(conn=None):
     print 'editing security group'
@@ -40,4 +48,4 @@ def sg_create(conn=None, force=False):
         sg = conn.create_security_group('fae_sg', 'Free Album Engine')
     _sg_update(sg, conn)
     for x in sg.rules:
-        print '  rule:',x
+        print '  rule:', x

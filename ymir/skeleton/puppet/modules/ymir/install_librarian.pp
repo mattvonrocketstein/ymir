@@ -1,5 +1,5 @@
 #
-# service/puppet//install_librarian.pp
+# puppet/modules/ymir/install_librarian.pp
 #
 # Install the puppet librarian so it can bootstrap the
 # dependencies mentioned in puppet/metadata.json

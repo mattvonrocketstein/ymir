@@ -1,7 +1,16 @@
-{   // sets the name for this service.
+{
+    // sets namespace  for this service.
+    // unused currently but should eventually
+    // be used in tagging, etc
+    "org_name": "OrgName",
+    "app_name": "AppName",
+    "env_name": "EnvName",
+
+    // sets the name for this service.
     // this will be used in AWS tags: choose wisely
     // for readability and any logging you add later
-    "name" : "org_name-app_name-env_name",
+    // Suggested format: "org_name-app_name-env_name"
+    "name" : "demo",
 
     // sets the ami for this service.
     // the default is ubuntu 14.04 amd64 ebs us-east-1
@@ -24,12 +33,14 @@
     // location of the pem file for this service.
     // this will be used for ssh connections with the service,
     // and if it is not correct then no remote can be executed.
-    "pem" : "~/.ssh/app_name.pem",
+    "pem" : "~/.ssh/{app_name}.pem",
 
-    // the AWS key_name for this service
-    // you can find the keys for your account here:
-    // https://console.aws.amazon.com/iam/home#encryptionKeys
-    "key_name" : "app_name",
+    // Sets up the AWS key_name for this service.
+    // By default, the value for the "app_name" field
+    // in this file will be used.  You can find the
+    // keys for your AWS account at the console here:
+    // **: https://console.aws.amazon.com/iam/home#encryptionKeys
+    "key_name" : "{app_name}",
 
     // path specifying the file which is the main entry point for puppet code
     // this file will be used only after the dependencies mentioned in
@@ -37,7 +48,7 @@
     "setup_list" : ["puppet/install_service.pp"],
 
     // a list of names for the AWS security groups this service will belong to
-    "security_groups" : ["app_name_sg"],
+    "security_groups" : ['fae_sg'],
 
     // a list of extra service-specific puppet files to execute during
     // provisioning.  these will l

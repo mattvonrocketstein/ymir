@@ -138,7 +138,7 @@ class AbstractService(Reporter):
                 run('librarian-puppet init')
                 run('librarian-puppet install --verbose')
         self.report("  bootstrapping puppet on remote host")
-        util._run_puppet('puppet/install_librarian.pp')
+        util._run_puppet('puppet/modules/ymir/install_librarian.pp')
         _init_puppet("puppet")
 
     def setup(self):
@@ -417,3 +417,23 @@ class AbstractService(Reporter):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         result = sock.connect_ex((host, int(port)))
         return result == 0
+
+    def _validate_sgs(self):
+        import time
+        time.sleep(10)
+        from boto.exception import EC2ResponseError
+        try:
+            rs = self.conn.get_all_security_groups(self.SECURITY_GROUPS)
+        except EC2ResponseError:
+            return "could not find security groups: "\
+                   + str(self.SECURITY_GROUPS)
+
+
+    def _validate_keypairs(self):
+        errors = []
+        if not os.path.exists(os.path.expanduser(self.PEM)):
+            errors.append('  ERROR: pem file is not present: ' + self.PEM)
+        keys = [k.name for k in util.get_conn().get_all_key_pairs()]
+        if self.KEY_NAME not in keys:
+            errors.append('  ERROR: aws keypair not found: ' + self.KEY_NAME)
+        return errors or None

@@ -6,7 +6,7 @@ import voluptuous, demjson
 import os
 import shutil
 
-from fabric.colors import red
+from fabric.colors import red, green
 from fabric.contrib.console import confirm
 
 from ymir.schema import schema
@@ -53,13 +53,22 @@ def ymir_init(args):
     print red('creating directory: ') + init_dir
     print red('copying ymir skeleton: '), skeleton_dir
     copytree(skeleton_dir, init_dir)
+import addict
 
 def _load_json(fname):
+    """ loads json and allows for
+        templating / value reflection
+    """
     with open(fname) as fhandle:
-        return demjson.decode(fhandle.read())
+        tmp = demjson.decode(fhandle.read())
+        for k,v in tmp.items():
+            if isinstance(v, basestring) and '{' in v:
+                tmp[k] = v.format(**tmp)
+        return addict.Dict(tmp)
 
 def _validate_file(fname):
-    """ returns only error """
+    """ simple schema validation, this
+        returns error message or None """
     tmp = _load_json(fname)
     try:
         schema(tmp)
@@ -69,8 +78,8 @@ def _validate_file(fname):
         return msg
     SERVICE_ROOT = os.path.dirname(fname)
     SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
-    tmp.update(SERVICE_ROOT=SERVICE_ROOT)
-    files = [tmp['puppet_setup']] + tmp['puppet']
+    tmp.update(dict(SERVICE_ROOT=SERVICE_ROOT))
+    files = tmp['setup_list'] + tmp['provision_list']
     for _file in files:
         if not os.path.exists(os.path.join(SERVICE_ROOT, _file)):
             err= ('Files mentioned in service json '
@@ -79,11 +88,12 @@ def _validate_file(fname):
                 SERVICE_ROOT, _file)
             return err
 
-
-
 def ymir_load(args, interactive=True):
     """ """
     ymir_validate(args, interactive=interactive)
+    return _ymir_load(args, interactive=interactive)
+
+def _ymir_load(args, interactive=True):
     SERVICE_ROOT = os.path.dirname(args.service_json)
     SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
     service_json = _load_json(args.service_json)
@@ -96,16 +106,34 @@ def ymir_load(args, interactive=True):
         [x.upper(), y] for x, y in service_json.items()])
     dct.update(SERVICE_ROOT=SERVICE_ROOT)
     ServiceFromJSON = type(
-        'ServiceFromJSON',
+        str(service_json.name).title(),
         (AbstractService,), dct)
     if interactive:
         print red("Service definition loaded from JSON")
     return ServiceFromJSON()
-
+from ymir import util
+OK = green('  ok')
 def ymir_validate(args, interactive=True):
     """ """
     err = _validate_file(args.service_json)
     if err:
         raise SystemExit(err)
     elif interactive:
-        print 'ok'
+        print 'Validating the file schema..\n  ok'
+    # simple validation has succeded, begin second phase.
+    # the schema can be loaded, so build a service object.
+    # the service object can then begin to validate itself
+    service_json = _load_json(args.service_json)
+    service = _ymir_load(args, interactive=False)
+
+    print 'Validating AWS keypairs..'
+    errors = service._validate_keypairs()
+    if errors:
+        for err in errors:
+            print '  ERROR: '+str(err)
+    else:
+        print OK
+
+    print 'Validating AWS security groups..'
+    err = service._validate_sgs()
+    print '  ERROR: '+str(err) if err else OK
