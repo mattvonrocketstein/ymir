@@ -81,7 +81,7 @@ def entry(settings=None):
     elif args.subcommand == 'init':
         ymir_init(args)
     elif args.subcommand == 'validate':
-        ymir_validate(args)
+        ymir_validate(args, simple=False)
     elif args.subcommand == 'load':
         ymir_load(args)
     elif args.subcommand == 'keypair':

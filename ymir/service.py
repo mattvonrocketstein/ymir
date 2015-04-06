@@ -145,7 +145,7 @@ class AbstractService(Reporter):
         """ setup service (operation should be after
         'create', before 'provision')"""
         self.report('setting up')
-        cm_data = self.status()
+        cm_data = self._status()
         if cm_data['status'] == 'running':
             self.setup_ip(cm_data['ip'])
         else:
@@ -241,8 +241,8 @@ class AbstractService(Reporter):
             with lcd(self.SERVICE_ROOT):
                 put('puppet', '/home/'+self.USERNAME)
                 self.report("custom config for this Service: ",
-                            PROVISION_LIST, section=True)
-                for relative_puppet_file in PROVISION_LIST:
+                            self.PROVISION_LIST, section=True)
+                for relative_puppet_file in self.PROVISION_LIST:
                     util._run_puppet(relative_puppet_file)
                 self.report('  restarting everything')
                 retries = 3
@@ -316,8 +316,8 @@ class AbstractService(Reporter):
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
                 run('sudo apt-get update')
-                self.copy_puppet()
                 self._bootstrap_dev()
+                self.copy_puppet()
                 util._run_puppet(self.setup_list)
 
     def reboot(self):

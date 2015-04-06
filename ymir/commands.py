@@ -90,7 +90,7 @@ def _validate_file(fname):
 
 def ymir_load(args, interactive=True):
     """ """
-    ymir_validate(args, interactive=interactive)
+    ymir_validate(args, interactive=False)
     return _ymir_load(args, interactive=interactive)
 
 def _ymir_load(args, interactive=True):
@@ -113,13 +113,17 @@ def _ymir_load(args, interactive=True):
     return ServiceFromJSON()
 from ymir import util
 OK = green('  ok')
-def ymir_validate(args, interactive=True):
+
+def ymir_validate(args, simple=True, interactive=True):
     """ """
     err = _validate_file(args.service_json)
     if err:
         raise SystemExit(err)
     elif interactive:
         print 'Validating the file schema..\n  ok'
+    if simple:
+        return
+
     # simple validation has succeded, begin second phase.
     # the schema can be loaded, so build a service object.
     # the service object can then begin to validate itself
