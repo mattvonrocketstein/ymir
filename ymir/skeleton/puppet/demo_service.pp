@@ -10,7 +10,7 @@ package {['ruby-dev', 'gem']: ensure => present }
 
 file { '/etc/motd':
   ensure  => file,
-  content => template('ymir/cache_motd.erb'),
+  content => template('ymir/motd.erb'),
 }
 
 package {'supervisor': ensure => present }

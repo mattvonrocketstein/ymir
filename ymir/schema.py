@@ -17,10 +17,13 @@ schema = Schema(
     {
         Required("instance_type") : unicode,
         Required("name") : unicode,
-        Optional("app_name") : unicode,
-        Optional("org_name") : unicode,
-        Optional("env_name") : unicode,
+        Optional("org_name", default="org") : unicode,
+        Optional("app_name", default="app") : unicode,
+        Optional("service_name", default="service") : unicode,
+        Optional("env_name", default='env') : unicode,
         Required("supervisor_pass") : unicode,
+        Optional("supervisor_port", default='9001') : unicode,
+        Optional("service_defaults", default={}) : dict,
         Required("supervisor_user") : unicode,
         Required("ami") : unicode,
         Required("username") : unicode,
@@ -29,6 +32,7 @@ schema = Schema(
         Required("setup_list") : list, # list of strings
         Required("security_groups") : list, # list of strings
         Required("provision_list") : list, # list of strings
+        Required("health_checks") : dict, # dict like d[check_name] = [ check_type, url ]
         },
     default=dict(),
     )

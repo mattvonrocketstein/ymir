@@ -16,6 +16,6 @@
    ],
   "dependencies": [
     {"name": "puppetlabs/stdlib"},
-    {"name": "proletaryo/supervisor"},
+    {"name": "proletaryo/supervisor"}
   ]
 }

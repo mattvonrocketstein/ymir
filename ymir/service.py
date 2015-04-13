@@ -29,21 +29,22 @@ class AbstractService(Reporter):
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
     SUPERVISOR_PORT = '9001'
-
+    SERVICE_DEFAULTS = {}
 
     INSTANCE_TYPE   = 't1.micro'
     SERVICE_ROOT    = None
     PEM             = None
     USERNAME        = None
     SECURITY_GROUPS = None
+    APP_NAME        = None
+    ORG_NAME        = None
+    ENV_NAME        = None
 
-    HEALTH_CHECKS = {
-        # Supervisor WUI
-        'http://{host}:'+SUPERVISOR_PORT : 'supervisor',
-        }
+    HEALTH_CHECKS = {}
     INTEGRATION_CHECKS = {}
+
     FABRIC_COMMANDS = [ 'status', 'ssh', 'create',
-                        'copy_puppet', 'setup', 's3',
+                        'setup', 's3', 'shell',
                         'provision', 'show', 'check',
                         'run', 'test', 'show_instances' ]
 
@@ -68,8 +69,8 @@ class AbstractService(Reporter):
         pass
 
     def _report_name(self):
-        return super(AbstractService,self)._report_name() + \
-                   '-Service'
+        return super(AbstractService, self)._report_name() + \
+                   ' Service'
 
     def __init__(self, conn=None):
         self.conn = conn or util.get_conn()
@@ -147,7 +148,11 @@ class AbstractService(Reporter):
         self.report('setting up')
         cm_data = self._status()
         if cm_data['status'] == 'running':
-            self.setup_ip(cm_data['ip'])
+            try:
+                self.setup_ip(cm_data['ip'])
+            except fabric.exceptions.NetworkError:
+                self.report("timed out, retrying")
+                self.setup()
         else:
             self.report('no instance is running for this Service, create it first')
 
@@ -177,8 +182,9 @@ class AbstractService(Reporter):
         """ open health-check webpages for this service in a browser """
         self.report('showing webpages')
         data = self._status()
-        for url in self.HEALTH_CHECKS:
-            self._show_url(url)
+        for check_name in self.HEALTH_CHECKS:
+            check, url = self.HEALTH_CHECKS[check_name]
+            self._show_url(url.format(**self._template_data()))
 
     def create(self, force=False):
         """ create new instance of this service ('force' defaults to False)"""
@@ -265,10 +271,12 @@ class AbstractService(Reporter):
             self.report("this service is not using S3 buckets")
         for bname, bucket in buckets:
             keys = [k for k in bucket]
-            self.report("  {0} ({1} items)".format(bname, len(keys)))
+            self.report("  {0} ({1} items) [{2}]".format(
+                bname, len(keys), bucket.get_acl()))
             for key in keys:
-                print ("  {0} (size {1})".format(
-                    key.name, key.size))
+                print ("  {0} (size {1}) [{2}]".format(
+                    key.name, key.size, key.get_acl()))
+        #from smashlib import embed; embed()
 
     @property
     def _s3_conn(self):
@@ -285,7 +293,6 @@ class AbstractService(Reporter):
 
     def run(self, command):
         """ run command on service host """
-        #raise Exception, command
         with util.ssh_ctx(
             self._status()['ip'],
             user=self.USERNAME,
@@ -318,7 +325,12 @@ class AbstractService(Reporter):
                 run('sudo apt-get update')
                 self._bootstrap_dev()
                 self.copy_puppet()
-                util._run_puppet(self.setup_list)
+                for setup_item in self.SETUP_LIST:
+                    self.report('setup_list[{0}] "{1}"'.format(
+                        self.SETUP_LIST.index(setup_item),
+                        setup_item
+                        ))
+                    util._run_puppet(setup_item)
 
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
@@ -363,9 +375,25 @@ class AbstractService(Reporter):
         self.report("showing: {0}".format(url))
         webbrowser.open(url)
 
+    def to_json(self,simple=False):
+        out = [x for x in dir(self.__class__) if x==x.upper()]
+        out = [ [x.lower(), getattr(self.__class__,x)] for x in out ]
+        out = dict(out)
+        if not simple:
+            data = self._status()
+            out.update(dict(host=self._host(data), ip=data['ip'],))
+        return out
+
+    def _template_data(self):
+        template_data = self.to_json()
+        #raise Exception, template_data['service_defaults']
+        template_data.update(**self.SERVICE_DEFAULTS)
+        return template_data
+
     def _run_check(self, check_type, url):
-        data = self._status()
-        url = url.format(host=self._host(data), ip=data['ip'])
+        """ """
+        data = self._template_data()
+        url = url.format(**data)
         try:
             check = getattr(checks, check_type)
         except AttributeError:
@@ -373,20 +401,23 @@ class AbstractService(Reporter):
                 check_type, url)
             raise SystemExit(err)
         else:
-            return check(self, url)
+            _url, message = check(self, url)
+            return _url, message
 
     def _test_data(self, data):
         """ run integration tests given 'status' data """
         out = {}
         ip = data['ip']
         self.check_data(data)
-        for url, check_type in self.INTEGRATION_CHECKS.items():
+        for check_name  in self.INTEGRATION_CHECKS:
+            check_type, url = self.INTEGRATION_CHECKS[check_name]
             _url, result = self._run_check(check_type, url)
-            out[url] = [check_type, result]
+            out[_url] = [check_type, result]
         self._display_checks(out)
 
 
     def _display_checks(self, check_data):
+        #from smashlib import embed; embed()
         for url in check_data:
             check_type, msg = check_data[url]
             self.report(' .. {0} {1} -- {2}'.format(
@@ -400,9 +431,10 @@ class AbstractService(Reporter):
         for x in 'status eb_health eb_status'.split():
             if x in data:
                 out['aws://'+x] = ['read', data[x]]
-        for url, check_type in self.HEALTH_CHECKS.items():
+        for check_name in self.HEALTH_CHECKS:
+            check_type, url = self.HEALTH_CHECKS[check_name]
             _url, result = self._run_check(check_type, url)
-            out[url] = [check_type, result]
+            out[_url] = [check_type, result]
         self._display_checks(out)
 
     def shell(self):

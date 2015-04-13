@@ -29,6 +29,7 @@
     // it matches with puppet/modules/ymir/templates/supervisord.conf
     "supervisor_user" : "admin",
     "supervisor_pass" : "testing",
+    "supervisor_port" : "9001",
 
     // location of the pem file for this service.
     // this will be used for ssh connections with the service,
@@ -45,12 +46,28 @@
     // path specifying the file which is the main entry point for puppet code
     // this file will be used only after the dependencies mentioned in
     // metadata.json have been installed.
-    "setup_list" : ["puppet/install_service.pp"],
+    "setup_list" : [
+
+        // install suite of devops packages suggested by ymir
+        "puppet/modules/ymir/packages.pp",
+        // creates /opt/ymir/logs which is used by supervisor, etc
+        "puppet/modules/ymir/log_dirs.pp"
+        ],
 
     // a list of names for the AWS security groups this service will belong to
-    "security_groups" : ['fae_sg'],
+    "security_groups" : ['your_sg_name'],
 
-    // a list of extra service-specific puppet files to execute during
-    // provisioning.  these will l
+    // a list of extra, service-specific puppet files to execute during
+    // provisioning.  by the time provisioning happens, any puppet
+    // dependencies mentioned in puppet/metadata.json are guaranteed
+    // to be installed, and setup_list is guaranteed to have run
+    // at least once.
     "provision_list" : ["puppet/demo_service.pp"]
+
+    // health checks to execute against this service
+    "health_checks": {
+        "supervisor" :
+        ['http_200',
+         'http://{supervisor_user}:{supervisor_pass}@{host}:{supervisor_port}'],
+    }
 }

@@ -3,10 +3,10 @@
 
 <a name="about">ABOUT</a>
 =========================
-Ymir is an automation tool.  Or less generally, it is a service description library/framework that combines the power of fabric, puppet, and boto to create, setup, provision, and control EC2 instances.
+Ymir is a tool for devops and automation, sort of like a less general, more opinionated version of [cloudformation](#) or [terraform](#).  More specifically, ymir can help to describe, build, and control services that are deployed on AWS.  Ymir can be used to generate project boilerplate which combines the power of fabric, puppet, and boto to create, setup, provision and control EC2 instances.
 
-  * The [boto](#) library is used for AWS automation (say creating EC2 instance from AMI)
-  * The [puppet](#) DSL describes how the instance will be provisioned <sub>(ex: installing system packages)</sub>
+  * The [boto](#) library is used for AWS automation (ex: creating EC2 instance from AMI)
+  * The [puppet](#) DSL describes how the instance will be provisioned (ex: installing system packages)
   * [Fabric](#) framework is used for command execution on local and remote hosts
 
 Ymir is glue code that can help with automation by generating boilerplate, laying out projects, and giving you a vocabulary you can use to describe your services.
@@ -97,3 +97,7 @@ The *key_name* and *pem* fields are critical for authenticating with your servic
 
 <a name="service-implementation">SERVICE IMPLEMENTATION</a>
 =========================================================
+
+*Service implementation* is based on the results of the setup & provisioning process which is achieved with puppet code.  Eventually ymir might support chef or shell.
+
+```

@@ -4,12 +4,15 @@
 import os, sys, shutil
 from argparse import ArgumentParser
 
+import boto
+
 from fabric.contrib.console import prompt, confirm#red,
 
 from ymir.version import __version__
 from ymir.commands import ymir_init, ymir_load, ymir_validate
 
-import boto
+from ymir.util import working_dir_is_ymir
+
 def ymir_keypair(args):
     """ """
     name = args.keypair_name
@@ -47,12 +50,23 @@ def get_parser():
         help='a (new) keyname created on aws.  pem saved to ~/.ssh')
     keypair_parser.add_argument('-f','--force', action='store_true',
                    help='a (new) directory to initial a ymir project in')
+
+    # build 'validate' subparser
     validate_parser = subparsers.add_parser(
         'validate', help='validate service.json')
-    validate_parser.add_argument(
-        'service_json', metavar='service_json',
-        type=str,
-        help='a (new) directory to initial a ymir project in')
+
+    vpkargs = dict(metavar='service_json',
+                   type=str,
+                   help='a (new) directory to initial a ymir project in')
+    if working_dir_is_ymir():
+        # in this case, the service_json
+        # positional argument may be implied
+        vpkargs.update(
+            dict(
+                nargs='?',
+                default='service.json'))
+    validate_parser.add_argument('service_json', **vpkargs)
+
     validate_parser.set_defaults(subcommand='validate')
     load_parser = subparsers.add_parser(
         'load', help='load service.json')
@@ -68,7 +82,6 @@ def get_parser():
                    help='a (new) directory to initial a ymir project in')
     init_parser.set_defaults(subcommand='init')
     return parser
-
 
 def entry(settings=None):
     """ Main entry point """
@@ -88,6 +101,7 @@ def entry(settings=None):
         ymir_keypair(args)
     elif args.subcommand == 'shell':
         from smashlib import embed; embed()
+    # reflect fabric here
 
 if __name__=='__main__':
     entry()
