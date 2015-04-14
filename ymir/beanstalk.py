@@ -19,13 +19,13 @@ class ElasticBeanstalkService(AbstractService):
         fabric-based authentication for the eb-instance yet.
     """
     S3_LOCATION = Location.DEFAULT
-    ENVIRONMENT_NAME = None
+    ENV_NAME = None
     HEALTH_CHECKS = {'http://{host}' : 'http_200',
                      'http://{ip}'   : 'http_200' }
 
     def __init__(self, *args, **kargs):
-        err = "ElasticBeanstalkService.ENVIRONMENT_NAME must be set"
-        assert self.ENVIRONMENT_NAME != None, err
+        err = "ElasticBeanstalkService.ENV_NAME must be set"
+        assert self.ENV_NAME != None, err
         super(ElasticBeanstalkService, self).__init__(*args, **kargs)
 
     @cached('ymir_status', timeout=10)
@@ -52,7 +52,7 @@ class ElasticBeanstalkService(AbstractService):
     def _report_name(self):
         return '{0} [{1}]'.format(
             super(ElasticBeanstalkService,self)._report_name(),
-             self.ENVIRONMENT_NAME)
+             self.ENV_NAME)
 
     def _eb_ctx(self):
         return prefix('eb use {0}'.format(self.NAME))
@@ -76,3 +76,6 @@ class ElasticBeanstalkService(AbstractService):
 
     def create(self, force=False):
         """ not implemented for beanstalk-based services """
+
+    def _validate_keypairs(self):
+        print "EB service does not validate keypairs"

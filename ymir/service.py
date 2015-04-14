@@ -72,13 +72,15 @@ class AbstractService(Reporter):
         return super(AbstractService, self)._report_name() + \
                    ' Service'
 
+
     def __init__(self, conn=None):
+        """"""
         self.conn = conn or util.get_conn()
-        required_class_vars = 'PEM USERNAME SECURITY_GROUPS SERVICE_ROOT'
-        required_class_vars =required_class_vars.split()
-        for var in required_class_vars:
-            err = 'subclassers must override '+var
-            assert getattr(self,var) is not None, err
+        #required_class_vars = 'PEM USERNAME SECURITY_GROUPS SERVICE_ROOT'
+        #required_class_vars =required_class_vars.split()
+        #for var in required_class_vars:
+        #    err = 'subclassers must override '+var
+        #    assert getattr(self,var) is not None, err
 
     def _bootstrap_dev(self):
         """ """
