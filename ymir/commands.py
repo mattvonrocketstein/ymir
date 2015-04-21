@@ -45,7 +45,7 @@ def _validate_file(fname):
     tmp = _load_json(fname)
     schema = _choose_schema(tmp)
     is_eb = schema.schema_name == 'eb_schema'
-    print 'Chose schema:\n ',schema.schema_name
+    #print 'Chose schema:\n ',schema.schema_name
     try:
         schema(tmp)
     except voluptuous.Invalid, e:
@@ -85,7 +85,7 @@ def _ymir_load(args, interactive=True):
         BaseService = ElasticBeanstalkService
     else:
         BaseService = AbstractService
-    print 'Chose service-class:\n ',BaseService.__name__
+    #print 'Chose service-class:\n ',BaseService.__name__
     ServiceFromJSON = type(
         classname, (BaseService,), dct)
 

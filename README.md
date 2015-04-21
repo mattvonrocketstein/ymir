@@ -14,6 +14,8 @@ Ymir is glue code that can help with automation by generating boilerplate, layin
 <a name="installation">INSTALLATION</a>
 =======================================
 
+**Prerequisites:** A simple python setup for your platform, basically python, python-dev, & python-virtualenv.  For debian you can use a one-liner like `sudo apt-get install python python-dev python-virtualenv`.   Afterwards you should be ready to run the commands below from your shell:
+
 ```shell
   $ git clone https://github.com/mattvonrocketstein/ymir.git
   $ cd ymir
@@ -21,8 +23,9 @@ Ymir is glue code that can help with automation by generating boilerplate, layin
   $ source venv/bin/activate
   $ pip install -r requirements.txt
   $ python setup.py develop
-  $ ymir version
 ```
+
+**To test if it worked**, try running `ymir version`.
 
 <a name="usage">USAGE OVERVIEW</a>
 ===================================
