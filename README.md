@@ -9,6 +9,7 @@ Ymir is a tool for devops and automation, sort of like a less general, more opin
   * The [Puppet](https://puppetlabs.com/puppet/what-is-puppet) DSL describes how the instance will be provisioned (ex: installing system packages)
   * The [Fabric](http://docs.fabfile.org/en/latest/tutorial.html) library / framework is used for command execution on local and remote hosts
 
+Ymir is "opinionated" in the sense that it currently only supports puppet for structured provisioning (or perhaps fabric for more adhoc provisioning). It is not required, but things will be easier for you if most daemonization for your services is accomplished using [supervisord](#).  Apart from all that, ymir is obviously Yet Another Devops Tool in a rapidly expanding and sometimes confusing toolbox which may or may not make you sigh in frustration.  Probably ymir configuration will eventually supprt "compiling" to terraform or cloudformation.
 
 <a name="installation">INSTALLATION</a>
 =======================================
@@ -56,23 +57,24 @@ Ymir is a tool for devops and automation, sort of like a less general, more opin
 
 | Operation        | Description           |
 | ------------- |:-------------:|
-| *create*      | creates your EC2 instance according to the specification in the `service.json` file (which is in the same directory as the fabfile).  To force creation even when your service is already present, use `fab create:force=True` |
-| *setup*      | operation should typically occur after `create` and before `provision`.  Setup is often slow because it needs to do things like updates for apt or yum.  Setup must be reinvoked if puppet dependencies change |
+| *create*    | creates your EC2 instance according to the specification in the `service.json` file (which is in the same directory as the fabfile).  To force creation even when your service is already present, use `fab create:force=True` |
+| *setup*     | operation should typically occur after `create` and before `provision`.  Setup is often slow because it needs to do things like updates for apt or yum.  Setup must be reinvoked if puppet dependencies change |
 | *provision* | typically occurs after setup and executes the bulk of the puppet code.  This step should do things like clone or update code repos on the service host, add or update files from templates, etc.  It should run fast and be idempotent |
-| *status* | shows service status, including IP address, EC2 status, etc.  It should also display (but not check) URLs which might be useful when running health tests on this service. |
-| *check* | runs health checks on the service.  The idea is to provide a simple starting point for integration with more sophisticated health monitoring with stuff like nagios |
-| *ssh* | operation simply connects to the service.  Apart from normal system administration or inspecting the service, this is good to use when you suspect that other operations might be failing because of AWS keypair issues |
-| *run* | operation runs a single command on the remote host as the default user.  Very useful for tailing logs and such |
-| *show* | operation integrates with your local browser to opens every webpage that *check* operation would have been looking at |
-| *test* | operation is intended to be an entry point for running integration tests on your service.  By default the *test* operation looks at everything that the *check* operation does, plus extra stuff (see [this section](#) of the service description documentation for more information about how to configure integration tests) |
-| *s3* | summarizes aspects of the contents of the s3 buckets your service defines, if any |
+| *status*    | shows service status, including IP address, EC2 status, etc.  It should also display (but not check) URLs which might be useful when running health tests on this service. |
+| *check*    | runs health checks on the service.  The idea is to provide a simple starting point for integration with more sophisticated health monitoring with stuff like nagios |
+| *ssh*     | operation simply connects to the service.  Apart from normal system administration or inspecting the service, this is good to use when you suspect that other operations might be failing because of AWS keypair issues |
+| *run*     | operation runs a single command on the remote host as the default user.  Very useful for tailing logs and such |
+| *show*    | operation integrates with your local browser to opens every webpage that *check* operation would have been looking at |
+| *test*    | operation is intended to be an entry point for running integration tests on your service.  By default the *test* operation looks at everything that the *check* operation does, plus extra stuff (see [this section](#) of the service description documentation for more information about how to configure integration tests) |
+| *s3*      | summarizes aspects of the contents of the s3 buckets your service defines, if any |
+| *freeze*      | freeze a (running) service to an AMI |
 
 
 
 <a name="service-description">SERVICE DESCRIPTION</a>
 =======================================================
 
-Service descriptions are structured service metadata which you can find stored in `service.json` files.  Currently supported fields are described below.
+Service descriptions are structured service metadata which you can find stored in `service.json` files.  Particularly important fields which you will definitely want to override are described in the paragraphs below.
 
 The *security_groups* field defines which AWS security groups this service will belong to.  Ymir may eventually contain helpers for *building* security groups, but at the moment these should probably be constructed by hand in advance.
 
@@ -80,7 +82,12 @@ Both the *setup_list* and *provision_list* fields both describe a list puppet fi
 
 The *key_name* and *pem* fields are critical for authenticating with your service to complete updates, etc.  The *key_name* field refers to a named AWS key, and the *pem* field should be a path that points to your corresponding AWS private key file.  If you don't already have a key and pem file, you can create this data using ymir: see [this section](#) of the usage-overview documentation.
 
+
+| Field name | Description |
+-------------|-------------|
+
 <a name="service-implementation">SERVICE IMPLEMENTATION</a>
-=========================================================
+============================================================
 
 *Service implementation* is currently achieved with puppet code, but eventually ymir might support chef or shell.
+  Pull requests welcome!  Until this feature is added, invoking shell or chef *from* puppet may be the best option.
