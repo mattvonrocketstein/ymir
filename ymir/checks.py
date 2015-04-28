@@ -33,7 +33,12 @@ def http(service, url, assert_json=False, codes=[]):
         resp = _get_request(url)
     except requests.exceptions.ConnectionError, e:
         if 'timed out' in str(e):
-            msg = 'timed out'
+            msg = 'requests.exceptions.ConnectionError (timed out)'
+        else:
+            msg = str(e)
+    except requests.exceptions.ConnectionError, e:
+        if 'timed out' in str(e):
+            msg = 'requests.exceptions.ReadTimeout'
         else:
             msg = str(e)
     else:

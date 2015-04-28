@@ -166,3 +166,8 @@ def ymir_validate(args, simple=True, interactive=True):
             print err
     if err is None:
         print '  ok'
+
+def ymir_freeze(args):
+    msg = 'not implemented yet'
+    print msg
+    raise SystemExit(msg)

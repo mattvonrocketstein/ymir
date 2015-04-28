@@ -9,9 +9,13 @@ import boto
 from fabric.contrib.console import prompt, confirm#red,
 
 from ymir.version import __version__
-from ymir.commands import ymir_init, ymir_load, ymir_validate
+from ymir.commands import ymir_init, ymir_load, ymir_validate, ymir_freeze
 
 from ymir.util import working_dir_is_ymir
+
+def ymir_freeze(args):
+    name = args.name
+    _id = args.instance_id
 
 def ymir_keypair(args):
     """ """
@@ -62,9 +66,7 @@ def get_parser():
         # in this case, the service_json
         # positional argument may be implied
         vpkargs.update(
-            dict(
-                nargs='?',
-                default='service.json'))
+            dict(nargs='?', default='service.json'))
     validate_parser.add_argument('service_json', **vpkargs)
 
     validate_parser.set_defaults(subcommand='validate')
@@ -79,8 +81,10 @@ def get_parser():
     init_parser.add_argument('init_dir', metavar='directory', type=str,
                    help='a (new) directory to initial a ymir project in')
     init_parser.add_argument('-f','--force', action='store_true',
-                   help='a (new) directory to initial a ymir project in')
+                   help='force overwrite even if directory exists')
     init_parser.set_defaults(subcommand='init')
+    freeze_parser = subparsers.add_parser('freeze', help='freeze ymir service (must be running)')
+    freeze_parser.set_defaults(subcommand='freeze')
     return parser
 
 def entry(settings=None):
@@ -99,6 +103,8 @@ def entry(settings=None):
         ymir_load(args)
     elif args.subcommand == 'keypair':
         ymir_keypair(args)
+    elif args.subcommand == 'freeze':
+        ymir_freeze(args)
     elif args.subcommand == 'shell':
         from smashlib import embed; embed()
     # reflect fabric here
