@@ -24,9 +24,8 @@
     // sets the AWS instance type for this service
     "instance_type"   : "t1.micro",
 
-    // set the supervisor credentials for this service.
-    // this section is unfortunately not DRY, make sure
-    // it matches with puppet/modules/ymir/templates/supervisord.conf
+    // Sets the supervisor credentials for this service.
+    // NB: these variables will be added to "facts" used by puppet
     "supervisor_user" : "admin",
     "supervisor_pass" : "testing",
     "supervisor_port" : "9001",
@@ -47,7 +46,6 @@
     // this file will be used only after the dependencies mentioned in
     // metadata.json have been installed.
     "setup_list" : [
-
         // install suite of devops packages suggested by ymir
         "puppet/modules/ymir/packages.pp",
         // creates /opt/ymir/logs which is used by supervisor, etc
