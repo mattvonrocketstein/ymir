@@ -26,10 +26,7 @@ def _load_json(fname):
     """
     with open(fname) as fhandle:
         tmp = demjson.decode(fhandle.read())
-        for k,v in tmp.items():
-            if isinstance(v, basestring) and '{' in v:
-                tmp[k] = v.format(**tmp)
-        return addict.Dict(tmp)
+        return _reflect(service_json=tmp)
 
 def _choose_schema(json):
     json = json.copy()
@@ -88,15 +85,42 @@ def _ymir_load(args, interactive=True):
     #print 'Chose service-class:\n ',BaseService.__name__
     ServiceFromJSON = type(
         classname, (BaseService,), dct)
-
+    obj = ServiceFromJSON()
+    # reflect
+    obj = _reflect(service_obj=obj)
     if interactive:
         print red("Service definition loaded from JSON")
-    return ServiceFromJSON()
+    return obj
+
+def ymir_shell(args):
+    """ """
+    wd_json = os.path.join(os.getcwd(),'service.json')
+    if os.path.exists(wd_json):
+        print 'found service.json import working directory, loading service..'
+        fake_args = addict.Dict(service_json=wd_json)
+        user_ns = dict(
+            service=ymir_load(fake_args))
+    from smashlib import embed; embed(user_ns=user_ns)
 
 def ymir_load(args, interactive=True):
     """ """
     ymir_validate(args, interactive=False)
     return _ymir_load(args, interactive=interactive)
+
+def _reflect(service_json=None, service_obj=None, simple=True):
+    """ """
+    assert service_json or service_obj
+    if service_obj:
+        for k, v in service_obj._template_data()['service_defaults'].items():
+            tmp = service_obj.SERVICE_DEFAULTS[k]
+            service_obj.SERVICE_DEFAULTS[k] = tmp.format(
+                service_obj._template_data(simple=simple))
+        return service_obj
+    if service_json:
+        for k,v in service_json.items():
+            if isinstance(v, basestring) and '{' in v:
+                service_json[k] = v.format(**service_json)
+        return addict.Dict(service_json)
 
 def ymir_init(args):
     """ responsible for executing the 'ymir init' command. """
@@ -139,10 +163,20 @@ def ymir_validate(args, simple=True, interactive=True):
     # simple validation has succeded, begin second phase.
     # the schema can be loaded, so build a service object.
     # the service object can then begin to validate itself
-    service_json = _load_json(args.service_json)
+
+    print 'Validating content in `health_checks` field..'
+
     service = _ymir_load(args, interactive=False)
+
+    errs = service._validate_health_checks()
+    if errs:
+        for e in errs:
+            print '  ERROR: '+str(e)
+    else:
+        print OK
+
     if not isinstance(service, ElasticBeanstalkService):
-        print 'Validating AWS keypairs..'
+        print 'Validating AWS keypair at field `key_name`..'
         errors = service._validate_keypairs()
         if errors:
             for err in errors:
@@ -150,22 +184,9 @@ def ymir_validate(args, simple=True, interactive=True):
         else:
             print OK
 
-        print 'Validating AWS security groups..'
+        print 'Validating AWS security groups in field `security_groups`..'
         err = service._validate_sgs()
         print '  ERROR: '+str(err) if err else OK
-
-    print 'Validating `health_checks` content..'
-    err = None
-    for check_name in service_json['health_checks']:
-        check_type, url = service_json['health_checks'][check_name]
-        try:
-            getattr(checks, check_type)
-        except AttributeError:
-            err = '  ERROR: {0} does not exist in ymir.checks'
-            err = err.format(check_type)
-            print err
-    if err is None:
-        print '  ok'
 
 def ymir_freeze(args):
     msg = 'not implemented yet'

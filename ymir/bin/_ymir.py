@@ -5,7 +5,7 @@ import os, sys, shutil
 from argparse import ArgumentParser
 
 import boto
-
+import addict
 from fabric.contrib.console import prompt, confirm#red,
 
 from ymir.version import __version__
@@ -106,7 +106,7 @@ def entry(settings=None):
     elif args.subcommand == 'freeze':
         ymir_freeze(args)
     elif args.subcommand == 'shell':
-        from smashlib import embed; embed()
+        ymir_shell(args)
     # reflect fabric here
 
 if __name__=='__main__':

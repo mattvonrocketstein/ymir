@@ -5,15 +5,25 @@
 
 import os, time
 import boto.ec2
-from fabric.api import local, settings, run
+from fabric.api import local, settings, run, shell_env
 from ymir.data import STATUS_DEAD, DEBUG
 
-def _run_puppet(_fname):
+def _run_puppet(_fname, facts={}):
     """ must be run within a fabric ssh context """
-    run("sudo puppet apply {0} --modulepath={1}/modules {2}".format(
-        '--debug' if DEBUG else '',
-        os.path.dirname(_fname),
-        _fname))
+    _facts = {}
+    for fact_name, val in facts.items():
+        if not fact_name.startswith('FACTER_'):
+            _facts['FACTER_' + fact_name] = val
+        else:
+            _facts[fact_name] = val
+    with shell_env(**_facts):
+        # sudo -E preserves the invoking enviroment,
+        # thus we are able to pass through the facts
+        #run("sudo -E echo FACTER_naxos_fae_env")
+        run("sudo -E puppet apply {0} --modulepath={1}/modules {2}".format(
+            '--debug' if DEBUG else '',
+            os.path.dirname(_fname),
+            _fname))
 
 def shell(conn=None, **namespace):
     conn = conn or get_conn()

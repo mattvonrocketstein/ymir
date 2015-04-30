@@ -251,7 +251,7 @@ class AbstractService(Reporter):
                 self.report("custom config for this Service: ",
                             self.PROVISION_LIST, section=True)
                 for relative_puppet_file in self.PROVISION_LIST:
-                    util._run_puppet(relative_puppet_file)
+                    util._run_puppet(relative_puppet_file, facts=self.facts)
                 self.report('  restarting everything')
                 retries = 3
                 cmd = "sudo /etc/init.d/supervisor restart"
@@ -332,7 +332,17 @@ class AbstractService(Reporter):
                         self.SETUP_LIST.index(setup_item),
                         setup_item
                         ))
-                    util._run_puppet(setup_item)
+                    util._run_puppet(setup_item, facts=self.facts)
+
+    @property
+    def facts(self):
+        tmp  = self.SERVICE_DEFAULTS.copy()
+        json = self._template_data(simple=True)
+        tmp.update(
+            dict(supervisor_user=json['supervisor_user'],
+                 supervisor_pass=json['supervisor_pass'],
+                 supervisor_port=json['supervisor_port']))
+        return tmp
 
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
@@ -373,28 +383,38 @@ class AbstractService(Reporter):
 
     def _show_url(self, url):
         data = self._status()
-        url = url.format(host=self._host(data), ip=data['ip'])
+        url = url.format(**self._template_data(simple=False))
         self.report("showing: {0}".format(url))
         webbrowser.open(url)
 
-    def to_json(self,simple=False):
+    # TODO: cache for when simple is false
+    def to_json(self, simple=False):
+        """ this is used to compute the equivalent of service.json if
+            there IS no service.json (ie the developer is using a python
+            class definition and class variables)
+        """
         out = [x for x in dir(self.__class__) if x==x.upper()]
-        out = [ [x.lower(), getattr(self.__class__,x)] for x in out ]
+        out = [ [x.lower(), getattr(self.__class__, x)] for x in out ]
         out = dict(out)
         if not simple:
             data = self._status()
-            out.update(dict(host=self._host(data), ip=data['ip'],))
+            extra = dict(host=self._host(data), ip=data['ip'],)
+            out.update(extra)
         return out
 
-    def _template_data(self):
-        template_data = self.to_json()
-        #raise Exception, template_data['service_defaults']
+    # TODO: cache for when simple is false
+    def _template_data(self, simple=False):
+        """ reflects the template information back into itself """
+        template_data = self.to_json(simple=simple)
         template_data.update(**self.SERVICE_DEFAULTS)
+        for k,v in template_data['service_defaults'].items():
+            if isinstance(v, basestring):
+                template_data['service_defaults'][k] = v.format(**template_data)
         return template_data
 
     def _run_check(self, check_type, url):
         """ """
-        data = self._template_data()
+        data = self._template_data(simple=False)
         url = url.format(**data)
         try:
             check = getattr(checks, check_type)
@@ -453,8 +473,8 @@ class AbstractService(Reporter):
         return result == 0
 
     def _validate_sgs(self):
-        import time
-        time.sleep(10)
+        #import time
+        #time.sleep(10)
         from boto.exception import EC2ResponseError
         try:
             rs = self.conn.get_all_security_groups(self.SECURITY_GROUPS)
@@ -462,6 +482,29 @@ class AbstractService(Reporter):
             return "could not find security groups: "\
                    + str(self.SECURITY_GROUPS)
 
+    def _validate_health_checks(self):
+        errs = []
+        # fake the host value just for validation because we don't know
+        # whether this service has been bootstrapped or not
+        service_json = self._template_data(simple=True)
+        service_json.update(host='host_name')
+        errs = []
+        for check_name in service_json['health_checks']:
+            check_type, url = service_json['health_checks'][check_name]
+            try:
+                getattr(checks, check_type)
+            except AttributeError:
+                err = '  check-type "{0}" does not exist in ymir.checks'
+                err = err.format(check_type)
+                errs.append(err)
+            tmp = service_json.copy()
+            tmp.update(dict(host='host'))
+            try:
+                url.format(**service_json)
+            except KeyError, exc:
+                errs.append('url "{0}" could not be formatted: missing {1}'.format(
+                    url, str(exc)))
+        return errs
 
     def _validate_keypairs(self):
         errors = []
