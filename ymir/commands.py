@@ -77,16 +77,16 @@ def _ymir_load(args, interactive=True):
         [x.upper(), y] for x, y in service_json.items()])
     dct.update(SERVICE_ROOT=SERVICE_ROOT)
     classname = str(service_json.name).lower()
-    if _choose_schema(service_json) == yschema.eb_schema:
+    chosen_schema = _choose_schema(service_json)
+    if chosen_schema == yschema.eb_schema:
         from ymir.beanstalk import ElasticBeanstalkService
         BaseService = ElasticBeanstalkService
     else:
         BaseService = AbstractService
     #print 'Chose service-class:\n ',BaseService.__name__
-    ServiceFromJSON = type(
-        classname, (BaseService,), dct)
+    ServiceFromJSON = type(classname, (BaseService,), dct)
     obj = ServiceFromJSON()
-    # reflect
+    obj._schema = chosen_schema
     obj = _reflect(service_obj=obj)
     if interactive:
         print red("Service definition loaded from JSON")
@@ -113,8 +113,9 @@ def _reflect(service_json=None, service_obj=None, simple=True):
     if service_obj:
         for k, v in service_obj._template_data()['service_defaults'].items():
             tmp = service_obj.SERVICE_DEFAULTS[k]
-            service_obj.SERVICE_DEFAULTS[k] = tmp.format(
-                service_obj._template_data(simple=simple))
+            if isinstance(tmp, basestring):
+                service_obj.SERVICE_DEFAULTS[k] = tmp.format(
+                    service_obj._template_data(simple=simple))
         return service_obj
     if service_json:
         for k,v in service_json.items():

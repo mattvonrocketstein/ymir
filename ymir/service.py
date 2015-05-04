@@ -15,12 +15,14 @@ from fabric.api import lcd, settings, run, put, cd
 from ymir import util
 from ymir import checks
 from ymir.base import Reporter
-from ymir.util import show_instances
+from ymir.util import show_instances, list_dir
 from ymir.data import DEFAULT_SUPERVISOR_PORT
+from ymir.schema import default_schema
 
 logging.captureWarnings(True)
 
 class AbstractService(Reporter):
+    _schema         = None
     S3_BUCKETS      = []
 
     # not DRY, see also:
@@ -28,27 +30,49 @@ class AbstractService(Reporter):
     #  puppet/modules/ymir/templates/supervisord.conf
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
-    SUPERVISOR_PORT = '9001'
+    SUPERVISOR_PORT = default_schema.get_default('supervisor_port')
     SERVICE_DEFAULTS = {}
-
+    LOGS = default_schema.get_default('logs')
+    LOG_DIRS = default_schema.get_default('log_dirs')
     INSTANCE_TYPE   = 't1.micro'
     SERVICE_ROOT    = None
     PEM             = None
     USERNAME        = None
-    SECURITY_GROUPS = None
     APP_NAME        = None
     ORG_NAME        = None
     ENV_NAME        = None
+    SECURITY_GROUPS = None
 
     HEALTH_CHECKS = {}
     INTEGRATION_CHECKS = {}
 
-    FABRIC_COMMANDS = [ 'status', 'ssh', 'create',
+    FABRIC_COMMANDS = [ 'check', 'create', 'logs',
+                        'provision', 'run',
                         'setup', 's3', 'shell',
-                        'provision', 'show', 'check',
-                        'run', 'test', 'show_instances' ]
+                        'status', 'ssh','show', 'show_instances',
+                        'tail', 'test',
+                        ]
+
+    def list_log_files(self):
+        with self.ssh_ctx():
+            for remote_dir in self.LOG_DIRS:
+                print list_dir(remote_dir)
+
+    def tail(self, filename):
+        """ tail a file on the service host """
+        with self.ssh_ctx():
+            run('tail -f '+filename)
+
+    def logs(self, *args):
+        """ list the known log files for this service"""
+        if not args:
+            self.list_log_files()
 
     def fabric_install(self):
+        """ publish certain service-methods into the fabfile
+            namespace. this essentially is responsible for
+            dynamically creating fabric commands.
+        """
         import fabfile
         for x in self.FABRIC_COMMANDS:
             try:
@@ -278,7 +302,6 @@ class AbstractService(Reporter):
             for key in keys:
                 print ("  {0} (size {1}) [{2}]".format(
                     key.name, key.size, key.get_acl()))
-        #from smashlib import embed; embed()
 
     @property
     def _s3_conn(self):
@@ -393,6 +416,7 @@ class AbstractService(Reporter):
             there IS no service.json (ie the developer is using a python
             class definition and class variables)
         """
+        blacklist = 'fabric_commands'.split()
         out = [x for x in dir(self.__class__) if x==x.upper()]
         out = [ [x.lower(), getattr(self.__class__, x)] for x in out ]
         out = dict(out)
@@ -400,6 +424,7 @@ class AbstractService(Reporter):
             data = self._status()
             extra = dict(host=self._host(data), ip=data['ip'],)
             out.update(extra)
+        [ out.pop(x, None) for x in blacklist ]
         return out
 
     # TODO: cache for when simple is false
@@ -439,7 +464,6 @@ class AbstractService(Reporter):
 
 
     def _display_checks(self, check_data):
-        #from smashlib import embed; embed()
         for url in check_data:
             check_type, msg = check_data[url]
             self.report(' .. {0} {1} -- {2}'.format(

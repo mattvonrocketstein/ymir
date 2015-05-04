@@ -3,10 +3,20 @@
     Mostly AWS utility functions
 """
 
+import shutil
 import os, time
 import boto.ec2
-from fabric.api import local, settings, run, shell_env
+from fabric.api import local, settings, run, shell_env, env
 from ymir.data import STATUS_DEAD, DEBUG
+
+def list_dir(dir_=None):
+    """returns a list of files in a directory (dir_) as absolute paths"""
+    dir_ = dir_ or env.cwd
+    if not dir_.endswith('/'):
+        dir_+='/'
+    string_ = run("for i in %s*; do echo $i; done" % dir_)
+    files = string_.replace("\r","").split("\n")
+    return files
 
 def _run_puppet(_fname, facts={}):
     """ must be run within a fabric ssh context """
@@ -116,7 +126,6 @@ def _block_while_terminating(instance, conn):
         time.sleep(3)
     print '  terminated successfully'
 
-import os, shutil
 # TODO: move to goulash
 # http://stackoverflow.com/questions/1868714/how-do-i-copy-an-entire-directory-of-files-into-an-existing-directory-using-pyth
 def copytree(src, dst, symlinks=False, ignore=None):
