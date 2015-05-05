@@ -15,11 +15,11 @@
 import requests
 
 def _get_request(url, **kargs):
-    return requests.get(url, timeout=2, verify=False, **kargs)
+    return requests.get(url, timeout=10, verify=False, **kargs)
 
 def port_open(service, port):
-    ip = service._status()['ip']
-    url= 'is_open://{0}:{1}'.format(ip, port)
+    ip  = service._status()['ip']
+    url = 'is_open://{0}:{1}'.format(ip, port)
     return url, str(service.is_port_open(ip, port))
 
 def supervisor(service, url):
@@ -36,7 +36,7 @@ def http(service, url, assert_json=False, codes=[]):
             msg = 'requests.exceptions.ConnectionError (timed out)'
         else:
             msg = str(e)
-    except requests.exceptions.ConnectionError, e:
+    except requests.exceptions.ReadTimeout, e:
         if 'timed out' in str(e):
             msg = 'requests.exceptions.ReadTimeout'
         else:
