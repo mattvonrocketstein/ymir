@@ -1,6 +1,6 @@
 """ ymir.security_groups
 
-    Helpers for security groups.. these are not used currently
+    Helpers for security groups.. not used currently
 """
 import collections
 

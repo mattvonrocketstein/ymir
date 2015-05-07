@@ -2,16 +2,12 @@
 """
 
 import os
-import shutil
 
 import addict
 import voluptuous, demjson
 
 from fabric.colors import red, green
-from fabric.contrib.console import confirm
 
-from ymir import util
-from ymir import checks
 from ymir.util import copytree
 from ymir import schema as yschema
 from ymir.service import AbstractService
@@ -53,7 +49,7 @@ def _validate_file(fname):
     SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
     tmp.update(dict(SERVICE_ROOT=SERVICE_ROOT))
     if is_eb:
-        return
+        return []
     files = tmp['setup_list'] + tmp['provision_list']
     for _file in files:
         if not os.path.exists(os.path.join(SERVICE_ROOT, _file)):
@@ -61,7 +57,8 @@ def _validate_file(fname):
                   'must exist relative to {0}, but {1}'
                   ' was not found').format(
                 SERVICE_ROOT, _file)
-            return err
+            return [err]
+    return []
 
 def _ymir_load(args, interactive=True):
     """ load service obj from service json """
@@ -153,41 +150,51 @@ def ymir_init(args):
 
 def ymir_validate(args, simple=True, interactive=True):
     """ """
-    err = _validate_file(args.service_json)
-    if err:
-        raise SystemExit(err)
-    elif interactive:
-        print 'Validating the file schema..\n  ok'
+    def print_errs(msg, _errs, die=False):
+        assert isinstance(_errs, list), str(type(_errs))
+        if interactive:
+            print msg
+        if not _errs:
+            print OK
+            return
+        for e in _errs:
+            print '  ERROR: '+str(e)
+        if die:
+            raise SystemExit(str(_errs))
+
+    errs = _validate_file(args.service_json)
+    print_errs(
+        'Validating the overall file schema..',
+        errs, die=True)
+
     if simple:
-        return
+        return True
 
     # simple validation has succeded, begin second phase.
     # the schema can be loaded, so build a service object.
     # the service object can then begin to validate itself
 
-    print 'Validating content in `health_checks` field..'
-
+    print 'Instantiating service to scrutinize it..'
     service = _ymir_load(args, interactive=False)
-
+    print OK
     errs = service._validate_health_checks()
-    if errs:
-        for e in errs:
-            print '  ERROR: '+str(e)
-    else:
-        print OK
+    print_errs(
+        'Validating content in `health_checks` field..',
+        errs)
 
     if not isinstance(service, ElasticBeanstalkService):
-        print 'Validating AWS keypair at field `key_name`..'
         errors = service._validate_keypairs()
-        if errors:
-            for err in errors:
-                print '  ERROR: '+str(err)
-        else:
-            print OK
+        print_errs('Validating AWS keypair at field `key_name`..',
+                   errors)
 
-        print 'Validating AWS security groups in field `security_groups`..'
-        err = service._validate_sgs()
-        print '  ERROR: '+str(err) if err else OK
+        errs = service._validate_sgs()
+        print_errs(
+            'Validating AWS security groups in field `security_groups`..',
+            errs)
+        errs = service._validate_puppet()
+        print_errs(
+            'Validating puppet code..',
+            errs)
 
 def ymir_freeze(args):
     msg = 'not implemented yet'

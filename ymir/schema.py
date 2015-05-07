@@ -10,7 +10,8 @@
 #     `logs`, `log_dirs`
 
 from voluptuous import Schema as _Schema
-from voluptuous import Required, Optional, Invalid, Undefined
+#from voluptuous import Invalid
+from voluptuous import Required, Optional, Undefined
 
 class Schema(_Schema):
     def __init__(self, validator, default=None):

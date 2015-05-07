@@ -1,7 +1,7 @@
 """ ymir.checks
 
     This file describes 'check_types' which are available for
-    use with integration tests or health-checking.
+    use with integration tests or health checks.
 
       | Check type  | Description
       |-------------|-----------------------------
@@ -10,6 +10,10 @@
       | json        | check that response is json.  yield bool
       | json_200    | check that response is json, code is 200. yield bool
       | port_open   | check that port is open.  yield bool
+
+   Every checker can optionally include it's own validation.  This validation
+   is NOT run during `ymir check` invocations but will be run during the
+   `ymir validate` invocation.
 """
 
 import requests
@@ -21,6 +25,15 @@ def port_open(service, port):
     ip  = service._status()['ip']
     url = 'is_open://{0}:{1}'.format(ip, port)
     return url, str(service.is_port_open(ip, port))
+def _port_open_validate(port):
+    if not isinstance(port, int):
+        try: int(port)
+        except ValueError:
+            err = ("the `port_open` check requires a single argument "
+                   "(the port number) which can be converted to an integer. "
+                   "  Got {0} instead").format(port)
+            return err
+port_open.validate = _port_open_validate
 
 def supervisor(service, url):
     url = 'http://{0}:{1}@{2}:{3}'.format(

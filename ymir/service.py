@@ -6,6 +6,7 @@ import shutil, webbrowser
 import logging
 
 import boto
+from boto.exception import EC2ResponseError
 
 import fabric
 from fabric.colors import blue
@@ -19,9 +20,171 @@ from ymir.util import show_instances, list_dir
 from ymir.data import DEFAULT_SUPERVISOR_PORT
 from ymir.schema import default_schema
 
+# Fabric and it's dependencies can be pretty noisy
 logging.captureWarnings(True)
+class ValidationMixin(object):
+    def _validate_sgs(self):
+        errs=[]
+        try:
+            rs = self.conn.get_all_security_groups(self.SECURITY_GROUPS)
+        except EC2ResponseError:
+            errs.append("could not find security groups: "\
+                   + str(self.SECURITY_GROUPS))
+        return errs
 
-class AbstractService(Reporter):
+    def _validate_health_checks(self):
+        errs = []
+        # fake the host value just for validation because we don't know
+        # whether this service has been bootstrapped or not
+        service_json = self._template_data(simple=True)
+        service_json.update(host='host_name')
+        errs = []
+        for check_name in service_json['health_checks']:
+            check_type, url = service_json['health_checks'][check_name]
+            try:
+                checker = getattr(checks, check_type)
+            except AttributeError:
+                err = '  check-type "{0}" does not exist in ymir.checks'
+                err = err.format(check_type)
+                errs.append(err)
+            tmp = service_json.copy()
+            tmp.update(dict(host='host'))
+            try:
+                url = url.format(**service_json)
+            except KeyError, exc:
+                errs.append('url "{0}" could not be formatted: missing {1}'.format(
+                    url, str(exc)))
+            else:
+                checker_validator = getattr(checker, 'validate',lambda url: None)
+                err = checker_validator(url)
+                if err: errs.append(err)
+        return errs
+
+    def _validate_puppet(self, recurse=False):
+        """ when recurse==True,
+              all puppet under SERVICE_ROOT/puppet will be checked
+
+            otherwise,
+              only validate the files mentioned in SETUP_LIST / PROVISION_LIST
+        """
+        #'puppet parser validate selinux.pp'
+        errs = []
+        return errs
+
+    def _validate_keypairs(self):
+        errors = []
+        if not os.path.exists(os.path.expanduser(self.PEM)):
+            errors.append('  ERROR: pem file is not present: ' + self.PEM)
+        keys = [k.name for k in util.get_conn().get_all_key_pairs()]
+        if self.KEY_NAME not in keys:
+            errors.append('  ERROR: aws keypair not found: ' + self.KEY_NAME)
+        return errors
+
+class FabricMixin(object):
+    FABRIC_COMMANDS = [ 'check', 'create', 'logs',
+                        'provision', 'run',
+                        'setup', 's3', 'shell',
+                        'status', 'ssh','show', 'show_instances',
+                        'tail', 'test',
+                        ]
+
+    def provision(self):
+        """ provision this service """
+        self.report('provisioning')
+        data = self._status()
+        if data['status']=='running':
+            return self.provision_ip(data['ip'])
+        else:
+            self.report('no instance is running for this Service, '
+                        'is the service created?  use "fab status" '
+                        'to check again')
+
+    def ssh(self):
+        """ connect to this service with ssh """
+        self.report('connecting with ssh')
+        cm_data = self.status()
+        if cm_data['status'] == 'running':
+            util.connect(cm_data['ip'],
+                         username=self.USERNAME,
+                         pem=self.PEM)
+        else:
+            self.report("no instance found")
+
+    def show(self):
+        """ open health-check webpages for this service in a browser """
+        self.report('showing webpages')
+        data = self._status()
+        for check_name in self.HEALTH_CHECKS:
+            check, url = self.HEALTH_CHECKS[check_name]
+            self._show_url(url.format(**self._template_data()))
+
+    def create(self, force=False):
+        """ create new instance of this service ('force' defaults to False)"""
+        self.report('creating', section=True)
+        conn = self.conn
+        i = self._get_instance()
+        if i is not None:
+            msg = '  instance already exists: {0} ({1})'
+            msg = msg.format(i, i.update())
+            self.report(msg)
+            if force:
+                self.report('  force is True, terminating it & rebuilding')
+                util._block_while_terminating(i, conn)
+                # might need to block and wait here
+                return self.create(force=False)
+            self.report('  force is False, refusing to rebuild it')
+            return
+
+        reservation = conn.run_instances(
+            image_id=self.AMI,
+            key_name=self.KEY_NAME,
+            instance_type=self.INSTANCE_TYPE,
+            security_groups = self.SECURITY_GROUPS,
+            #block_device_mappings = [bdm]
+            )
+
+        instance = reservation.instances[0]
+        self.report('  no instance found, creating it now.')
+        self.report('  reservation-id:', instance.id)
+
+        util._block_while_pending(instance)
+        status = instance.update()
+        if status == 'running':
+            self.report('  instance is running.')
+            self.report('  setting tag for "Name": {0}'.format(self.NAME))
+            instance.add_tag("Name", self.NAME)
+        else:
+            self.report('Weird instance status: ', status)
+            return None
+        try:
+            self.setup()
+        except fabric.exceptions.NetworkError:
+            time.sleep(4)
+            self.setup()
+        self.provision()
+
+    def check(self):
+        """ reports health for this service """
+        self.report('checking health')
+        data = self._status()
+        if data['status'] == 'running':
+            return self.check_data(data)
+        else:
+            self.report('no instance is running for this'
+                        ' Service, create it first')
+
+    def test(self):
+        """ runs integration tests for this service """
+        self.report('running integration tests')
+        data = self._status()
+        if data['status'] == 'running':
+            return self._test_data(data)
+        else:
+            self.report('no instance is running for this'
+                        ' Service, start (or create) it first')
+
+
+class AbstractService(Reporter, FabricMixin, ValidationMixin):
     _schema         = None
     S3_BUCKETS      = []
 
@@ -46,12 +209,6 @@ class AbstractService(Reporter):
     HEALTH_CHECKS = {}
     INTEGRATION_CHECKS = {}
 
-    FABRIC_COMMANDS = [ 'check', 'create', 'logs',
-                        'provision', 'run',
-                        'setup', 's3', 'shell',
-                        'status', 'ssh','show', 'show_instances',
-                        'tail', 'test',
-                        ]
 
     def list_log_files(self):
         with self.ssh_ctx():
@@ -95,7 +252,6 @@ class AbstractService(Reporter):
     def _report_name(self):
         return super(AbstractService, self)._report_name() + \
                    ' Service'
-
 
     def __init__(self, conn=None):
         """"""
@@ -182,80 +338,11 @@ class AbstractService(Reporter):
         else:
             self.report('no instance is running for this Service, create it first')
 
-    def provision(self):
-        """ provision this service """
-        self.report('provisioning')
-        data = self._status()
-        if data['status']=='running':
-            return self.provision_ip(data['ip'])
-        else:
-            self.report('no instance is running for this Service, '
-                        'is the service created?  use "fab status" '
-                        'to check again')
-
-    def ssh(self):
-        """ connect to this service with ssh """
-        self.report('connecting with ssh')
-        cm_data = self.status()
-        if cm_data['status'] == 'running':
-            util.connect(cm_data['ip'],
-                         username=self.USERNAME,
-                         pem=self.PEM)
-        else:
-            self.report("no instance found")
-
-    def show(self):
-        """ open health-check webpages for this service in a browser """
-        self.report('showing webpages')
-        data = self._status()
-        for check_name in self.HEALTH_CHECKS:
-            check, url = self.HEALTH_CHECKS[check_name]
-            self._show_url(url.format(**self._template_data()))
-
-    def create(self, force=False):
-        """ create new instance of this service ('force' defaults to False)"""
-        self.report('creating', section=True)
+    def _get_instance(self):
         conn = self.conn
         i = util.get_instance_by_name(self.NAME, conn)
-        if i is not None:
-            msg = '  instance already exists: {0} ({1})'
-            msg = msg.format(i, i.update())
-            self.report(msg)
-            if force:
-                self.report('  force is True, terminating it & rebuilding')
-                util._block_while_terminating(i, conn)
-                # might need to block and wait here
-                return self.create(force=False)
-            self.report('  force is False, refusing to rebuild it')
-            return
+        return i
 
-        reservation = conn.run_instances(
-            image_id=self.AMI,
-            key_name=self.KEY_NAME,
-            instance_type=self.INSTANCE_TYPE,
-            security_groups = self.SECURITY_GROUPS,
-            #block_device_mappings = [bdm]
-            )
-
-        instance = reservation.instances[0]
-        self.report('  no instance found, creating it now.')
-        self.report('  reservation-id:', instance.id)
-
-        util._block_while_pending(instance)
-        status = instance.update()
-        if status == 'running':
-            self.report('  instance is running.')
-            self.report('  setting tag for "Name": {0}'.format(self.NAME))
-            instance.add_tag("Name", self.NAME)
-        else:
-            self.report('Weird instance status: ', status)
-            return None
-        try:
-            self.setup()
-        except fabric.exceptions.NetworkError:
-            time.sleep(4)
-            self.setup()
-        self.provision()
 
     def ssh_ctx(self):
         return util.ssh_ctx(
@@ -263,88 +350,55 @@ class AbstractService(Reporter):
             user=self.USERNAME,
             pem=self.PEM)
 
+    def _update_tags(self):
+        self.report('updating instance tags')
+        i = self._get_instance()
+        json = self.to_json(simple=True)
+        tags = dict(
+            description = json['service_description'],)
+        #tags.update(..)
+        i.add_tags(tags)
+
+    def _restart_supervisor(self):
+        self.report('  restarting everything')
+        retries = 3
+        cmd = "sudo /etc/init.d/supervisor restart"
+        restart = lambda: run(cmd).return_code
+        with settings(warn_only=True):
+            result = restart()
+            count = 0
+            while result != 0 and count < retries:
+                msg = ('failed to restart supervisor.'
+                       '  trying again [{0}]').format(count)
+                print msg
+                result = restart()
+                count += 1
+
     def provision_ip(self, ip):
+        self._update_tags()
         self.report('installing build-essentials & puppet', section=True)
-        tdir = os.path.join(self.SERVICE_ROOT, 'puppet', '.tmp')
-        if os.path.exists(tdir):
-            #'<root>/puppet/.tmp should be nixed'
-            shutil.rmtree(tdir)
+        self._clean_tmp_dir()
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
+                # tilde expansion doesnt work with 'put'
                 put('puppet', '/home/'+self.USERNAME)
                 self.report("custom config for this Service: ",
                             self.PROVISION_LIST, section=True)
                 for relative_puppet_file in self.PROVISION_LIST:
                     util._run_puppet(relative_puppet_file, facts=self.facts)
-                self.report('  restarting everything')
-                retries = 3
-                cmd = "sudo /etc/init.d/supervisor restart"
-                restart = lambda: run(cmd).return_code
-                with settings(warn_only=True):
-                    result = restart()
-                    count = 0
-                    while result != 0 and count < retries:
-                        msg = ('failed to restart supervisor.'
-                               '  trying again [{0}]').format(count)
-                        print msg
-                        result = restart()
-                        count += 1
+            self._restart_supervisor()
 
-    def s3(self):
-        """ show summary of s3 information for this service"""
-        buckets = self._setup_buckets(quiet=True).items()
-        if not buckets:
-            self.report("this service is not using S3 buckets")
-        for bname, bucket in buckets:
-            keys = [k for k in bucket]
-            self.report("  {0} ({1} items) [{2}]".format(
-                bname, len(keys), bucket.get_acl()))
-            for key in keys:
-                print ("  {0} (size {1}) [{2}]".format(
-                    key.name, key.size, key.get_acl()))
-
-    @property
-    def _s3_conn(self):
-        return boto.connect_s3()
-
-    def _setup_buckets(self, quiet=False):
-        conn = self._s3_conn
-        tmp = {}
-        report = self.report if not quiet else lambda *args, **kargs: None
-        for name in self.S3_BUCKETS:
-            report("setting up s3 bucket: {0}".format(name))
-            tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
-        return tmp
-
-    def run(self, command):
-        """ run command on service host """
-        with util.ssh_ctx(
-            self._status()['ip'],
-            user=self.USERNAME,
-            pem=self.PEM):
-            run(command)
-
-    def copy_puppet(self):
-        """ copy puppet code to remote host (refreshes any dependencies) """
-        with util.ssh_ctx(
-            self._status()['ip'],
-            user=self.USERNAME,
-            pem=self.PEM):
-            with lcd(self.SERVICE_ROOT):
-                self.report('  flushing remote puppet codes and refreshing')
-                run("rm -rf puppet")
-                put('puppet', '/home/' + self.USERNAME)
-                self._bootstrap_puppet(force=True)
-
-    def setup_ip(self, ip):
-        self.report('setting up any s3 buckets this service requires',
-                    section=True)
-        self._setup_buckets()
-        self.report('installing build-essentials & puppet', section=True)
+    def _clean_tmp_dir(self):
+        """ necessary because puppet librarian is messy """
         tdir = os.path.join(self.SERVICE_ROOT, 'puppet', '.tmp')
         if os.path.exists(tdir):
             #'<root>/puppet/.tmp should be nixed'
             shutil.rmtree(tdir)
+
+    def setup_ip(self, ip):
+        self._setup_buckets()
+        self.report('installing build-essentials & puppet', section=True)
+        self._clean_tmp_dir()
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
                 run('sudo apt-get update')
@@ -367,6 +421,55 @@ class AbstractService(Reporter):
                  supervisor_port=json['supervisor_port']))
         return tmp
 
+    def s3(self):
+        """ show summary of s3 information for this service """
+        buckets = self._setup_buckets(quiet=True).items()
+        if not buckets:
+            self.report("this service is not using S3 buckets")
+        for bname, bucket in buckets:
+            keys = [k for k in bucket]
+            self.report("  {0} ({1} items) [{2}]".format(
+                bname, len(keys), bucket.get_acl()))
+            for key in keys:
+                print ("  {0} (size {1}) [{2}]".format(
+                    key.name, key.size, key.get_acl()))
+
+    @property
+    def _s3_conn(self):
+        return boto.connect_s3()
+
+    def _setup_buckets(self, quiet=False):
+        report = self.report if not quiet else lambda *args, **kargs: None
+        report('setting up any s3 buckets this service requires',
+               section=True)
+        conn = self._s3_conn
+        tmp = {}
+        for name in self.S3_BUCKETS:
+            report("setting up s3 bucket: {0}".format(name))
+            tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
+        return tmp
+
+    def run(self, command):
+        """ run command on service host """
+        with util.ssh_ctx(
+            self._status()['ip'],
+            user=self.USERNAME,
+            pem=self.PEM):
+            run(command)
+
+    def copy_puppet(self):
+        """ copy puppet code to remote host (refreshes any dependencies) """
+        with util.ssh_ctx(
+            self._status()['ip'],
+            user=self.USERNAME,
+            pem=self.PEM):
+            with lcd(self.SERVICE_ROOT):
+                msg = '  flushing remote puppet codes and refreshing'
+                self.report(msg)
+                run("rm -rf puppet")
+                put('puppet', '/home/' + self.USERNAME)
+                self._bootstrap_puppet(force=True)
+
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
         self.report('rebooting service')
@@ -377,26 +480,6 @@ class AbstractService(Reporter):
         else:
             self.report("service does not appear to be running")
 
-    def check(self):
-        """ reports health for this service """
-        self.report('checking health')
-        data = self._status()
-        if data['status'] == 'running':
-            return self.check_data(data)
-        else:
-            self.report('no instance is running for this'
-                        ' Service, create it first')
-
-    def test(self):
-        """ runs integration tests for this service """
-        self.report('running integration tests')
-        data = self._status()
-        if data['status'] == 'running':
-            return self._test_data(data)
-        else:
-            self.report('no instance is running for this'
-                        ' Service, start (or create) it first')
-
     def _host(self, data=None):
         """ todo: move to beanstalk class """
         data = data or self._status()
@@ -405,7 +488,6 @@ class AbstractService(Reporter):
             data.get('ip'))
 
     def _show_url(self, url):
-        data = self._status()
         url = url.format(**self._template_data(simple=False))
         self.report("showing: {0}".format(url))
         webbrowser.open(url)
@@ -454,7 +536,6 @@ class AbstractService(Reporter):
     def _test_data(self, data):
         """ run integration tests given 'status' data """
         out = {}
-        ip = data['ip']
         self.check_data(data)
         for check_name  in self.INTEGRATION_CHECKS:
             check_type, url = self.INTEGRATION_CHECKS[check_name]
@@ -472,7 +553,6 @@ class AbstractService(Reporter):
 
     def check_data(self, data):
         out = {}
-        ip = data['ip']
         # include relevant sections of status results
         for x in 'status eb_health eb_status'.split():
             if x in data:
@@ -484,7 +564,8 @@ class AbstractService(Reporter):
         self._display_checks(out)
 
     def shell(self):
-        return util.shell(conn=self.conn, Service=self)
+        return util.shell(
+            conn=self.conn, Service=self, service=self)
 
     def show_instances(self):
         """ show all ec2 instances """
@@ -492,49 +573,7 @@ class AbstractService(Reporter):
 
     @staticmethod
     def is_port_open(host, port):
+        """ TODO: refactor into ymir.utils. this is used by ymir.checks """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         result = sock.connect_ex((host, int(port)))
         return result == 0
-
-    def _validate_sgs(self):
-        #import time
-        #time.sleep(10)
-        from boto.exception import EC2ResponseError
-        try:
-            rs = self.conn.get_all_security_groups(self.SECURITY_GROUPS)
-        except EC2ResponseError:
-            return "could not find security groups: "\
-                   + str(self.SECURITY_GROUPS)
-
-    def _validate_health_checks(self):
-        errs = []
-        # fake the host value just for validation because we don't know
-        # whether this service has been bootstrapped or not
-        service_json = self._template_data(simple=True)
-        service_json.update(host='host_name')
-        errs = []
-        for check_name in service_json['health_checks']:
-            check_type, url = service_json['health_checks'][check_name]
-            try:
-                getattr(checks, check_type)
-            except AttributeError:
-                err = '  check-type "{0}" does not exist in ymir.checks'
-                err = err.format(check_type)
-                errs.append(err)
-            tmp = service_json.copy()
-            tmp.update(dict(host='host'))
-            try:
-                url.format(**service_json)
-            except KeyError, exc:
-                errs.append('url "{0}" could not be formatted: missing {1}'.format(
-                    url, str(exc)))
-        return errs
-
-    def _validate_keypairs(self):
-        errors = []
-        if not os.path.exists(os.path.expanduser(self.PEM)):
-            errors.append('  ERROR: pem file is not present: ' + self.PEM)
-        keys = [k.name for k in util.get_conn().get_all_key_pairs()]
-        if self.KEY_NAME not in keys:
-            errors.append('  ERROR: aws keypair not found: ' + self.KEY_NAME)
-        return errors or None

@@ -1,21 +1,24 @@
 """ ymir.bin._ymir
 """
 
-import os, sys, shutil
+import os, sys
 from argparse import ArgumentParser
 
 import boto
-import addict
-from fabric.contrib.console import prompt, confirm#red,
+from fabric.contrib.console import confirm#red,
 
 from ymir.version import __version__
-from ymir.commands import ymir_init, ymir_load, ymir_validate, ymir_freeze
+from ymir.commands import ymir_init, ymir_load, ymir_validate
 
 from ymir.util import working_dir_is_ymir
 
+def ymir_shell(args):
+    print 'not implemented yet'
+
 def ymir_freeze(args):
-    name = args.name
-    _id = args.instance_id
+    #name = args.name
+    #_id = args.instance_id
+    print 'not implemented yet'
 
 def ymir_keypair(args):
     """ """
