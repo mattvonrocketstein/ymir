@@ -21,11 +21,14 @@ from ymir.util import show_instances, list_dir
 from ymir.data import DEFAULT_SUPERVISOR_PORT
 from ymir.schema import default_schema
 
+logger = logging.getLogger(__name__)
+
 # Fabric and it's dependencies can be pretty noisy
 logging.captureWarnings(True)
+
 class ValidationMixin(object):
     def _validate_sgs(self):
-        errs=[]
+        errs = []
         try:
             rs = self.conn.get_all_security_groups(self.SECURITY_GROUPS)
         except EC2ResponseError:
@@ -53,10 +56,12 @@ class ValidationMixin(object):
             try:
                 url = url.format(**service_json)
             except KeyError, exc:
-                errs.append('url "{0}" could not be formatted: missing {1}'.format(
-                    url, str(exc)))
+                msg = 'url "{0}" could not be formatted: missing {1}'
+                msg = msg.format(url, str(exc))
+                errs.append(msg)
             else:
-                checker_validator = getattr(checker, 'validate',lambda url: None)
+                checker_validator = getattr(
+                    checker, 'validate', lambda url: None)
                 err = checker_validator(url)
                 if err: errs.append(err)
         return errs
@@ -69,7 +74,21 @@ class ValidationMixin(object):
               only validate the files mentioned in SETUP_LIST / PROVISION_LIST
         """
         #'puppet parser validate selinux.pp'
-        errs = []
+        errs=[]
+        pdir = os.path.join(self.SERVICE_ROOT,'puppet')
+        if not os.path.exists(pdir):
+            errs.append('puppet directory does not exist @ {0}'.format(
+                pdir))
+        else:
+            with quiet():
+                result = local('find {0}|grep .pp$'.format(pdir), capture=True)
+                for filename in result.split('\n'):
+                    logger.debug("validating {0}".format(filename))
+                    result = local('puppet parser validate {0}'.format(
+                        filename), capture=True)
+                    error = result.return_code!=0
+                    if error:
+                        errs.append('{0}'.format(filename))
         return errs
 
     def _validate_keypairs(self):

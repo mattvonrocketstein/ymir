@@ -2,6 +2,7 @@
 """
 
 import os, sys
+import logging
 from argparse import ArgumentParser
 
 import boto
@@ -11,6 +12,14 @@ from ymir.version import __version__
 from ymir.commands import ymir_init, ymir_load, ymir_validate
 
 from ymir.util import working_dir_is_ymir
+logger = logging.getLogger(__name__)
+
+LOG_LEVELS = [logging.CRITICAL, #50
+              logging.ERROR,    #40
+              logging.WARNING,  #30
+              logging.INFO,     #20
+              logging.DEBUG,    #10
+              ]
 
 def ymir_shell(args):
     print 'not implemented yet'
@@ -38,9 +47,19 @@ def ymir_keypair(args):
     key = ec2.create_key_pair(name)
     key.save(os.getcwd())
 
+
 def get_parser():
     """ creates the parser for the ymir command line utility """
     parser = ArgumentParser(prog=os.path.split(sys.argv[0])[-1])
+    parser.add_argument(
+        '-v', '--verbose', default=1,
+        action="count", dest="verbose",
+        help="turn up logging verbosity")
+    parser.add_argument('--debug',
+                        default=False,
+                        action='store_true',
+                        dest='debug',
+                        help='shortcut for -vvv')
     subparsers = parser.add_subparsers(help='commands')
     help_parser = subparsers.add_parser('help', help='show ymir help')
     help_parser.set_defaults(subcommand='help')
@@ -90,10 +109,27 @@ def get_parser():
     freeze_parser.set_defaults(subcommand='freeze')
     return parser
 
+
 def entry(settings=None):
     """ Main entry point """
     parser = get_parser()
     args = parser.parse_args(sys.argv[1:])
+
+    if args.debug:
+        args.verbose = 4
+    try:
+        level = LOG_LEVELS[args.verbose]
+    except IndexError:
+        raise SystemExit("-vvv is the maximum!")
+
+    logging.basicConfig(
+        level=level,
+        #format='%(levelname)s: %(message)s'
+        #format = '%(levelname)s [%(name)s:%(lineno)s] %(message)s'
+        format="%(levelname)s [%(filename)s:%(lineno)s] %(message)s",
+        )
+    logger.debug('log level is: {0}'.format(level))
+
     if args.subcommand == 'version':
         print 'ymir=={0}'.format(__version__)
     elif args.subcommand == 'help':
