@@ -11,7 +11,8 @@ from boto.exception import EC2ResponseError
 import fabric
 from fabric.colors import blue
 from fabric.contrib.files import exists
-from fabric.api import lcd, settings, run, put, cd
+from fabric.api import (
+    cd, lcd, local, put, quiet, settings, run )
 
 from ymir import util
 from ymir import checks
@@ -183,7 +184,26 @@ class FabricMixin(object):
             self.report('no instance is running for this'
                         ' Service, start (or create) it first')
 
-
+    def _validate_puppet_librarian(self):
+        errs = []
+        metadata = os.path.join(
+            self.SERVICE_ROOT,'puppet','metadata.json')
+        if not os.path.exists(metadata):
+            errs.append('{0} does not exist!'.format(metadata))
+        else:
+            if util.has_gem('metadata-json-lint'):
+                cmd_t = 'metadata-json-lint {0}'
+                with quiet():
+                    x = local(cmd_t.format(metadata), capture=True)
+                error = x.return_code!=0
+                if error:
+                    errs.append('could not validate {0}'.format(metadata))
+                    errs.append(x.stderr.strip())
+            else:
+                errs.append(
+                    'cannot validate.  '
+                    '"gem install metadata-json-lint" first')
+        return errs
 class AbstractService(Reporter, FabricMixin, ValidationMixin):
     _schema         = None
     S3_BUCKETS      = []

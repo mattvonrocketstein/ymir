@@ -60,7 +60,7 @@ def _validate_file(fname):
             return [err]
     return []
 
-def _ymir_load(args, interactive=True):
+def _ymir_load(args, interactive=True, simple=False):
     """ load service obj from service json """
     SERVICE_ROOT = os.path.dirname(args.service_json)
     SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
@@ -84,7 +84,7 @@ def _ymir_load(args, interactive=True):
     ServiceFromJSON = type(classname, (BaseService,), dct)
     obj = ServiceFromJSON()
     obj._schema = chosen_schema
-    obj = _reflect(service_obj=obj)
+    obj = _reflect(service_obj=obj, simple=simple)
     if interactive:
         print red("Service definition loaded from JSON")
     return obj
@@ -108,11 +108,12 @@ def _reflect(service_json=None, service_obj=None, simple=True):
     """ """
     assert service_json or service_obj
     if service_obj:
-        for k, v in service_obj._template_data()['service_defaults'].items():
+        tdata = service_obj._template_data(simple=simple)
+        for k, v in tdata['service_defaults'].items():
             tmp = service_obj.SERVICE_DEFAULTS[k]
             if isinstance(tmp, basestring):
                 service_obj.SERVICE_DEFAULTS[k] = tmp.format(
-                    service_obj._template_data(simple=simple))
+                    tdata)
         return service_obj
     if service_json:
         for k,v in service_json.items():
@@ -147,7 +148,6 @@ def ymir_init(args):
     print red('copying ymir skeleton: '), skeleton_dir
     copytree(skeleton_dir, init_dir)
 
-
 def ymir_validate(args, simple=True, interactive=True):
     """ """
     def print_errs(msg, _errs, die=False):
@@ -158,7 +158,7 @@ def ymir_validate(args, simple=True, interactive=True):
             print OK
             return
         for e in _errs:
-            print '  ERROR: '+str(e)
+            print red('  ERROR: ')+str(e)
         if die:
             raise SystemExit(str(_errs))
 
@@ -175,7 +175,7 @@ def ymir_validate(args, simple=True, interactive=True):
     # the service object can then begin to validate itself
 
     print 'Instantiating service to scrutinize it..'
-    service = _ymir_load(args, interactive=False)
+    service = _ymir_load(args, interactive=False, simple=True)
     print OK
     errs = service._validate_health_checks()
     print_errs(
@@ -186,7 +186,8 @@ def ymir_validate(args, simple=True, interactive=True):
         errors = service._validate_keypairs()
         print_errs('Validating AWS keypair at field `key_name`..',
                    errors)
-
+        errs = service._validate_puppet_librarian()
+        print_errs('Validating puppet-librarian\'s metadata.json', errs)
         errs = service._validate_sgs()
         print_errs(
             'Validating AWS security groups in field `security_groups`..',
