@@ -74,5 +74,8 @@ def http_200(service, url):
 def http_401(service, url):
     return http(service, url, codes=[401])
 
+def http_403(service, url):
+    return http(service, url, codes=[403])
+
 def json_200(service, url):
     return json(service, url, codes=[200])
