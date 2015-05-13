@@ -14,7 +14,9 @@ Ymir is "opinionated" in the sense that it currently only supports puppet for st
 <a name="installation">INSTALLATION</a>
 =======================================
 
-**Prerequisites:** A simple python setup for your platform, basically python, python-dev, & python-virtualenv.  For debian you can use a one-liner like `sudo apt-get install python python-dev python-virtualenv`.   Afterwards you should be ready to run the commands below from your shell:
+**Prerequisites:** A simple python setup for your platform, basically python, python-dev, & python-virtualenv.  For debian you can use a one-liner like `sudo apt-get install python python-dev python-virtualenv`.
+
+**Installation:**
 
 ```shell
   $ git clone https://github.com/mattvonrocketstein/ymir.git
@@ -25,7 +27,10 @@ Ymir is "opinionated" in the sense that it currently only supports puppet for st
   $ python setup.py develop
 ```
 
-**To test if it worked**, try running `ymir version`.
+To test if it worked, try running `ymir version`.
+
+**Suggested software:**
+    * [Puppet metadata validator](https://rubygems.org/gems/metadata-json-lint)
 
 <a name="usage">USAGE OVERVIEW</a>
 ===================================

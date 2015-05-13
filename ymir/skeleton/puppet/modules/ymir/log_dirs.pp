@@ -7,16 +7,18 @@
 # standard exec path
 Exec { path => [ '/bin/', '/sbin/' , '/usr/bin/', '/usr/sbin/' ] }
 
-file {'/opt/ymir/':
+file { '/opt/ymir/':
   ensure  => directory,
   recurse => true,
 }
-file {'/opt/ymir/logs':
+
+file { '/opt/ymir/logs':
   ensure  => directory,
   recurse => true,
   require => File['/opt/ymir']
 }
-exec{ 'writable-logdir':
+
+exec { 'writable-ymir-logdir':
   command => 'chmod uog+rwx /opt/ymir/logs',
   require => File['/opt/ymir/logs']
 }

@@ -10,7 +10,8 @@
     // this will be used in AWS tags: choose wisely
     // for readability and any logging you add later
     // Suggested format: "org_name-app_name-env_name"
-    "name" : "demo",
+    "name" : "{org_name}-{app_name}-{env_name}",
+    "service_description": "Service description goes here",
 
     // sets the ami for this service.
     // the default is ubuntu 14.04 amd64 ebs us-east-1
@@ -60,7 +61,7 @@
     // dependencies mentioned in puppet/metadata.json are guaranteed
     // to be installed, and setup_list is guaranteed to have run
     // at least once.
-    "provision_list" : ["puppet/demo_service.pp"]
+    "provision_list" : ["puppet/demo_service.pp"],
 
     // health checks to execute against this service
     "health_checks": {

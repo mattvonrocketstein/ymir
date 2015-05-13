@@ -12,9 +12,54 @@ from ymir.util import copytree
 from ymir import schema as yschema
 from ymir.service import AbstractService
 from ymir.beanstalk import ElasticBeanstalkService
+from ymir.schema import SGFileSchema, Schema, _choose_schema
 
 OK = green('  ok')
 YMIR_SRC = os.path.dirname(__file__)
+
+import logging
+logger = logging.getLogger(__name__)
+
+def ymir_sg(args):
+    def unpack_rule(r):
+        return addict.Dict(
+            ip_protocol=r[0],
+            from_port=r[1],
+            to_port=r[2],
+            cidr_ip=r[3])
+    def supports_ssh(_rules):
+        """ FIXME: dumb heuristic """
+        for _rule in _rules:
+            _rule = unpack_rule(_rule)
+            if _rule.to_port==22:
+                return True
+        return False
+
+    force = args.force
+    fname = os.path.abspath(args.sg_json)
+    if not os.path.exists(fname):
+        err = 'security group json @ "{0}" does not exist'.format(fname)
+        raise SystemExit(err)
+    with open(fname) as fhandle:
+        json = demjson.decode(fhandle.read())
+    logger.debug("loaded json from {0}".format(fname))
+    logger.debug(json)
+    SGFileSchema(json)
+    logger.debug("validated json from {0}".format(fname))
+
+    # one last sanity check
+    rules = [entry['rules'] for entry in json]
+    if not force and not \
+       any([supports_ssh(x) for x in rules]):
+        raise SystemExit("No security group mentions ssh!  "
+                         "Unless you pass --force "
+                         "ymir assumes this is an error")
+    from ymir.security_groups import sg_sync
+    for entry in json:
+        name = entry['name']
+        descr = entry['description']
+        rules = entry['rules']
+        sg_sync(name=name, description=descr, rules=rules)
 
 def _load_json(fname):
     """ loads json and allows for
@@ -23,14 +68,6 @@ def _load_json(fname):
     with open(fname) as fhandle:
         tmp = demjson.decode(fhandle.read())
         return _reflect(service_json=tmp)
-
-def _choose_schema(json):
-    json = json.copy()
-    if json.instance_type in [u'elastic_beanstalk', u'elasticbeanstalk']:
-        schema = yschema.eb_schema
-    else:
-        schema = yschema.default_schema
-    return schema
 
 def _validate_file(fname):
     """ simple schema validation, this
@@ -151,7 +188,7 @@ def ymir_init(args):
 def ymir_validate(args, simple=True, interactive=True):
     """ """
     def print_errs(msg, _errs, die=False):
-        assert isinstance(_errs, list), str(type(_errs))
+        assert isinstance(_errs, list), str(_errs)
         if interactive:
             print msg
         if not _errs:
@@ -163,9 +200,10 @@ def ymir_validate(args, simple=True, interactive=True):
             raise SystemExit(str(_errs))
 
     errs = _validate_file(args.service_json)
-    print_errs(
-        'Validating the overall file schema..',
-        errs, die=True)
+    if interactive:
+        print_errs(
+            'Validating the overall file schema..',
+            errs, die=True)
 
     if simple:
         return True
@@ -188,9 +226,9 @@ def ymir_validate(args, simple=True, interactive=True):
                    errors)
         errs = service._validate_puppet_librarian()
         print_errs('Validating puppet-librarian\'s metadata.json', errs)
-        errs = service._validate_sgs()
+        errs = service._validate_named_sgs()
         print_errs(
-            'Validating AWS security groups in field `security_groups`..',
+            'Validating simple AWS security groups in field `security_groups`..',
             errs)
         errs = service._validate_puppet()
         print_errs(

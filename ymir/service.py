@@ -27,13 +27,20 @@ logger = logging.getLogger(__name__)
 logging.captureWarnings(True)
 
 class ValidationMixin(object):
-    def _validate_sgs(self):
+    def _validate_named_sgs(self):
+        """ validation for security groups.
+            NB: this requires AWS credentials
+        """
         errs = []
+        sgs = [x for x in self.SECURITY_GROUPS if isinstance(x, basestring)]
         try:
-            rs = self.conn.get_all_security_groups(self.SECURITY_GROUPS)
+            rs = self.conn.get_all_security_groups(sgs)
         except EC2ResponseError:
             errs.append("could not find security groups: "\
                    + str(self.SECURITY_GROUPS))
+        #for x in set(self.SECURITY_GROUPS)-set(sgs):
+        #    errs.append('sg entry {0} is complex, ignoring it'.format(
+        #        x.get('name')))
         return errs
 
     def _validate_health_checks(self):
@@ -73,12 +80,12 @@ class ValidationMixin(object):
             otherwise,
               only validate the files mentioned in SETUP_LIST / PROVISION_LIST
         """
-        #'puppet parser validate selinux.pp'
-        errs=[]
-        pdir = os.path.join(self.SERVICE_ROOT,'puppet')
+        errs = []
+        pdir = os.path.join(self.SERVICE_ROOT, 'puppet')
         if not os.path.exists(pdir):
-            errs.append('puppet directory does not exist @ {0}'.format(
-                pdir))
+            msg = 'puppet directory does not exist @ {0}'
+            msg = msg.format(pdir)
+            errs.append(msg)
         else:
             with quiet():
                 result = local('find {0}|grep .pp$'.format(pdir), capture=True)
@@ -104,7 +111,7 @@ class FabricMixin(object):
     FABRIC_COMMANDS = [ 'check', 'create', 'logs',
                         'provision', 'run',
                         'setup', 's3', 'shell',
-                        'status', 'ssh','show', 'show_instances',
+                        'status', 'ssh','show', 'show_facts', 'show_instances',
                         'tail', 'test',
                         ]
 
@@ -452,6 +459,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     @property
     def facts(self):
+        """ """
         tmp  = self.SERVICE_DEFAULTS.copy()
         json = self._template_data(simple=True)
         tmp.update(
@@ -605,6 +613,8 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def shell(self):
         return util.shell(
             conn=self.conn, Service=self, service=self)
+    def show_facts(self):
+        print self.facts
 
     def show_instances(self):
         """ show all ec2 instances """

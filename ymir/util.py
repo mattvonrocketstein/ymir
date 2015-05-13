@@ -39,8 +39,9 @@ def shell(conn=None, **namespace):
     conn = conn or get_conn()
     try:
         from smashlib import embed; embed(user_ns=namespace)
-    except ImportError:
-        print 'you need smashlib or ipython installed to run the shell'
+    except ImportError,e:
+        print 'you need smashlib or ipython installed to run the shell!'
+        raise
 
 def connect(ip, username='ubuntu', pem=None):
     cmd = "ssh -l {0} {1}".format(username, ip)
