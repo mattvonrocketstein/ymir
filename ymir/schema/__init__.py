@@ -31,13 +31,14 @@ def _validate_sg_entry(dct, index=0):
                       " string-name or full dictionary "
                       "specification".format(index))
     expected_keys = 'name description rules'.split()
+    optional_keys = 'vpc'.split()
     for x in expected_keys:
         if x not in dct:
             raise Invalid(
                 ("security_group entry #{0} in dictionary format"
                  " is malformed: missing required key `{1}`").format(
                     index, x))
-    leftover = set(dct.keys())-set(expected_keys)
+    leftover = set(dct.keys()) - set(expected_keys) -set(optional_keys)
     if leftover:
         raise Invalid(
             ('found unexpected keys in'
