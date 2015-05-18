@@ -7,7 +7,7 @@ from .util import list_of_strings
 BaseSchema = {
     Required("name") : unicode,
     Required("instance_type") : unicode,
-    #Required("service_name") : unicode,
+    Required("service_name") : unicode,
     Required("service_description") : unicode,
     Required("health_checks") : dict,
     Required("username") : unicode,
@@ -17,6 +17,7 @@ BaseSchema = {
     Optional("org_name", default="org") : unicode,
     Optional("app_name", default="app") : unicode,
     Optional("service_defaults", default={}) : dict,
+    Optional("reservation_extras", default={}) : dict,
     Optional("supervisor_port", default='9001') : unicode,
     Optional("env_name", default='env') : unicode, }
 
