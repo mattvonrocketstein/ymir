@@ -8,11 +8,13 @@ import voluptuous, demjson
 
 from fabric.colors import red, green
 
+from ymir.base import report
 from ymir.util import copytree
 from ymir import schema as yschema
 from ymir.service import AbstractService
 from ymir.beanstalk import ElasticBeanstalkService
 from ymir.schema import SGFileSchema, Schema, _choose_schema
+from ymir.security_groups import sg_sync
 
 OK = green('  ok')
 YMIR_SRC = os.path.dirname(__file__)
@@ -54,12 +56,14 @@ def ymir_sg(args):
         raise SystemExit("No security group mentions ssh!  "
                          "Unless you pass --force "
                          "ymir assumes this is an error")
-    from ymir.security_groups import sg_sync
     for entry in json:
         name = entry['name']
         descr = entry['description']
         rules = entry['rules']
-        sg_sync(name=name, description=descr, rules=rules)
+        vpc = entry.get('vpc', None)
+        sg_sync(name=name, description=descr, rules=rules,
+                #vpc=vpc
+                )
 
 def _load_json(fname):
     """ loads json and allows for
@@ -138,7 +142,8 @@ def ymir_shell(args):
 
 def ymir_load(args, interactive=True):
     """ """
-    ymir_validate(args, interactive=False)
+    report('profile', os.environ.get('AWS_PROFILE','default'))
+    ymir_validate(args, simple=True, interactive=False)
     return _ymir_load(args, interactive=interactive)
 
 def _reflect(service_json=None, service_obj=None, simple=True):
