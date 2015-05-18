@@ -19,3 +19,9 @@ class Reporter(object):
         print template.format(
             name,
             msg, args or '')
+
+
+def report(title, msg, *args, **kargs):
+    """ FIXME: display hack """
+    _reporter = type(title, (Reporter,), dict())()
+    _reporter.report(msg)
