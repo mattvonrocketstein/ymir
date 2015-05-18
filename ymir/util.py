@@ -75,7 +75,7 @@ def has_gem(name):
     """ TODO: move to goulash """
     with quiet():
         x = local('gem list|grep {0}'.format(name), capture=True)
-    error = x.return_code!=0
+    error = x.return_code != 0
     return not error
 
 def get_conn(key_name=None, region='us-east-1'):
