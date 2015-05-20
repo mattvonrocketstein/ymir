@@ -12,7 +12,7 @@ import fabric
 from fabric.colors import blue
 from fabric.contrib.files import exists
 from fabric.api import (
-    cd, lcd, local, put, quiet, settings, run )
+    cd, lcd, local, put, quiet, settings, sudo, run )
 
 from ymir import util
 from ymir import checks
@@ -161,12 +161,19 @@ class FabricMixin(object):
                 return self.create(force=False)
             self.report('  force is False, refusing to rebuild it')
             return
-
+        # HACK: deal with unfortunate vpc vs. ec2-classic differences
+        reservation_extras = self.RESERVATION_EXTRAS.copy()
+        if 'security_group_ids' in reservation_extras:
+            # vpc-based (not ec2 classic style)
+            pass
+        else:
+            reservation_extras['security_groups'] = self.SECURITY_GROUPS
         reservation = conn.run_instances(
             image_id=self.AMI,
             key_name=self.KEY_NAME,
             instance_type=self.INSTANCE_TYPE,
-            security_groups = self.SECURITY_GROUPS,
+            **reservation_extras
+            #security_groups = self.SECURITY_GROUPS,
             #block_device_mappings = [bdm]
             )
 
@@ -183,12 +190,8 @@ class FabricMixin(object):
         else:
             self.report('Weird instance status: ', status)
             return None
-        try:
-            self.setup()
-        except fabric.exceptions.NetworkError:
-            time.sleep(4)
-            self.setup()
-        self.provision()
+        time.sleep(5)
+        self.report("Finished with creation.  Now run `fab setup`")
 
     def check(self):
         """ reports health for this service """
@@ -251,7 +254,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     ORG_NAME        = None
     ENV_NAME        = None
     SECURITY_GROUPS = None
-
+    RESERVATION_EXTRAS = default_schema.get_default('reservation_extras')
     HEALTH_CHECKS = {}
     INTEGRATION_CHECKS = {}
 
@@ -310,9 +313,14 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def _bootstrap_dev(self):
         """ """
-        run('sudo apt-get install -y git build-essential')
-        run('sudo apt-get install -y puppet ruby-dev')
-
+        with settings(warn_only=True):
+            r1 = run('sudo apt-get install -y git build-essential')
+        if r1.return_code!=0:
+            print 'bad return code bootstrapping dev.. waiting and trying again'
+            import time
+            time.sleep(5)
+            self._bootstrap_dev()
+        r2 = run('sudo apt-get install -y puppet ruby-dev')
 
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
@@ -382,7 +390,8 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 self.report("timed out, retrying")
                 self.setup()
         else:
-            self.report('no instance is running for this Service, create it first')
+            self.report('No instance is running for this Service, create it first.')
+            self.report('If it was recently created, wait while and then try again')
 
     def _get_instance(self):
         conn = self.conn
@@ -456,6 +465,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                         setup_item
                         ))
                     util._run_puppet(setup_item, facts=self.facts)
+        self.report("Setup complete.  Now run `fab provision`")
 
     @property
     def facts(self):
@@ -608,11 +618,24 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             check_type, url = self.HEALTH_CHECKS[check_name]
             _url, result = self._run_check(check_type, url)
             out[_url] = [check_type, result]
+        with self.ssh_ctx():
+            with quiet():
+                tmp = sudo('supervisorctl status')
+        tmp = tmp.split('\n')
+        tmp = [_.split() for _ in tmp]
+        for task_line in tmp:
+            task_name = task_line.pop(0)
+            task_status = task_line.pop(0)
+            task_remark = ' '.join(task_line)
+            out['supervisorctl://{0}'.format(task_name)] = [
+                'supervisorctl',
+                '{0}: {1}'.format(task_status, task_remark)]
         self._display_checks(out)
 
     def shell(self):
         return util.shell(
             conn=self.conn, Service=self, service=self)
+
     def show_facts(self):
         print self.facts
 
