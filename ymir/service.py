@@ -216,7 +216,7 @@ class FabricMixin(object):
     def _validate_puppet_librarian(self):
         errs = []
         metadata = os.path.join(
-            self.SERVICE_ROOT,'puppet','metadata.json')
+            self.SERVICE_ROOT, 'puppet', 'metadata.json')
         if not os.path.exists(metadata):
             errs.append('{0} does not exist!'.format(metadata))
         else:
@@ -618,18 +618,22 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             check_type, url = self.HEALTH_CHECKS[check_name]
             _url, result = self._run_check(check_type, url)
             out[_url] = [check_type, result]
-        with self.ssh_ctx():
-            with quiet():
-                tmp = sudo('supervisorctl status')
-        tmp = tmp.split('\n')
-        tmp = [_.split() for _ in tmp]
-        for task_line in tmp:
-            task_name = task_line.pop(0)
-            task_status = task_line.pop(0)
-            task_remark = ' '.join(task_line)
-            out['supervisorctl://{0}'.format(task_name)] = [
-                'supervisorctl',
-                '{0}: {1}'.format(task_status, task_remark)]
+       # with self.ssh_ctx():
+       #     with quiet():
+       #         # maybe use the supervisor webui here, which
+       #         # we have password to in service.json
+       #         # the pem file may not be available?
+       #         tmp = sudo('supervisorctl status')
+       # tmp = tmp.split('\n')
+       # tmp = [_.split() for _ in tmp]
+       # for task_line in tmp:
+       #     if not task_line: continue
+       #     task_name = task_line.pop(0)
+       #     task_status = task_line.pop(0)
+       #     task_remark = ' '.join(task_line)
+       #     out['supervisorctl://{0}'.format(task_name)] = [
+       #         'supervisorctl',
+       #         '{0}: {1}'.format(task_status, task_remark)]
         self._display_checks(out)
 
     def shell(self):
