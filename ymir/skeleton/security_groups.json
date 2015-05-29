@@ -1,0 +1,11 @@
+[
+    { "name":'demo_security_group',
+      "description": 'demo security group',
+      // ["ip_protocol", "from_port", "to_port", "cidr_ip", ]
+      "rules": [
+          ['tcp', 80, 80, '0.0.0.0/0'],     // web
+          ['tcp', 22, 22, '0.0.0.0/0'],     // ssh
+      ]
+
+    },
+]
