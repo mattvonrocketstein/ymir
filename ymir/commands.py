@@ -3,10 +3,12 @@
 
 import os
 
+import boto
 import addict
 import voluptuous, demjson
 
 from fabric.colors import red, green
+from fabric.contrib.console import confirm
 
 from ymir.base import report
 from ymir.util import copytree
@@ -21,6 +23,7 @@ YMIR_SRC = os.path.dirname(__file__)
 
 import logging
 logger = logging.getLogger(__name__)
+
 
 def ymir_sg(args):
     def unpack_rule(r):
@@ -224,7 +227,6 @@ def ymir_validate(args, simple=True, interactive=True):
     print_errs(
         'Validating content in `health_checks` field..',
         errs)
-
     if not isinstance(service, ElasticBeanstalkService):
         errors = service._validate_keypairs()
         print_errs('Validating AWS keypair at field `key_name`..',
@@ -239,6 +241,38 @@ def ymir_validate(args, simple=True, interactive=True):
         print_errs(
             'Validating puppet code..',
             errs)
+
+def ymir_keypair(args):
+    """ """
+    name = args.keypair_name
+    ec2 = boto.connect_ec2()
+    if not args.force:
+        q = ('\nCreate new AWSkeypair "{0}" (the '
+             'results will be saved to "{1}.pem" '
+             'in the working directory)?\n\n')
+        try:
+            result = confirm(q.format(name, name))
+        except KeyboardInterrupt:
+            return
+        if not result:
+            return
+        #boto.ec2.keypair.KeyPair
+    key = ec2.create_key_pair(name)
+    key.save(os.getcwd())
+
+def ymir_eip(args):
+    ec2 = boto.connect_ec2()
+    if not args.force:
+        q = ('\nCreate new elastic ip (the '
+             'ID for the result will be shown on stdout)?\n\n')
+        try:
+            result = confirm(q.format())
+        except KeyboardInterrupt:
+            return
+        if not result:
+            return
+    addr = ec2.allocate_address()
+    print addr.allocation_id
 
 def ymir_freeze(args):
     msg = 'not implemented yet'

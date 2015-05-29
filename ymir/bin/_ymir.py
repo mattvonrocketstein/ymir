@@ -5,11 +5,10 @@ import os, sys
 import logging
 from argparse import ArgumentParser
 
-import boto
-from fabric.contrib.console import confirm#red,
-
 from ymir.version import __version__
-from ymir.commands import ymir_init, ymir_load, ymir_validate, ymir_sg
+from ymir.commands import (
+    ymir_init, ymir_load, ymir_validate, ymir_sg,
+    ymir_eip, ymir_keypair)
 
 from ymir.util import working_dir_is_ymir
 logger = logging.getLogger(__name__)
@@ -28,24 +27,6 @@ def ymir_freeze(args):
     #name = args.name
     #_id = args.instance_id
     print 'not implemented yet'
-
-def ymir_keypair(args):
-    """ """
-    name = args.keypair_name
-    ec2 = boto.connect_ec2()
-    if not args.force:
-        q = ('\nCreate new AWSkeypair "{0}" (the '
-             'results will be saved to "{1}.pem" '
-             'in the working directory)?\n\n')
-        try:
-            result = confirm(q.format(name, name))
-        except KeyboardInterrupt:
-            return
-        if not result:
-            return
-        #boto.ec2.keypair.KeyPair
-    key = ec2.create_key_pair(name)
-    key.save(os.getcwd())
 
 
 def get_parser():
@@ -67,6 +48,11 @@ def get_parser():
     version_parser.set_defaults(subcommand='version')
     shell_parser = subparsers.add_parser('shell', help='open interactive shell')
     shell_parser.set_defaults(subcommand='shell')
+
+    eip_parser = subparsers.add_parser('eip', help='assign new elastic ip')
+    eip_parser.set_defaults(subcommand='eip')
+    eip_parser.add_argument('-f','--force', action='store_true',
+                   help='force noninteractive mode')
 
     sgkargs = dict(metavar='security_group_json',
                    type=str,)
@@ -155,6 +141,8 @@ def entry(settings=None):
         print 'ymir=={0}'.format(__version__)
     elif args.subcommand == 'help':
         parser.print_help()
+    elif args.subcommand == 'eip':
+        ymir_eip(args)
     elif args.subcommand == 'security_group':
         ymir_sg(args)
     elif args.subcommand == 'init':
