@@ -14,6 +14,8 @@ BaseSchema = {
     Required("pem") : unicode,
     Optional("logs", default=[]) : list_of_strings,
     Optional("log_dirs", default=[]) : list_of_strings,
+    Optional("s3_buckets", default=[]) : list_of_strings,
+    Optional("elastic_ips", default=[]) : list_of_strings,
     Optional("org_name", default="org") : unicode,
     Optional("app_name", default="app") : unicode,
     Optional("service_defaults", default={}) : dict,
@@ -28,9 +30,11 @@ class Schema(_Schema):
         super(Schema, self).__init__(validator)
 
     def get_default(self, name):
+        default=None
         tmp = [k for k in BaseSchema.keys() if str(k)==name]
         if tmp:
             default=tmp[0].default
             if default == Undefined:
                 return None
-            return default
+        if callable(default): return default()
+        return default

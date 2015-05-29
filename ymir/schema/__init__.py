@@ -18,7 +18,7 @@ from .util import list_of_strings, list_of_dicts
 
 def _choose_schema(json):
     json = json.copy()
-    if json.instance_type in [u'elastic_beanstalk', u'elasticbeanstalk']:
+    if json.get('instance_type') in [u'elastic_beanstalk', u'elasticbeanstalk']:
         schema = eb_schema
     else:
         schema = default_schema

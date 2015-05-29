@@ -161,8 +161,10 @@ class FabricMixin(object):
                 return self.create(force=False)
             self.report('  force is False, refusing to rebuild it')
             return
+
         # HACK: deal with unfortunate vpc vs. ec2-classic differences
         reservation_extras = self.RESERVATION_EXTRAS.copy()
+
         if 'security_group_ids' in reservation_extras:
             # vpc-based (not ec2 classic style)
             pass
@@ -235,7 +237,8 @@ class FabricMixin(object):
         return errs
 class AbstractService(Reporter, FabricMixin, ValidationMixin):
     _schema         = None
-    S3_BUCKETS      = []
+    S3_BUCKETS      = default_schema.get_default('s3_buckets')
+    ELASTIC_IPS      = default_schema.get_default('elastic_ips')
 
     # not DRY, see also:
     #  puppet/modules/ymir/templates/ymir_motd.erb
@@ -452,6 +455,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def setup_ip(self, ip):
         self._setup_buckets()
+        self._setup_eips()
         self.report('installing build-essentials & puppet', section=True)
         self._clean_tmp_dir()
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
@@ -497,13 +501,35 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def _setup_buckets(self, quiet=False):
         report = self.report if not quiet else lambda *args, **kargs: None
-        report('setting up any s3 buckets this service requires',
-               section=True)
+        report('setting up any s3 buckets this service requires')
         conn = self._s3_conn
         tmp = {}
         for name in self.S3_BUCKETS:
             report("setting up s3 bucket: {0}".format(name))
             tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
+        return tmp
+
+    def _setup_eips(self, quiet=False):
+        report = self.report if not quiet else lambda *args, **kargs: None
+        report('setting up any elastic IPs this service requires')
+        tmp = {}
+        for alloc_id in self.ELASTIC_IPS:
+            report("setting up elastic IP: {0}".format(alloc_id))
+            addr = self.conn.get_all_addresses(
+                filters=dict(allocation_id=alloc_id))
+            if not addr or len(addr)>1:
+                err = "Expected exactly one EIP would match filter, got {0}"
+                err = err.format(addr)
+                raise SystemExit(err)
+            addr = addr[0]
+            status = self._status()
+            instance_id = status['instance'].id
+            if addr.instance_id is None:
+                addr.associate(instance_id=instance_id)
+                report(" + {0}: {1}".format(addr.allocation_id, addr))
+            else:
+                report(" ERROR: already assigned! {0}: {1}".format(
+                    addr.allocation_id, addr))
         return tmp
 
     def run(self, command):
