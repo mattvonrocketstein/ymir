@@ -5,6 +5,7 @@
     "org_name": "OrgName",
     "app_name": "AppName",
     "env_name": "EnvName",
+    "service_name": "ServiceName",
 
     // sets the name for this service.
     // this will be used in AWS tags: choose wisely

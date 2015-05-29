@@ -24,10 +24,12 @@ file{'/etc/supervisor/supervisord.conf':
   owner   => 'root',
   require => Package['supervisor'],
   content => template('ymir/supervisord.conf')}->
-file { '/etc/supervisor/conf.d':
-  ensure  => directory,
-  require => Package['supervisor'],
-  source  => 'puppet:///modules/ymir/supervisor.d',
+file {'/etc/supervisor/conf.d':
+  ensure  => 'directory',
   recurse => true,
-  notify  => Service['supervisor']
-}
+  purge   => true,
+}->
+file{'/etc/supervisor/conf.d/example.conf':
+  ensure  => present,
+  owner   => 'root',
+  content => template('ymir/example.conf')}
