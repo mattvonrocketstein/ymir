@@ -115,12 +115,12 @@ class FabricMixin(object):
                         'tail', 'test',
                         ]
 
-    def provision(self):
+    def provision(self, fname=None):
         """ provision this service """
-        self.report('provisioning')
+        self.report('provisioning {0}'.format(fname or ''))
         data = self._status()
         if data['status']=='running':
-            return self.provision_ip(data['ip'])
+            return self.provision_ip(data['ip'], fname=fname)
         else:
             self.report('no instance is running for this Service, '
                         'is the service created?  use "fab status" '
@@ -432,17 +432,22 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 result = restart()
                 count += 1
 
-    def provision_ip(self, ip):
-        self._update_tags()
+    def provision_ip(self, ip, fname=None):
+        """ """
         self.report('installing build-essentials & puppet', section=True)
         self._clean_tmp_dir()
+        if fname is not None:
+            assert fname in self.PROVISION_LIST
+            provision_list = [fname]
+        else:
+            provision_list = self.PROVISION_LIST
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
                 # tilde expansion doesnt work with 'put'
                 put('puppet', '/home/'+self.USERNAME)
                 self.report("custom config for this Service: ",
-                            self.PROVISION_LIST, section=True)
-                for relative_puppet_file in self.PROVISION_LIST:
+                            provision_list, section=True)
+                for relative_puppet_file in provision_list:
                     util._run_puppet(relative_puppet_file, facts=self.facts)
             self._restart_supervisor()
 
@@ -454,6 +459,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             shutil.rmtree(tdir)
 
     def setup_ip(self, ip):
+        self._update_tags()
         self._setup_buckets()
         self._setup_eips()
         self.report('installing build-essentials & puppet', section=True)
@@ -528,7 +534,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 addr.associate(instance_id=instance_id)
                 report(" + {0}: {1}".format(addr.allocation_id, addr))
             else:
-                report(" ERROR: already assigned! {0}: {1}".format(
+                report(" - already assigned: {0}: {1}".format(
                     addr.allocation_id, addr))
         return tmp
 
