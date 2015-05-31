@@ -437,7 +437,11 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         self.report('installing build-essentials & puppet', section=True)
         self._clean_tmp_dir()
         if fname is not None:
-            assert fname in self.PROVISION_LIST
+            if fname not in self.PROVISION_LIST:
+                err = ('ERROR: Provisioning a single file requires that '
+                       'the file should be mentioned in service.json, '
+                       'but "{0}" was not found.').format(fname)
+                raise SystemExit(err)
             provision_list = [fname]
         else:
             provision_list = self.PROVISION_LIST
