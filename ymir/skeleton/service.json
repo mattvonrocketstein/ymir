@@ -77,5 +77,9 @@
         "supervisor" :
         ['http_200',
          'http://{supervisor_user}:{supervisor_pass}@{host}:{supervisor_port}'],
+    },
+
+    // data that will be passed on to the puppet FACTer
+    'service_defaults' : {
     }
 }
