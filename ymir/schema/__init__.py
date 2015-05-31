@@ -9,9 +9,9 @@
 #     `provision_list`,`setup_list`, `security_groups`
 #     `logs`, `log_dirs`
 
-from voluptuous import Schema as _Schema
 from voluptuous import Invalid
-from voluptuous import Required, Optional, Undefined
+from voluptuous import Schema as _Schema
+from voluptuous import Required, Optional#, Undefined
 
 from .base import BaseSchema, Schema
 from .util import list_of_strings, list_of_dicts

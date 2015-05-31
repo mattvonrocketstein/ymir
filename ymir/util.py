@@ -6,8 +6,10 @@
 import shutil
 import os, time
 import boto.ec2
-from fabric.api import local, settings, run, shell_env, env
-from ymir.data import STATUS_DEAD, DEBUG
+
+from fabric.api import settings, run, shell_env, env
+
+from ymir.data import STATUS_DEAD
 
 def list_dir(dir_=None):
     """returns a list of files in a directory (dir_) as absolute paths"""
@@ -18,7 +20,7 @@ def list_dir(dir_=None):
     files = string_.replace("\r","").split("\n")
     return files
 
-def _run_puppet(_fname, facts={}):
+def _run_puppet(_fname, debug=False, facts={}):
     """ must be run within a fabric ssh context """
     _facts = {}
     for fact_name, val in facts.items():
@@ -31,7 +33,7 @@ def _run_puppet(_fname, facts={}):
         # thus we are able to pass through the facts
         #run("sudo -E echo FACTER_naxos_fae_env")
         run("sudo -E puppet apply {0} --modulepath={1}/modules {2}".format(
-            '--debug' if DEBUG else '',
+            '--debug' if debug else '',
             os.path.dirname(_fname),
             _fname))
 

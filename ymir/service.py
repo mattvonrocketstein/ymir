@@ -6,114 +6,37 @@ import shutil, webbrowser
 import logging
 
 import boto
-from boto.exception import EC2ResponseError
+
 
 import fabric
 from fabric.colors import blue
 from fabric.contrib.files import exists
 from fabric.api import (
-    cd, lcd, local, put, quiet, settings, sudo, run )
+    cd, lcd, local, put,
+    quiet, settings, run )
 
 from ymir import util
 from ymir import checks
 from ymir.base import Reporter
-from ymir.util import show_instances, list_dir
 from ymir.data import DEFAULT_SUPERVISOR_PORT
 from ymir.schema import default_schema
+from ymir.validation import ValidationMixin
 
+# capture warnings because Fabric and
+# it's dependencies can be pretty noisy
 logger = logging.getLogger(__name__)
-
-# Fabric and it's dependencies can be pretty noisy
 logging.captureWarnings(True)
 
-class ValidationMixin(object):
-    def _validate_named_sgs(self):
-        """ validation for security groups.
-            NB: this requires AWS credentials
-        """
-        errs = []
-        sgs = [x for x in self.SECURITY_GROUPS if isinstance(x, basestring)]
-        try:
-            rs = self.conn.get_all_security_groups(sgs)
-        except EC2ResponseError:
-            errs.append("could not find security groups: "\
-                   + str(self.SECURITY_GROUPS))
-        #for x in set(self.SECURITY_GROUPS)-set(sgs):
-        #    errs.append('sg entry {0} is complex, ignoring it'.format(
-        #        x.get('name')))
-        return errs
-
-    def _validate_health_checks(self):
-        errs = []
-        # fake the host value just for validation because we don't know
-        # whether this service has been bootstrapped or not
-        service_json = self._template_data(simple=True)
-        service_json.update(host='host_name')
-        errs = []
-        for check_name in service_json['health_checks']:
-            check_type, url = service_json['health_checks'][check_name]
-            try:
-                checker = getattr(checks, check_type)
-            except AttributeError:
-                err = '  check-type "{0}" does not exist in ymir.checks'
-                err = err.format(check_type)
-                errs.append(err)
-            tmp = service_json.copy()
-            tmp.update(dict(host='host'))
-            try:
-                url = url.format(**service_json)
-            except KeyError, exc:
-                msg = 'url "{0}" could not be formatted: missing {1}'
-                msg = msg.format(url, str(exc))
-                errs.append(msg)
-            else:
-                checker_validator = getattr(
-                    checker, 'validate', lambda url: None)
-                err = checker_validator(url)
-                if err: errs.append(err)
-        return errs
-
-    def _validate_puppet(self, recurse=False):
-        """ when recurse==True,
-              all puppet under SERVICE_ROOT/puppet will be checked
-
-            otherwise,
-              only validate the files mentioned in SETUP_LIST / PROVISION_LIST
-        """
-        errs = []
-        pdir = os.path.join(self.SERVICE_ROOT, 'puppet')
-        if not os.path.exists(pdir):
-            msg = 'puppet directory does not exist @ {0}'
-            msg = msg.format(pdir)
-            errs.append(msg)
-        else:
-            with quiet():
-                result = local('find {0}|grep .pp$'.format(pdir), capture=True)
-                for filename in result.split('\n'):
-                    logger.debug("validating {0}".format(filename))
-                    result = local('puppet parser validate {0}'.format(
-                        filename), capture=True)
-                    error = result.return_code!=0
-                    if error:
-                        errs.append('{0}'.format(filename))
-        return errs
-
-    def _validate_keypairs(self):
-        errors = []
-        if not os.path.exists(os.path.expanduser(self.PEM)):
-            errors.append('  ERROR: pem file is not present: ' + self.PEM)
-        keys = [k.name for k in util.get_conn().get_all_key_pairs()]
-        if self.KEY_NAME not in keys:
-            errors.append('  ERROR: aws keypair not found: ' + self.KEY_NAME)
-        return errors
 
 class FabricMixin(object):
-    FABRIC_COMMANDS = [ 'check', 'create', 'logs',
-                        'provision', 'run',
-                        'setup', 's3', 'shell',
-                        'status', 'ssh','show', 'show_facts', 'show_instances',
-                        'tail', 'test',
-                        ]
+    FABRIC_COMMANDS = [
+        'check', 'create', 'logs',
+        'provision', 'run',
+        'setup', 's3', 'shell',
+        'status', 'ssh','show',
+        'show_facts', 'show_instances',
+        'tail', 'test',
+        ]
 
     def provision(self, fname=None):
         """ provision this service """
@@ -140,7 +63,7 @@ class FabricMixin(object):
     def show(self):
         """ open health-check webpages for this service in a browser """
         self.report('showing webpages')
-        data = self._status()
+        #data = self._status()
         for check_name in self.HEALTH_CHECKS:
             check, url = self.HEALTH_CHECKS[check_name]
             self._show_url(url.format(**self._template_data()))
@@ -235,6 +158,7 @@ class FabricMixin(object):
                     'cannot validate.  '
                     '"gem install metadata-json-lint" first')
         return errs
+
 class AbstractService(Reporter, FabricMixin, ValidationMixin):
     _schema         = None
     S3_BUCKETS      = default_schema.get_default('s3_buckets')
@@ -265,7 +189,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def list_log_files(self):
         with self.ssh_ctx():
             for remote_dir in self.LOG_DIRS:
-                print list_dir(remote_dir)
+                print util.list_dir(remote_dir)
 
     def tail(self, filename):
         """ tail a file on the service host """
@@ -378,7 +302,9 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 run('librarian-puppet init')
                 run('librarian-puppet install --verbose')
         self.report("  bootstrapping puppet on remote host")
-        util._run_puppet('puppet/modules/ymir/install_librarian.pp')
+        util._run_puppet(
+            'puppet/modules/ymir/install_librarian.pp',
+            debug=self.YMIR_DEBUG)
         _init_puppet("puppet")
 
     def setup(self):
@@ -448,8 +374,9 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
                 # tilde expansion doesnt work with 'put'
-                put('puppet', '/home/'+self.USERNAME)
-                self.report("custom config for this Service: ",
+                with settings(warn_only=True):
+                    put('puppet', '/home/'+self.USERNAME)
+                self.report("Provision list for this service: ",
                             provision_list, section=True)
                 for relative_puppet_file in provision_list:
                     util._run_puppet(relative_puppet_file, facts=self.facts)
@@ -478,7 +405,12 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                         self.SETUP_LIST.index(setup_item),
                         setup_item
                         ))
-                    util._run_puppet(setup_item, facts=self.facts)
+                    util._run_puppet(
+                        setup_item,
+                        facts=self.facts,
+                        debug=self.YMIR_DEBUG,)
+
+
         self.report("Setup complete.  Now run `fab provision`")
 
     @property
@@ -681,7 +613,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def show_instances(self):
         """ show all ec2 instances """
-        show_instances(conn=self.conn)
+        util.show_instances(conn=self.conn)
 
     @staticmethod
     def is_port_open(host, port):

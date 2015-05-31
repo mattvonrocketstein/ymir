@@ -14,6 +14,7 @@ BaseSchema = {
     Required("pem") : unicode,
     Optional("logs", default=[]) : list_of_strings,
     Optional("log_dirs", default=[]) : list_of_strings,
+    Optional("ymir_debug", default=False) : bool,
     Optional("s3_buckets", default=[]) : list_of_strings,
     Optional("elastic_ips", default=[]) : list_of_strings,
     Optional("org_name", default="org") : unicode,

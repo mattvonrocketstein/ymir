@@ -15,7 +15,7 @@ from ymir.util import copytree
 from ymir import schema as yschema
 from ymir.service import AbstractService
 from ymir.beanstalk import ElasticBeanstalkService
-from ymir.schema import SGFileSchema, Schema, _choose_schema
+from ymir.schema import SGFileSchema, _choose_schema
 from ymir.security_groups import sg_sync
 
 OK = green('  ok')

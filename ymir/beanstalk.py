@@ -41,7 +41,7 @@ class ElasticBeanstalkService(AbstractService):
         result = result.split('\n')
         header = 'Environment details for:'
         assert result[0].strip().startswith(header),'weird output: '+str(result)
-        eb_env = result[0][len(header):].strip()
+        #eb_env = result[0][len(header):].strip()
         result = [x.split(':') for x in result[1:]]
         result = [[ 'eb_' + x[0].strip().lower().replace(' ', '_'),
                    ':'.join(x[1:]).strip()] for x in result]
