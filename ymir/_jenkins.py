@@ -8,24 +8,31 @@
     I'd just commit these upstream, but despite adoption the library code
     is not that nice to work with.
 """
-
+from __future__ import print_function
 import urlparse
 import logging
 logger = logging.getLogger(__name__)
 
 import requests
-from jenkins import Jenkins as _Jenkins
+try:
+    from jenkins import Jenkins as _Jenkins
+except ImportError:
+    err = ("Cannot import 'jenkins'.  Try using pip "
+           "to install python-jenkins first")
+    raise SystemExit(err)
 
 class RequestsMixin(object):
     def _request(self, url='', **kargs):
         method = kargs.pop('method', 'get')
+        kargs['verify'] = False
         if url.startswith('/'):
             url = url[1:]
-        logger.debug('_request {0} with initial url: {1}'.format(method,url))
+        logger.debug('_request {0} with initial url: {1}'.format(
+            method, url))
         url = self.base_url + url
         logger.debug('_request with transformed url: '+url)
         method = getattr(requests, method)
-        logger.debug('method {0} '.format(method))
+        #logger.debug('method {0} '.format(method))
         resp = method(url, **kargs)
         self.last_resp = resp
         return resp
@@ -50,10 +57,11 @@ class Jenkins(_Jenkins, RequestsMixin):
             something like `http://user:api_key@host:port`
         """
         tmp = urlparse.urlparse(base_url)
-        self.base_url = '{0}://{1}:{2}@{3}/{4}'.format(
+        self.base_url = '{0}://{3}{4}'.format(
             tmp.scheme, user, _pass, tmp.netloc, tmp.path)
+        #raise Exception,self.base_url
         if not self.base_url.endswith('/'):
-            self.base_url+='/'
+            self.base_url += '/'
         self.last_resp = None
         super(Jenkins, self).__init__(base_url, user, _pass)
 
@@ -84,7 +92,10 @@ class Jenkins(_Jenkins, RequestsMixin):
             return self.STATUS_UNKNOWN
 
     def install_plugin(self, plugin):
-        assert '@' in plugin, 'plugin must include version info'
+        if '@' not in plugin:
+            raise ValueError(
+                ('plugin must include version'
+                 ' info, got: "{0}"').format(plugin))
         payload = """<jenkins><install plugin="{0}" /></jenkins>"""
         payload = payload.format(plugin)
         resp = self._post(
