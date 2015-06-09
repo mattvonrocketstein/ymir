@@ -170,6 +170,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
     SUPERVISOR_PORT = default_schema.get_default('supervisor_port')
+    YMIR_DEBUG = default_schema.get_default('ymir_debug')
     SERVICE_DEFAULTS = {}
     LOGS = default_schema.get_default('logs')
     LOG_DIRS = default_schema.get_default('log_dirs')
