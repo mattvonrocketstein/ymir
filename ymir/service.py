@@ -11,6 +11,7 @@ import boto
 import fabric
 from fabric.colors import blue
 from fabric.contrib.files import exists
+from fabric import api
 from fabric.api import (
     cd, lcd, local, put,
     quiet, settings, run )
@@ -35,8 +36,30 @@ class FabricMixin(object):
         'setup', 's3', 'shell',
         'status', 'ssh','show',
         'show_facts', 'show_instances',
-        'tail', 'test',
+        'tail', 'test', 'get', 'put',
         ]
+
+    def put(self, fname):
+        """ thin wrapper around fabric's scp command
+            just to use this service ssh context
+        """
+        self.report(
+            'getting "{0}" from remote'.format(
+                fname))
+        with self.ssh_ctx():
+            return api.get(fname)
+
+    def get(self, fname):
+        """ thin wrapper around fabric's scp command
+            just to use this service ssh context
+        """
+        self.report(
+            'getting "{0}" from remote'.format(
+                fname))
+        dest = os.path.basename(fname)
+        with self.ssh_ctx():
+            return api.get(fname, local_path=dest)
+
 
     def provision(self, fname=None):
         """ provision this service """
@@ -212,7 +235,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             try:
                 tmp = getattr(fabfile, x)
             except AttributeError:
-                setattr(fabfile,x,getattr(self,x))
+                setattr(fabfile, x, getattr(self,x))
             else:
                 err = ('Service definition "{0}" attempted'
                        ' to publish method "{1}" as a fabric '

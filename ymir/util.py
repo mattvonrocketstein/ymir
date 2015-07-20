@@ -83,7 +83,7 @@ def has_gem(name):
 def get_conn(key_name=None, region='us-east-1'):
     #print 'creating ec2 connection'
     try:
-        conn = boto.ec2.connect_to_region(region)
+        conn = boto.ec2.connect_to_region(region, profile_name=os.environ['AWS_PROFILE'])
     except boto.exception.NoAuthHandlerFound:
         err = ("ERROR: no AWS credentials could be found.  "
                "Set env variables or use ~/.boto, then try again")

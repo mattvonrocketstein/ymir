@@ -72,7 +72,10 @@ To test if it worked, try running `ymir version`.
 | *show*        | operation integrates with your local browser to opens every webpage that *check* operation would have been looking at |
 | *test*        | operation is intended to be an entry point for running integration tests on your service.  By default the *test* operation looks at everything that the *check* operation does, plus extra stuff (see [this section](#) of the service description documentation for more information about how to configure integration tests) |
 | *s3*      | summarizes contents of the s3 buckets your service defines, if any |
-| *freeze*      | freeze a (running) service to an AMI |
+| *get*      | scp "get" for this service.  takes one argument (the remote file) and always saves to the working directory |
+| *put*      | scp "put" for this service.  (not fully implemented yet) |
+| *freeze*      | freeze a (running) service to an AMI (not fully implemented yet) |
+
 
 
 
