@@ -84,9 +84,9 @@ def get_conn(key_name=None, region='us-east-1'):
     #print 'creating ec2 connection'
     try:
         conn = boto.ec2.connect_to_region(region, profile_name=os.environ['AWS_PROFILE'])
-    except boto.exception.NoAuthHandlerFound:
-        err = ("ERROR: no AWS credentials could be found.  "
-               "Set env variables or use ~/.boto, then try again")
+    except (KeyError, boto.exception.NoAuthHandlerFound):
+        err = ("ERROR: no AWS credentials could be found.\n  "
+               "Set AWS_PROFILE environment variable, or use ~/.boto, then try again")
         raise SystemExit(err)
     if key_name is not None:
         keypair = conn.get_key_pair(key_name)
