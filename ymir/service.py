@@ -3,6 +3,7 @@
 import os, time
 import socket
 import shutil, webbrowser
+import tempfile
 import logging
 
 import boto
@@ -39,15 +40,15 @@ class FabricMixin(object):
         'tail', 'test', 'get', 'put',
         ]
 
-    def put(self, fname):
+    def put(self, *args):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
         """
         self.report(
-            'getting "{0}" from remote'.format(
-                fname))
+            'putting "{0}" to remote'.format(
+                args))
         with self.ssh_ctx():
-            return api.get(fname)
+            return api.put(*args)
 
     def get(self, fname):
         """ thin wrapper around fabric's scp command
@@ -58,7 +59,7 @@ class FabricMixin(object):
                 fname))
         dest = os.path.basename(fname)
         with self.ssh_ctx():
-            return api.get(fname, local_path=dest)
+            return api.get(fname, local_path='.', use_sudo=True)
 
 
     def provision(self, fname=None):
@@ -141,12 +142,12 @@ class FabricMixin(object):
         time.sleep(5)
         self.report("Finished with creation.  Now run `fab setup`")
 
-    def check(self):
+    def check(self, check_name=None):
         """ reports health for this service """
         self.report('checking health')
         data = self._status()
         if data['status'] == 'running':
-            return self.check_data(data)
+            return self.check_data(data, check_name=check_name)
         else:
             self.report('no instance is running for this'
                         ' Service, create it first')
@@ -198,6 +199,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     LOGS = default_schema.get_default('logs')
     LOG_DIRS = default_schema.get_default('log_dirs')
     INSTANCE_TYPE   = 't1.micro'
+    PUPPET_PARSER   = None
     SERVICE_ROOT    = None
     PEM             = None
     USERNAME        = None
@@ -271,7 +273,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             import time
             time.sleep(5)
             self._bootstrap_dev()
-        r2 = run('sudo apt-get install -y puppet ruby-dev')
+        r2 = run('sudo apt-get install -y puppet ruby-dev > /dev/null')
 
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
@@ -298,7 +300,10 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def _status(self):
         """ retrieves service status information """
         inst = util.get_instance_by_name(self.NAME, self.conn)
+        #from smashlib import embed; embed()
         if inst:
+            #addresses = [ a for a in self.conn.get_all_addresses() \
+            #              if a.instance_id == inst.id]
             result = dict(
                 instance=inst,
                 supervisor='http://{0}:{1}@{2}:{3}/'.format(
@@ -325,7 +330,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             with cd(_dir):
                 run('librarian-puppet init')
                 run('librarian-puppet install --verbose')
-        self.report("  bootstrapping puppet on remote host")
+        self.report("  bootstrapping puppet dependencies on remote host")
         util._run_puppet(
             'puppet/modules/ymir/install_librarian.pp',
             debug=self.YMIR_DEBUG)
@@ -381,6 +386,16 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 print msg
                 result = restart()
                 count += 1
+    def _compress_local_puppet_code(self):
+        """ returns an absolute path to a temporary file
+            containing puppet code for this service.
+            NB: caller is responsible for deletion
+        """
+        with lcd(self.SERVICE_ROOT):
+            pfile = tempfile.mktemp(suffix='.tgz')
+            # build a local tarball to copy and unzip on the remote side
+            api.local('tar -czf {0} puppet/ '.format(pfile))
+        return pfile
 
     def provision_ip(self, ip, fname=None):
         """ """
@@ -395,15 +410,24 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             provision_list = [fname]
         else:
             provision_list = self.PROVISION_LIST
+        remote_user_home = '/home/' + self.USERNAME
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
-                # tilde expansion doesnt work with 'put'
-                with settings(warn_only=True):
-                    put('puppet', '/home/'+self.USERNAME)
+                # if clean==True, in the call below, the puppet deps
+                # which were installed in the `setup` phase would be
+                # destroyed.  not what is wanted for provisioning!
+                self.copy_puppet(clean=False)
                 self.report("Provision list for this service: ",
                             provision_list, section=True)
                 for relative_puppet_file in provision_list:
-                    util._run_puppet(relative_puppet_file, facts=self.facts)
+                    self.report('provision_list[{0}]: "{1}"'.format(
+                        provision_list.index(relative_puppet_file),
+                        relative_puppet_file))
+                    util._run_puppet(
+                        relative_puppet_file,
+                        parser=self.PUPPET_PARSER,
+                        facts=self.facts,
+                        )
             self._restart_supervisor()
 
     def _clean_tmp_dir(self):
@@ -421,16 +445,18 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         self._clean_tmp_dir()
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
-                run('sudo apt-get update')
+                run('sudo apt-get update > /dev/null')
                 self._bootstrap_dev()
                 self.copy_puppet()
+                self._bootstrap_puppet(force=True)
                 for setup_item in self.SETUP_LIST:
-                    self.report('setup_list[{0}] "{1}"'.format(
+                    self.report('setup_list[{0}]: "{1}"'.format(
                         self.SETUP_LIST.index(setup_item),
                         setup_item
                         ))
                     util._run_puppet(
                         setup_item,
+                        puppet_dir='puppet',
                         facts=self.facts,
                         debug=self.YMIR_DEBUG,)
 
@@ -482,7 +508,8 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         for alloc_id in self.ELASTIC_IPS:
             report("setting up elastic IP: {0}".format(alloc_id))
             addr = self.conn.get_all_addresses(
-                filters=dict(allocation_id=alloc_id))
+                filters=dict(allocation_id=alloc_id)) + \
+                self.conn.get_all_addresses(filters=dict())
             if not addr or len(addr)>1:
                 err = "Expected exactly one EIP would match filter, got {0}"
                 err = err.format(addr)
@@ -506,18 +533,32 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             pem=self.PEM):
             run(command)
 
-    def copy_puppet(self):
+    def copy_puppet(self, clean=True):
         """ copy puppet code to remote host (refreshes any dependencies) """
         with util.ssh_ctx(
             self._status()['ip'],
             user=self.USERNAME,
             pem=self.PEM):
-            with lcd(self.SERVICE_ROOT):
-                msg = '  flushing remote puppet codes and refreshing'
-                self.report(msg)
-                run("rm -rf puppet")
-                put('puppet', '/home/' + self.USERNAME)
-                self._bootstrap_puppet(force=True)
+            remote_user_home = '/home/' + self.USERNAME
+            pfile = self._compress_local_puppet_code()
+            msg = '  flushing remote puppet codes and refreshing'
+            self.report(msg)
+            try:
+                put(pfile, remote_user_home)
+                with api.cd(remote_user_home):
+                    if clean:
+                        # this undoes `ymir setup` phase, ie the installation
+                        # of puppet deps mentioned in metadata.json.
+                        api.run('rm -rf puppet')
+                    api.run('tar -zxf {0}'.format(os.path.basename(pfile)))
+            finally:
+                api.local('rm {0}'.format(pfile))
+
+            #with lcd(self.SERVICE_ROOT):
+                #pfile = self._compress_local_puppet_code(self)
+                #api.run("rm -rf puppet")
+                #api.put('puppet', '/home/' + self.USERNAME)
+
 
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
@@ -593,20 +634,26 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         self._display_checks(out)
 
 
-    def _display_checks(self, check_data):
+    def _display_checks(self, check_data, check_name=None):
         for url in check_data:
             check_type, msg = check_data[url]
             self.report(' .. {0} {1} -- {2}'.format(
                 blue('[?{0}]'.format(check_type)),
                 url, msg))
 
-    def check_data(self, data):
+    def check_data(self, data, check_name=None):
         out = {}
         # include relevant sections of status results
         for x in 'status eb_health eb_status'.split():
             if x in data:
                 out['aws://'+x] = ['read', data[x]]
-        for check_name in self.HEALTH_CHECKS:
+        health_checks = self.HEALTH_CHECKS.keys()
+        if check_name:
+            err = 'check {0} not found in {1}'.format(
+                check_name, health_checks)
+            assert check_name in health_checks,err
+            health_checks = [check_name]
+        for check_name in health_checks:
             check_type, url = self.HEALTH_CHECKS[check_name]
             _url, result = self._run_check(check_type, url)
             out[_url] = [check_type, result]
