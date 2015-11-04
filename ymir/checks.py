@@ -25,6 +25,7 @@ def port_open(service, port):
     ip  = service._status()['ip']
     url = 'is_open://{0}:{1}'.format(ip, port)
     return url, str(service.is_port_open(ip, port))
+
 def _port_open_validate(port):
     if not isinstance(port, int):
         try: int(port)

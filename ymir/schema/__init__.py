@@ -69,6 +69,11 @@ def sg_schema(lst):
     for x in lst:
         _validate_sg_entry(x, lst.index(x))
 
+def _validate_puppet_parser(x):
+    if x!='future':
+        err = "puppet_parser has only one acceptable value: 'future'"
+        raise Invalid(err)
+
 SGFileSchema = _Schema(sg_schema)
 
 schema =  BaseSchema.copy()
@@ -80,7 +85,8 @@ schema.update({
     Required("setup_list") : _validate_sl_field,
     Required("security_groups") : _validate_sg_field,
     Required("provision_list") : _validate_pl_field,
-    })
+    Optional("puppet_parser") : _validate_puppet_parser,
+})
 
 schema = default_schema = Schema(schema, default=dict(),)
 default_schema.schema_name = 'default_schema'

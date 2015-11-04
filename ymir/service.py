@@ -550,15 +550,9 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                         # this undoes `ymir setup` phase, ie the installation
                         # of puppet deps mentioned in metadata.json.
                         api.run('rm -rf puppet')
-                    api.run('tar -zxf {0}'.format(os.path.basename(pfile)))
+                    api.run('tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
             finally:
-                api.local('rm {0}'.format(pfile))
-
-            #with lcd(self.SERVICE_ROOT):
-                #pfile = self._compress_local_puppet_code(self)
-                #api.run("rm -rf puppet")
-                #api.put('puppet', '/home/' + self.USERNAME)
-
+                api.local('rm "{0}"'.format(pfile))
 
     def reboot(self):
         """ TODO: blocking until reboot is complete? """

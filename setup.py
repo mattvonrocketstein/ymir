@@ -31,7 +31,12 @@ setup(
     entry_points = {
         'console_scripts': \
         ['ymir = ymir.bin._ymir:entry', ] },
-    install_requires = ['voluptuous', 'demjson'],
+    install_requires = [
+        'voluptuous',
+        'demjson',
+        'goulash',
+        'werkzeug', # used for caching
+        ],
     #package_data={'ymir': ['skeleton/*']},
     include_package_data=True, # this will use MANIFEST.in during install where we specify additional files
 

@@ -20,7 +20,7 @@ def list_dir(dir_=None):
     files = string_.replace("\r","").split("\n")
     return files
 
-def _run_puppet(_fname, debug=False, facts={}):
+def _run_puppet(_fname, parser=None, debug=False, puppet_dir=None, facts={}):
     """ must be run within a fabric ssh context """
     _facts = {}
     for fact_name, val in facts.items():
@@ -32,10 +32,11 @@ def _run_puppet(_fname, debug=False, facts={}):
         # sudo -E preserves the invoking enviroment,
         # thus we are able to pass through the facts
         #run("sudo -E echo FACTER_naxos_fae_env")
-        run("sudo -E puppet apply {0} --modulepath={1}/modules {2}".format(
-            '--debug' if debug else '',
-            os.path.dirname(_fname),
-            _fname))
+        run("sudo -E puppet apply {parser} {debug} --modulepath={pdir}/modules {fname}".format(
+            parser=('--parser '+parser) if parser else '',
+            debug='--debug' if debug else '',
+            pdir=puppet_dir or os.path.dirname(_fname),
+            fname=_fname))
 
 def shell(conn=None, **namespace):
     conn = conn or get_conn()
