@@ -11,6 +11,7 @@ import boto
 
 import fabric
 from fabric.colors import blue
+from fabric.colors import yellow
 from fabric.contrib.files import exists
 from fabric import api
 from fabric.api import (
@@ -142,15 +143,15 @@ class FabricMixin(object):
         time.sleep(5)
         self.report("Finished with creation.  Now run `fab setup`")
 
-    def check(self, check_name=None):
+    def check(self):
         """ reports health for this service """
         self.report('checking health')
         data = self._status()
         if data['status'] == 'running':
-            return self.check_data(data, check_name=check_name)
+            return self._check()
         else:
             self.report('no instance is running for this'
-                        ' Service, create it first')
+                        ' service, create it first')
 
     def test(self):
         """ runs integration tests for this service """
@@ -160,7 +161,7 @@ class FabricMixin(object):
             return self._test_data(data)
         else:
             self.report('no instance is running for this'
-                        ' Service, start (or create) it first')
+                        ' service, start (or create) it first')
 
     def _validate_puppet_librarian(self):
         errs = []
@@ -252,8 +253,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         pass
 
     def _report_name(self):
-        return super(AbstractService, self)._report_name() + \
-                   ' Service'
+        return super(AbstractService, self)._report_name()
 
     def __init__(self, conn=None):
         """"""
@@ -278,16 +278,14 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
         if 'section' in kargs:
-            print '-'*80
+            print '-' * 80
         template = '\x1b[31;01m{0}:\x1b[39;49;00m {1} {2}'
         name = self._report_name()
         # if Service subclasses are embedded directly into fabfiles, there
         # is a need for a lot of private variables to control the namespace
         # fabric publishes as commands.
         name = name.replace('_', '')
-        print template.format(
-            name,
-            msg, args or '')
+        print template.format(name, msg, args or '')
 
     def status(self):
         """ shows IP, ec2 status/tags, etc for this service """
@@ -300,7 +298,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def _status(self):
         """ retrieves service status information """
         inst = util.get_instance_by_name(self.NAME, self.conn)
-        #from smashlib import embed; embed()
         if inst:
             #addresses = [ a for a in self.conn.get_all_addresses() \
             #              if a.instance_id == inst.id]
@@ -417,8 +414,8 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 # which were installed in the `setup` phase would be
                 # destroyed.  not what is wanted for provisioning!
                 self.copy_puppet(clean=False)
-                self.report("Provision list for this service: ",
-                            provision_list, section=True)
+                self.report("Provision list for this service: {0}".format(
+                            provision_list), section=True)
                 for relative_puppet_file in provision_list:
                     self.report('provision_list[{0}]: "{1}"'.format(
                         provision_list.index(relative_puppet_file),
@@ -603,71 +600,37 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 template_data['service_defaults'][k] = v.format(**template_data)
         return template_data
 
-    def _run_check(self, check_type, url):
-        """ """
-        data = self._template_data(simple=False)
-        url = url.format(**data)
-        try:
-            check = getattr(checks, check_type)
-        except AttributeError:
-            err = 'Not sure how to run "{0}" check on {1}: '.format(
-                check_type, url)
-            raise SystemExit(err)
-        else:
-            _url, message = check(self, url)
-            return _url, message
-
-    def _test_data(self, data):
-        """ run integration tests given 'status' data """
+    """ def _test_data(self, data):
+        #run integration tests given 'status' data
         out = {}
         self.check_data(data)
         for check_name  in self.INTEGRATION_CHECKS:
             check_type, url = self.INTEGRATION_CHECKS[check_name]
             _url, result = self._run_check(check_type, url)
-            out[_url] = [check_type, result]
-        self._display_checks(out)
+            out[_url] = [check_name, check_type, result]
+        self._display_checks(out) """
 
+    def _display_checks(self, checks):
+        for check_obj in checks:
+            self.report(' [{0}] [?{1}] -- {2} {3}'.format(
+                yellow(check_obj.name),
+                blue(check_obj.check_type),
+                check_obj.url_t,
+                check_obj.msg))
 
-    def _display_checks(self, check_data, check_name=None):
-        for url in check_data:
-            check_type, msg = check_data[url]
-            self.report(' .. {0} {1} -- {2}'.format(
-                blue('[?{0}]'.format(check_type)),
-                url, msg))
-
-    def check_data(self, data, check_name=None):
+    def _check(self):
         out = {}
         # include relevant sections of status results
-        for x in 'status eb_health eb_status'.split():
-            if x in data:
-                out['aws://'+x] = ['read', data[x]]
-        health_checks = self.HEALTH_CHECKS.keys()
-        if check_name:
-            err = 'check {0} not found in {1}'.format(
-                check_name, health_checks)
-            assert check_name in health_checks,err
-            health_checks = [check_name]
-        for check_name in health_checks:
-            check_type, url = self.HEALTH_CHECKS[check_name]
-            _url, result = self._run_check(check_type, url)
-            out[_url] = [check_type, result]
-       # with self.ssh_ctx():
-       #     with quiet():
-       #         # maybe use the supervisor webui here, which
-       #         # we have password to in service.json
-       #         # the pem file may not be available?
-       #         tmp = sudo('supervisorctl status')
-       # tmp = tmp.split('\n')
-       # tmp = [_.split() for _ in tmp]
-       # for task_line in tmp:
-       #     if not task_line: continue
-       #     task_name = task_line.pop(0)
-       #     task_status = task_line.pop(0)
-       #     task_remark = ' '.join(task_line)
-       #     out['supervisorctl://{0}'.format(task_name)] = [
-       #         'supervisorctl',
-       #         '{0}: {1}'.format(task_status, task_remark)]
-        self._display_checks(out)
+        #for x in 'status eb_health eb_status'.split():
+        #    if x in data:
+        #        out['aws://'+x] = ['read', data[x]]
+        health_checks = []
+        for check_name, (_type, url_t) in self.HEALTH_CHECKS.items():
+            check_obj = checks.Check(url_t=url_t, check_type=_type, name=check_name)
+            health_checks.append(check_obj)
+        for check_obj in health_checks:
+            check_obj.run(self)
+        self._display_checks(health_checks)
 
     def shell(self):
         return util.shell(
