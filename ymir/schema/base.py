@@ -12,6 +12,7 @@ BaseSchema = {
     Required("health_checks") : dict,
     Required("username") : unicode,
     Required("pem") : unicode,
+    Optional("tags", default=[]) : list_of_strings,
     Optional("logs", default=[]) : list_of_strings,
     Optional("log_dirs", default=[]) : list_of_strings,
     Optional("ymir_debug", default=False) : bool,

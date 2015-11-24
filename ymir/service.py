@@ -33,12 +33,15 @@ logging.captureWarnings(True)
 
 class FabricMixin(object):
     FABRIC_COMMANDS = [
-        'check', 'create', 'logs',
-        'provision', 'run',
+        'check', 'create', 'get',
+        'logs',
+        'provision', 'put',
+        'run',
         'setup', 's3', 'shell',
         'status', 'ssh','show',
         'show_facts', 'show_instances',
-        'tail', 'test', 'get', 'put',
+        'tail', 'test',
+        'update_tags'
         ]
 
     def put(self, *args):
@@ -360,13 +363,22 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             user=self.USERNAME,
             pem=self.PEM)
 
-    def _update_tags(self):
-        self.report('updating instance tags')
+    def update_tags(self):
+        """ update instance tags from service.json """
+        self.report('updating instance tags: ')
         i = self._get_instance()
         json = self.to_json(simple=True)
         tags = dict(
-            description = json['service_description'],)
-        #tags.update(..)
+            description = json.get('service_description',''),
+            org = json.get('org_name',''),
+            app = json.get('app_name',''),
+            env = json.get("env_name",''),
+            )
+        for tag in json.get('tags',[]):
+            tags[tag] = 'true'
+        for tag in tags:
+            if not tags[tag]: tags.pop(tag)
+        self.report('  {0}'.format(tags.keys()))
         i.add_tags(tags)
 
     def _restart_supervisor(self):
@@ -425,7 +437,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                         parser=self.PUPPET_PARSER,
                         facts=self.facts,
                         )
-            self._restart_supervisor()
+            #self._restart_supervisor()
 
     def _clean_tmp_dir(self):
         """ necessary because puppet librarian is messy """
@@ -435,7 +447,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             shutil.rmtree(tdir)
 
     def setup_ip(self, ip):
-        self._update_tags()
+        self.update_tags()
         self._setup_buckets()
         self._setup_eips()
         self.report('installing build-essentials & puppet', section=True)
