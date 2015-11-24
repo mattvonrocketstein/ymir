@@ -351,9 +351,14 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             self.report('No instance is running for this Service, create it first.')
             self.report('If it was recently created, wait while and then try again')
 
-    def _get_instance(self):
+    def _get_instance(self, strict=False):
         conn = self.conn
         i = util.get_instance_by_name(self.NAME, conn)
+        if strict and i is None:
+            err = "Could not acquire instance! Is the name '{0}' correct?"
+            err = err.format(self.NAME)
+            self.report(err)
+            raise SystemExit(1)
         return i
 
 
@@ -366,7 +371,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def update_tags(self):
         """ update instance tags from service.json """
         self.report('updating instance tags: ')
-        i = self._get_instance()
+        i = self._get_instance(strict=True)
         json = self.to_json(simple=True)
         tags = dict(
             description = json.get('service_description',''),
