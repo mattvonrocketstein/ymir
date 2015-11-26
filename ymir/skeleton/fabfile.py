@@ -16,12 +16,15 @@ except ImportError:
 
 DEBUG = False
 YMIR_SERVICE_ROOT = os.path.dirname(__file__)
-YMIR_SERVICE_JSON = os.path.join(YMIR_SERVICE_ROOT, 'service.json')
+YMIR_SERVICE_JSON = os.path.abspath(
+    os.environ.get(
+        'YMIR_SERVICE_JSON',
+        os.path.join(YMIR_SERVICE_ROOT, 'service.json')))
 
 if not os.path.exists(YMIR_SERVICE_JSON):
     err = ("Your ymir service is misconfigured.  Expected "
-           " to find 'service.json' alongside the fabfile, "
-           "please create {0} to continue.").format(
+           "to find '{0}' alongside the fabfile, "
+           "please create it to continue.").format(
         YMIR_SERVICE_JSON)
     raise SystemExit(err)
 
