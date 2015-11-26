@@ -1,11 +1,26 @@
 """ ymir.security_groups
 
-    Helpers for security groups.. not used currently
+    Helpers for security groups.  These helpers are used as in
+    `ymir sg security_group.json` where the JSON schema is roughly:
+
+        [ { "name":'security-group name',
+            "description": 'security-group-description',
+            "rules": [
+                // ["protocol", "from_port", "to_port", "cidr_ip", ]
+                ['tcp', 80, 80, '0.0.0.0/0'],        // http
+                ['tcp', 22, 22, '0.0.0.0/0'],        // ssh
+                ['tcp', 443, 443, '0.0.0.0/0'],      // https
+                ['tcp', 1337, 1337, '0.0.0.0/0'],    // supervisor
+                ['tcp', 27217, 27217, '0.0.0.0/0'],  // mongo
+            ]
+          }, ]
+
+
 """
-import collections
+import logging
 
 import boto
-import logging
+from fabric import colors
 
 from ymir.util import get_conn
 
@@ -27,8 +42,8 @@ def sg_update(sg_name, conn=None):
     sg = groups[0]
     return _sg_update(sg, conn)
 """
-
 import boto.vpc
+
 def get_or_create_security_group(c, group_name, description=""):
     """
     """
@@ -36,38 +51,46 @@ def get_or_create_security_group(c, group_name, description=""):
     group = groups[0] if groups else None
     if not group:
         print "Creating group '%s'..."%(group_name,)
-        group = c.create_security_group(group_name, "A group for %s"%(group_name,))
+        group = c.create_security_group(
+            group_name, "A group for %s"%(group_name,))
     return group
 
-def sg_sync(name=None, description=None, rules=[], conn=None, vpc=None, force=False):
+def sg_rules(sg):
+    """ return jsonified sg rules.
+        (boto gives objects rather than strings)
+    """
+    current_rules = []
+    for r in sg.rules:
+        tmp = [str(r.ip_protocol),
+               str(r.from_port),
+               str(r.to_port),
+               map(str, r.grants)]
+        if len(tmp[-1])==1:
+            tmp[-1] = tmp[-1][0]
+        current_rules.append(tmp)
+    return set([tuple(r) for r in current_rules])
+
+def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
     """ http://boto.readthedocs.org/en/latest/security_groups.html """
     logger.debug("Synchronizing security group: {0} -- {1}".format(
         name, description))
-    assert rules
-    assert name
-    if not description:
-        description = sg_name
-    csg_kargs = {}
+    assert rules and name
     conn = conn or get_conn()
+    description = description or name
+    csg_kargs = {}
     if vpc is not None:
         conn = boto.vpc.connect_to_region('us-east-1')
         csg_kargs['vpc_id'] = vpc
     sg = get_or_create_security_group(conn, name, description)
-    #try:
-    #    sg = conn.create_security_group(name, description, **csg_kargs)
-    #except boto.exception.EC2ResponseError:
-    #    logger.debug('error creating security, maybe it already exists?')
-    #    groups = conn.get_all_security_groups([name])
-    #    if not groups:
-    #        raise
-    #    sg = groups[0]
-    for r in rules:
-        try:
-            sg.authorize(*r)
-        except boto.exception.EC2ResponseError:
-            logger.warning("could not set rule (maybe dupe): {0}".format(r))
-        else:
-            logger.debug("set new rule: {0}".format(r))
-    for x in sg.rules:
-        print ('  rule: {0}'.format(x))
-    print 'created security group', sg.id
+    current_rules = sg_rules(sg)
+    rules = set([tuple(map(str, r)) for r in rules])
+
+    new_rules = rules - current_rules
+    for rule in new_rules:
+        print colors.red('authorizing')+' new rule: {0}'.format(r)
+        sg.authorize(*r)
+
+    stale_rules = current_rules - rules
+    for r in stale_rules:
+        print colors.red('revoking')+' old rule: {0}'.format(r)
+        sg.revoke(*r)
