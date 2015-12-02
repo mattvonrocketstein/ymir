@@ -193,10 +193,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     _schema         = None
     S3_BUCKETS      = default_schema.get_default('s3_buckets')
     ELASTIC_IPS      = default_schema.get_default('elastic_ips')
-
-    # not DRY, see also:
-    #  puppet/modules/ymir/templates/ymir_motd.erb
-    #  puppet/modules/ymir/templates/supervisord.conf
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
     SUPERVISOR_PORT = default_schema.get_default('supervisor_port')
