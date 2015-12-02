@@ -38,8 +38,10 @@ class FabricMixin(object):
         'provision', 'put',
         'run',
         'setup', 's3', 'shell',
-        'status', 'ssh','show',
+        'status',
+        'ssh','show',
         'show_facts', 'show_instances',
+        'supervisor','supervisorctl',
         'tail', 'test',
         'update_tags'
         ]
@@ -220,6 +222,12 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         with self.ssh_ctx():
             for remote_dir in self.LOG_DIRS:
                 print util.list_dir(remote_dir)
+
+    def supervisorctl(self, command):
+        """ run supervisorctl command on the remote host """
+        with self.ssh_ctx():
+            run('sudo supervisorctl {0}'.format(command))
+    supervisor = supervisorctl
 
     def tail(self, filename):
         """ tail a file on the service host """
