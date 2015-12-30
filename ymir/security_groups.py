@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ ymir.security_groups
 
     Helpers for security groups.  These helpers are used as in
@@ -21,10 +22,12 @@ import logging
 
 import boto
 from fabric import colors
+from boto.exception import EC2ResponseError
 
 from ymir.util import get_conn
 
 logger = logging.getLogger(__name__)
+
 
 def _sg_update(sg=None, conn=None, rules=[]):
     assert rules
@@ -44,16 +47,18 @@ def sg_update(sg_name, conn=None):
 """
 import boto.vpc
 
+
 def get_or_create_security_group(c, group_name, description=""):
     """
     """
     groups = [g for g in c.get_all_security_groups() if g.name == group_name]
     group = groups[0] if groups else None
     if not group:
-        print "Creating group '%s'..."%(group_name,)
+        print "Creating group '%s'..." % (group_name,)
         group = c.create_security_group(
-            group_name, "A group for %s"%(group_name,))
+            group_name, "A group for %s" % (group_name,))
     return group
+
 
 def sg_rules(sg):
     """ return jsonified sg rules.
@@ -65,10 +70,11 @@ def sg_rules(sg):
                str(r.from_port),
                str(r.to_port),
                map(str, r.grants)]
-        if len(tmp[-1])==1:
+        if len(tmp[-1]) == 1:
             tmp[-1] = tmp[-1][0]
         current_rules.append(tmp)
     return set([tuple(r) for r in current_rules])
+
 
 def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
     """ http://boto.readthedocs.org/en/latest/security_groups.html """
@@ -86,11 +92,28 @@ def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
     rules = set([tuple(map(str, r)) for r in rules])
 
     new_rules = rules - current_rules
-    for rule in new_rules:
-        print colors.red('authorizing')+' new rule: {0}'.format(r)
-        sg.authorize(*r)
-
     stale_rules = current_rules - rules
-    for r in stale_rules:
-        print colors.red('revoking')+' old rule: {0}'.format(r)
-        sg.revoke(*r)
+
+    if not stale_rules and not new_rules:
+        print colors.blue("rules already synchronized:") + \
+            " nothing to do."
+    if stale_rules:
+        print colors.blue("stale rules: ") + \
+            "{0} total".format(len(stale_rules))
+    if new_rules:
+        print colors.blue("new rules: ") + \
+            "{0} total".format(len(new_rules))
+
+    for rule in new_rules:
+        print colors.blue('authorizing') + ' new rule: {0}'.format(rule),
+        try:
+            sg.authorize(*rule)
+        except EC2ResponseError as e:
+            print colors.red('failed:') + str(e)
+        else:
+            print colors.green('ok')
+
+    for rule in stale_rules:
+        print colors.red('revoking:') + \
+            ' old rule: {0}'.format(rule)
+        sg.revoke(*rule)
