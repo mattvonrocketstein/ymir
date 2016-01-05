@@ -66,14 +66,14 @@ def sg_rules(sg):
     """
     current_rules = []
     for r in sg.rules:
-        tmp = [str(r.ip_protocol),
-               str(r.from_port),
-               str(r.to_port),
-               map(str, r.grants)]
-        if len(tmp[-1]) == 1:
-            tmp[-1] = tmp[-1][0]
-        current_rules.append(tmp)
-    return set([tuple(r) for r in current_rules])
+        grants = map(str, r.grants)
+        for g in grants:
+            if not g.startswith('sg-'):
+                current_rules.append([str(r.ip_protocol),
+                                      str(r.from_port),
+                                      str(r.to_port), ] + [g])
+    rules = [tuple(r) for r in current_rules]
+    return set(rules)
 
 
 def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
@@ -106,14 +106,18 @@ def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
 
     for rule in new_rules:
         print colors.blue('authorizing') + ' new rule: {0}'.format(rule),
-        try:
-            sg.authorize(*rule)
-        except EC2ResponseError as e:
-            print colors.red('failed:') + str(e)
-        else:
-            print colors.green('ok')
+        catch_ec2_error(lambda rule=rule: sg.authorize(*rule))
 
     for rule in stale_rules:
         print colors.red('revoking:') + \
             ' old rule: {0}'.format(rule)
-        sg.revoke(*rule)
+        catch_ec2_error(lambda rule=rule: sg.revoke(*rule))
+
+
+def catch_ec2_error(fxn):
+    try:
+        fxn()
+    except EC2ResponseError as e:
+        print colors.red('failed:') + str(e)
+    else:
+        print colors.green('ok')
