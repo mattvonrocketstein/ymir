@@ -62,6 +62,7 @@ To test if it worked, try running `ymir version`.
 
 | Operation     | Description           |
 | ------------- |:-------------:|
+| *validate*    | attempts to validate configuration files for sanity, useful to execute before `fab create`
 | *create*      | creates your EC2 instance according to the specification in the `service.json` file (which is in the same directory as the fabfile).  To force creation even when your service is already present, use `fab create:force=True` |
 | *setup*       | operation should typically occur after `create` and before `provision`.  Setup is often slow because it needs to do things like updates for apt or yum.  Setup must be reinvoked if puppet dependencies change |
 | *provision*   | typically occurs after setup and executes the bulk of the puppet code.  This step should do things like clone or update code repos on the service host, add or update files from templates, etc.  It should run fast and be idempotent |
