@@ -87,10 +87,17 @@ def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
 
     new_rules = rules - current_rules
     for rule in new_rules:
-        print colors.red('authorizing')+' new rule: {0}'.format(r)
-        sg.authorize(*r)
+        print colors.red('authorizing')+' new rule: {0}'.format(rule)
+        try:
+            sg.authorize(*rule)
+        except boto.exception.EC2ResponseError as err:
+            print colors.red('error') +' {}'.format(err)
 
     stale_rules = current_rules - rules
-    for r in stale_rules:
-        print colors.red('revoking')+' old rule: {0}'.format(r)
-        sg.revoke(*r)
+    for rule in stale_rules:
+        print colors.red('revoking')+' old rule: {0}'.format(rule)
+        try:
+            sg.revoke(*rule)
+        except boto.exception.EC2ResponseError as err:
+            print colors.red('error') +' {}'.format(err)
+
