@@ -17,10 +17,10 @@
     // sets the ami for this service.
     // the default is ubuntu 14.04 amd64 ebs us-east-1
     // default is PV! (only suitable for t1.micro)
-    "ami" : "ami-3cf8b154",
+    //"ami" : "ami-3cf8b154",
 
     // if you do not want t1.micro, you need HVM (below)
-    // "ami" : "ami-9aaa1cf2",
+    "ami" : "ami-9aaa1cf2",
 
     // sets the username for this service.
     // this is used for ssh, so make sure this
@@ -29,7 +29,7 @@
 
     // sets the AWS instance type for this service make sure
     // AMI above matches the instance type you are asking for
-    "instance_type"   : "t1.micro",
+    "instance_type"   : "t2.micro",
 
     // Sets the supervisor credentials for this service.
     // NB: these variables will be added to "facts" used by puppet
