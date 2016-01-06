@@ -23,7 +23,9 @@ BaseSchema = {
     Optional("service_defaults", default={}) : dict,
     Optional("reservation_extras", default={}) : dict,
     Optional("supervisor_port", default='9001') : unicode,
-    Optional("env_name", default='env') : unicode, }
+    Optional("env_name", default='env') : unicode,
+    Optional("eip", default="") : unicode,
+}
 
 class Schema(_Schema):
     """ """

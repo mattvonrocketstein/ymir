@@ -40,6 +40,7 @@ $ fab -l
 
 Typical commands:
 
+* fab validate # attempts to make sure configuration files have all necessary settings, useful to execute before `fab create`
 * fab create # create a new instance
 * fab create:force=True # for creating a new instance, overwriting if necessary
 * fab status # show status for current instance (assuming it exists)
