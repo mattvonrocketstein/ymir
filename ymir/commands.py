@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ ymir.commands
 """
 
@@ -5,7 +6,8 @@ import os
 
 import boto
 import addict
-import voluptuous, demjson
+import voluptuous
+import demjson
 
 from fabric.colors import red, green
 from fabric.contrib.console import confirm
@@ -32,11 +34,12 @@ def ymir_sg(args):
             from_port=r[1],
             to_port=r[2],
             cidr_ip=r[3])
+
     def supports_ssh(_rules):
         """ FIXME: dumb heuristic """
         for _rule in _rules:
             _rule = unpack_rule(_rule)
-            if _rule.to_port==22:
+            if _rule.to_port == 22:
                 return True
         return False
 
@@ -63,10 +66,9 @@ def ymir_sg(args):
         name = entry['name']
         descr = entry['description']
         rules = entry['rules']
-        vpc = entry.get('vpc', None)
         sg_sync(name=name, description=descr, rules=rules,
-                #vpc=vpc
                 )
+
 
 def _load_json(fname):
     """ loads json and allows for
@@ -76,13 +78,14 @@ def _load_json(fname):
         tmp = demjson.decode(fhandle.read())
         return _reflect(service_json=tmp)
 
+
 def _validate_file(fname):
     """ simple schema validation, this
         returns error message or None """
     tmp = _load_json(fname)
     schema = _choose_schema(tmp)
     is_eb = schema.schema_name == 'eb_schema'
-    #print 'Chose schema:\n ',schema.schema_name
+    # print 'Chose schema:\n ',schema.schema_name
     try:
         schema(tmp)
     except voluptuous.Invalid, e:
@@ -96,13 +99,14 @@ def _validate_file(fname):
         return []
     files = tmp['setup_list'] + tmp['provision_list']
     for _file in files:
-        if not os.path.exists(os.path.join(SERVICE_ROOT, _file)):
-            err= ('Files mentioned in service json '
-                  'must exist relative to {0}, but {1}'
-                  ' was not found').format(
+        if '://' not in _file and not os.path.exists(os.path.join(SERVICE_ROOT, _file)):
+            err = ('Files mentioned in service json '
+                   'must exist relative to {0}, but {1}'
+                   ' was not found').format(
                 SERVICE_ROOT, _file)
             return [err]
     return []
+
 
 def _ymir_load(args, interactive=True, simple=False):
     """ load service obj from service json """
@@ -110,10 +114,9 @@ def _ymir_load(args, interactive=True, simple=False):
     SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
     service_json = _load_json(args.service_json)
     if interactive:
-        lint = demjson.jsonlint()
         print red("Service root: "), '\n  ', SERVICE_ROOT
         print red("Service JSON: ")
-        rc = lint.main(['-S', '--format', args.service_json])
+
     dct = dict([
         [x.upper(), y] for x, y in service_json.items()])
     dct.update(SERVICE_ROOT=SERVICE_ROOT)
@@ -124,7 +127,7 @@ def _ymir_load(args, interactive=True, simple=False):
         BaseService = ElasticBeanstalkService
     else:
         BaseService = AbstractService
-    #print 'Chose service-class:\n ',BaseService.__name__
+    # print 'Chose service-class:\n ',BaseService.__name__
     ServiceFromJSON = type(classname, (BaseService,), dct)
     obj = ServiceFromJSON()
     obj._schema = chosen_schema
@@ -133,21 +136,25 @@ def _ymir_load(args, interactive=True, simple=False):
         print red("Service definition loaded from JSON")
     return obj
 
+
 def ymir_shell(args):
     """ """
-    wd_json = os.path.join(os.getcwd(),'service.json')
+    wd_json = os.path.join(os.getcwd(), 'service.json')
     if os.path.exists(wd_json):
         print 'found service.json import working directory, loading service..'
         fake_args = addict.Dict(service_json=wd_json)
         user_ns = dict(
             service=ymir_load(fake_args))
-    from smashlib import embed; embed(user_ns=user_ns)
+    from smashlib import embed
+    embed(user_ns=user_ns)
+
 
 def ymir_load(args, interactive=True):
     """ """
-    report('profile', os.environ.get('AWS_PROFILE','default'))
+    report('profile', os.environ.get('AWS_PROFILE', 'default'))
     ymir_validate(args, simple=True, interactive=False)
     return _ymir_load(args, interactive=interactive)
+
 
 def _reflect(service_json=None, service_obj=None, simple=True):
     """ """
@@ -161,10 +168,11 @@ def _reflect(service_json=None, service_obj=None, simple=True):
                     tdata)
         return service_obj
     if service_json:
-        for k,v in service_json.items():
+        for k, v in service_json.items():
             if isinstance(v, basestring) and '{' in v:
                 service_json[k] = v.format(**service_json)
         return addict.Dict(service_json)
+
 
 def ymir_init(args):
     """ responsible for executing the 'ymir init' command. """
@@ -174,7 +182,7 @@ def ymir_init(args):
                'ymir project, the directory should'
                ' not already exist.')
         raise SystemExit(err)
-    using_dot = init_dir == os.getcwd()
+    init_dir == os.getcwd()
     if os.path.exists(init_dir) and args.force:
         folder = init_dir
         for the_file in os.listdir(folder):
@@ -193,6 +201,7 @@ def ymir_init(args):
     print red('copying ymir skeleton: '), skeleton_dir
     copytree(skeleton_dir, init_dir)
 
+
 def ymir_validate(args, simple=True, interactive=True):
     """ """
     def print_errs(msg, _errs, die=False):
@@ -203,7 +212,7 @@ def ymir_validate(args, simple=True, interactive=True):
             print OK
             return
         for e in _errs:
-            print red('  ERROR: ')+str(e)
+            print red('  ERROR: ') + str(e)
         if die:
             raise SystemExit(str(_errs))
 
@@ -241,6 +250,9 @@ def ymir_validate(args, simple=True, interactive=True):
         print_errs(
             'Validating puppet code..',
             errs)
+        errs = service._validate_puppet_templates()
+        print_errs('Validating puppet templates..', errs)
+
 
 def ymir_keypair(args):
     """ """
@@ -256,9 +268,10 @@ def ymir_keypair(args):
             return
         if not result:
             return
-        #boto.ec2.keypair.KeyPair
+        # boto.ec2.keypair.KeyPair
     key = ec2.create_key_pair(name)
     key.save(os.getcwd())
+
 
 def ymir_eip(args):
     ec2 = boto.connect_ec2()
@@ -273,6 +286,7 @@ def ymir_eip(args):
             return
     addr = ec2.allocate_address()
     print addr.allocation_id
+
 
 def ymir_freeze(args):
     msg = 'not implemented yet'
