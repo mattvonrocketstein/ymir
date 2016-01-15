@@ -1,24 +1,55 @@
+# -*- coding: utf-8 -*-
 """ ymir.util
 
     Mostly AWS utility functions
 """
 
 import shutil
-import os, time
+import os
+import time
+from functools import wraps
+
 import boto.ec2
 
 from fabric.api import settings, run, shell_env, env
 
 from ymir.data import STATUS_DEAD
 
+
+def report(label, msg, *args, **kargs):
+    """ 'print' shortcut that includes some color and formatting """
+    if 'section' in kargs:
+        print '-' * 80
+    template = '\x1b[31;01m{0}:\x1b[39;49;00m {1} {2}'
+    # if Service subclasses are embedded directly into fabfiles, there
+    # is a need for a lot of private variables to control the namespace
+    # fabric publishes as commands.
+    label = label.replace('_', '')
+    print template.format(label, msg, args or '')
+
+
+def require_running_instance(fxn):
+    """ NB: only for use with Service instance methods! """
+    @wraps(fxn)
+    def newf(self, *args, **kargs):
+        cm_data = self._status()
+        if cm_data['status'] == 'running':
+            return fxn(self, *args, **kargs)
+        else:
+            self.report("no instance found!")
+            return None
+    return newf
+
+
 def list_dir(dir_=None):
-    """returns a list of files in a directory (dir_) as absolute paths"""
+    """ returns a list of files in a directory (dir_) as absolute paths """
     dir_ = dir_ or env.cwd
     if not dir_.endswith('/'):
-        dir_+='/'
+        dir_ += '/'
     string_ = run("for i in %s*; do echo $i; done" % dir_)
-    files = string_.replace("\r","").split("\n")
+    files = string_.replace("\r", "").split("\n")
     return files
+
 
 def _run_puppet(_fname, parser=None, debug=False, puppet_dir=None, facts={}):
     """ must be run within a fabric ssh context """
@@ -31,34 +62,52 @@ def _run_puppet(_fname, parser=None, debug=False, puppet_dir=None, facts={}):
     with shell_env(**_facts):
         # sudo -E preserves the invoking enviroment,
         # thus we are able to pass through the facts
-        #run("sudo -E echo FACTER_naxos_fae_env")
         run("sudo -E puppet apply {parser} {debug} --modulepath={pdir}/modules {fname}".format(
-            parser=('--parser '+parser) if parser else '',
+            parser=('--parser ' + parser) if parser else '',
             debug='--debug' if debug else '',
             pdir=puppet_dir or os.path.dirname(_fname),
             fname=_fname))
 
+
 def shell(conn=None, **namespace):
     conn = conn or get_conn()
     try:
-        from smashlib import embed; embed(user_ns=namespace)
-    except ImportError,e:
+        from smashlib import embed
+        embed(user_ns=namespace)
+    except ImportError as e:
         print 'you need smashlib or ipython installed to run the shell!'
+        print "original error: " + str(e)
         raise
 
-def connect(ip, username='ubuntu', pem=None):
+
+def mosh(ip, username='ubuntu', pem=None):
+    """ connect to remote host using mosh """
+    assert ip is not None
+    pem = '-i ' + pem if pem else ''
+    cmd = 'mosh --ssh="ssh {pem}" {user}@{host}'.format(
+        pem=pem, user=username, host=ip)
+    with settings(warn_only=True):
+        return local(cmd)
+
+
+def ssh(ip, username='ubuntu', pem=None):
+    """ connect to remote host using mosh """
+    assert ip is not None
     cmd = "ssh -l {0} {1}".format(username, ip)
     if pem is not None:
         cmd += ' -i {0}'.format(pem)
     with settings(warn_only=True):
         local(cmd)
 
+
 def ssh_ctx(ip, user='ubuntu', pem=None):
     """ context manager for use with fabric """
+    assert ip is not None
     ctx = dict(user=user, host_string=ip)
     if pem is not None:
         ctx.update(key_filename=pem)
     return settings(**ctx)
+
 
 def get_instance_by_id(id, conn):
     """ returns the id for the instance"""
@@ -74,6 +123,7 @@ def get_instance_by_id(id, conn):
 
 from fabric.api import quiet, local
 
+
 def has_gem(name):
     """ TODO: move to goulash """
     with quiet():
@@ -81,10 +131,12 @@ def has_gem(name):
     error = x.return_code != 0
     return not error
 
+
 def get_conn(key_name=None, region='us-east-1'):
-    #print 'creating ec2 connection'
+    # print 'creating ec2 connection'
     try:
-        conn = boto.ec2.connect_to_region(region, profile_name=os.environ['AWS_PROFILE'])
+        conn = boto.ec2.connect_to_region(
+            region, profile_name=os.environ['AWS_PROFILE'])
     except (KeyError, boto.exception.NoAuthHandlerFound):
         err = ("ERROR: no AWS credentials could be found.\n  "
                "Set AWS_PROFILE environment variable, or use ~/.boto, then try again")
@@ -97,6 +149,7 @@ def get_conn(key_name=None, region='us-east-1'):
             print msg
     return conn
 
+
 def show_instances(conn):
     """ """
     for i, tags in get_tags(None, conn).items():
@@ -104,11 +157,13 @@ def show_instances(conn):
         for k in tags:
             print '  ', k, tags[k]
 
+
 def get_instance_by_name(name, conn):
     """ returns the id for the instance """
     for i, tags in get_tags(None, conn).items():
         if tags.get('Name') == name and tags['status'] not in STATUS_DEAD:
             return conn.get_only_instances([i.id])[0]
+
 
 def get_tags(instance, conn):
     """ returns { instance_id: instance_tags } """
@@ -124,6 +179,7 @@ def get_tags(instance, conn):
         out[inst] = tags
     return out
 
+
 def _block_while_pending(instance):
     """ """
     # Check up on its status every so often
@@ -132,6 +188,7 @@ def _block_while_pending(instance):
         print '  polling reservation [status is "pending"]'
         time.sleep(4)
         status = instance.update()
+
 
 def _block_while_terminating(instance, conn):
     """ """
@@ -146,6 +203,8 @@ def _block_while_terminating(instance, conn):
 
 # TODO: move to goulash
 # http://stackoverflow.com/questions/1868714/how-do-i-copy-an-entire-directory-of-files-into-an-existing-directory-using-pyth
+
+
 def copytree(src, dst, symlinks=False, ignore=None):
     """ shutil.copytree is broken/weird """
     if not os.path.exists(dst):
@@ -157,8 +216,9 @@ def copytree(src, dst, symlinks=False, ignore=None):
             copytree(s, d, symlinks, ignore)
         else:
             if not os.path.exists(d) or \
-                   os.stat(src).st_mtime - os.stat(dst).st_mtime > 1:
+                    os.stat(src).st_mtime - os.stat(dst).st_mtime > 1:
                 shutil.copy2(s, d)
+
 
 def working_dir_is_ymir():
     return '.ymir' in os.listdir(os.getcwd())
