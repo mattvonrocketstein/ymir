@@ -1,13 +1,18 @@
+# -*- coding: utf-8 -*-
 """ ymir.service
 """
-import os, time
+import os
+import time
+import pprint
 import socket
-import shutil, webbrowser
+import urlparse
+import shutil
+import webbrowser
 import tempfile
 import logging
 
 import boto
-
+# from retrying import retry
 
 import fabric
 from fabric.colors import blue
@@ -16,12 +21,11 @@ from fabric.contrib.files import exists
 from fabric import api
 from fabric.api import (
     cd, lcd, local, put,
-    quiet, settings, run )
+    quiet, settings, run)
 
 from ymir import util
 from ymir import checks
 from ymir.base import Reporter
-from ymir.data import DEFAULT_SUPERVISOR_PORT
 from ymir.schema import default_schema
 from ymir.validation import ValidationMixin
 
@@ -31,20 +35,26 @@ logger = logging.getLogger(__name__)
 logging.captureWarnings(True)
 
 
+def catch_network_error(exc):
+    if isinstance(exc, fabric.exceptions.NetworkError):
+        util.report('NetworkError', 'sleeping and retrying')
+        return True
+
+
 class FabricMixin(object):
     FABRIC_COMMANDS = [
         'check', 'create', 'get',
-        'logs',
+        'logs', 'mosh',
         'provision', 'put',
         'run',
         'setup', 's3', 'shell',
         'status',
-        'ssh','show',
+        'service', 'ssh', 'show',
         'show_facts', 'show_instances',
-        'supervisor','supervisorctl',
+        'supervisor', 'supervisorctl',
         'tail', 'test',
         'update_tags'
-        ]
+    ]
 
     def put(self, *args):
         """ thin wrapper around fabric's scp command
@@ -56,44 +66,36 @@ class FabricMixin(object):
         with self.ssh_ctx():
             return api.put(*args)
 
-    def get(self, fname):
+    def get(self, fname, local_path='.'):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
         """
         self.report(
             'getting "{0}" from remote'.format(
                 fname))
-        dest = os.path.basename(fname)
         with self.ssh_ctx():
-            return api.get(fname, local_path='.', use_sudo=True)
+            return api.get(fname, local_path=local_path, use_sudo=True)
 
+    @util.require_running_instance
+    def mosh(self):
+        """ connect to this service with mosh """
+        self.report('connecting with mosh')
+        self.report('connecting with ssh')
+        util.mosh(self.status()['ip'],
+                  username=self.USERNAME,
+                  pem=self.PEM)
 
-    def provision(self, fname=None):
-        """ provision this service """
-        self.report('provisioning {0}'.format(fname or ''))
-        data = self._status()
-        if data['status']=='running':
-            return self.provision_ip(data['ip'], fname=fname)
-        else:
-            self.report('no instance is running for this Service, '
-                        'is the service created?  use "fab status" '
-                        'to check again')
-
+    @util.require_running_instance
     def ssh(self):
         """ connect to this service with ssh """
         self.report('connecting with ssh')
-        cm_data = self.status()
-        if cm_data['status'] == 'running':
-            util.connect(cm_data['ip'],
-                         username=self.USERNAME,
-                         pem=self.PEM)
-        else:
-            self.report("no instance found")
+        util.ssh(self._status()['ip'],
+                 username=self.USERNAME,
+                 pem=self.PEM)
 
     def show(self):
         """ open health-check webpages for this service in a browser """
         self.report('showing webpages')
-        #data = self._status()
         for check_name in self.HEALTH_CHECKS:
             check, url = self.HEALTH_CHECKS[check_name]
             self._show_url(url.format(**self._template_data()))
@@ -128,9 +130,7 @@ class FabricMixin(object):
             key_name=self.KEY_NAME,
             instance_type=self.INSTANCE_TYPE,
             **reservation_extras
-            #security_groups = self.SECURITY_GROUPS,
-            #block_device_mappings = [bdm]
-            )
+        )
 
         instance = reservation.instances[0]
         self.report('  no instance found, creating it now.')
@@ -148,12 +148,12 @@ class FabricMixin(object):
         time.sleep(5)
         self.report("Finished with creation.  Now run `fab setup`")
 
-    def check(self):
+    def check(self, name=None):
         """ reports health for this service """
         self.report('checking health')
         data = self._status()
         if data['status'] == 'running':
-            return self._check()
+            return self._check(names=[name])
         else:
             self.report('no instance is running for this'
                         ' service, create it first')
@@ -179,7 +179,7 @@ class FabricMixin(object):
                 cmd_t = 'metadata-json-lint {0}'
                 with quiet():
                     x = local(cmd_t.format(metadata), capture=True)
-                error = x.return_code!=0
+                error = x.return_code != 0
                 if error:
                     errs.append('could not validate {0}'.format(metadata))
                     errs.append(x.stderr.strip())
@@ -189,10 +189,11 @@ class FabricMixin(object):
                     '"gem install metadata-json-lint" first')
         return errs
 
+
 class AbstractService(Reporter, FabricMixin, ValidationMixin):
-    _schema         = None
-    S3_BUCKETS      = default_schema.get_default('s3_buckets')
-    ELASTIC_IPS      = default_schema.get_default('elastic_ips')
+    _schema = None
+    S3_BUCKETS = default_schema.get_default('s3_buckets')
+    ELASTIC_IPS = default_schema.get_default('elastic_ips')
     SUPERVISOR_USER = ''
     SUPERVISOR_PASS = ''
     SUPERVISOR_PORT = default_schema.get_default('supervisor_port')
@@ -200,27 +201,32 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     SERVICE_DEFAULTS = {}
     LOGS = default_schema.get_default('logs')
     LOG_DIRS = default_schema.get_default('log_dirs')
-    INSTANCE_TYPE   = 't1.micro'
-    PUPPET_PARSER   = None
-    SERVICE_ROOT    = None
-    PEM             = None
-    USERNAME        = None
-    APP_NAME        = None
-    ORG_NAME        = None
-    ENV_NAME        = None
+
+    PEM = None
+    INSTANCE_TYPE = None
+    PUPPET_PARSER = None
+    SERVICE_ROOT = None
+    USERNAME = None
+    APP_NAME = None
+    ORG_NAME = None
+    ENV_NAME = None
     SECURITY_GROUPS = None
     RESERVATION_EXTRAS = default_schema.get_default('reservation_extras')
     HEALTH_CHECKS = {}
     INTEGRATION_CHECKS = {}
-
 
     def list_log_files(self):
         with self.ssh_ctx():
             for remote_dir in self.LOG_DIRS:
                 print util.list_dir(remote_dir)
 
+    def service(self, command):
+        """ run `sudo service <cmd>` on the remote host"""
+        with self.ssh_ctx():
+            run('sudo service {0}'.format(command))
+
     def supervisorctl(self, command):
-        """ run supervisorctl command on the remote host """
+        """ run `sudo supervisorctl <cmd>` on the remote host """
         with self.ssh_ctx():
             run('sudo supervisorctl {0}'.format(command))
     supervisor = supervisorctl
@@ -228,7 +234,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def tail(self, filename):
         """ tail a file on the service host """
         with self.ssh_ctx():
-            run('tail -f '+filename)
+            run('tail -f ' + filename)
 
     def logs(self, *args):
         """ list the known log files for this service"""
@@ -245,7 +251,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             try:
                 tmp = getattr(fabfile, x)
             except AttributeError:
-                setattr(fabfile, x, getattr(self,x))
+                setattr(fabfile, x, getattr(self, x))
             else:
                 err = ('Service definition "{0}" attempted'
                        ' to publish method "{1}" as a fabric '
@@ -265,61 +271,118 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def __init__(self, conn=None):
         """"""
         self.conn = conn or util.get_conn()
-        #required_class_vars = 'PEM USERNAME SECURITY_GROUPS SERVICE_ROOT'
-        #required_class_vars =required_class_vars.split()
-        #for var in required_class_vars:
-        #    err = 'subclassers must override '+var
-        #    assert getattr(self,var) is not None, err
 
     def _bootstrap_dev(self):
         """ """
+        self.report("installing git & build-essentials")
         with settings(warn_only=True):
-            r1 = run('sudo apt-get install -y git build-essential')
-        if r1.return_code!=0:
-            print 'bad return code bootstrapping dev.. waiting and trying again'
-            import time
-            time.sleep(5)
+            r1 = run('sudo apt-get install -y git build-essential > /dev/null')
+        if r1.return_code != 0:
+            self.report(
+                'bad return code bootstrapping dev.. waiting and trying again')
+            time.sleep(35)
             self._bootstrap_dev()
-        r2 = run('sudo apt-get install -y puppet ruby-dev > /dev/null')
+        self._install_puppet()
+
+    def _remove_system_package(self, pkg_name, quiet=True):
+        """ FIXME: only works with ubuntu/debian """
+        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
+            api.sudo('apt-get -y remove {0} {1}'.format(
+                pkg_name, '> /dev/null' if quiet else ''))
+
+    def _install_puppet(self):
+        self.report("installing puppet")
+
+        def doit():
+            """ see https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html """
+            run_install = lambda: api.sudo('ruby install.rb')
+            download = lambda x: api.run('wget ' + x + ' > /dev/null')
+            decompress = lambda x: api.run('tar -zxvf ' + x + ' > /dev/null')
+
+            download('http://downloads.puppetlabs.com/facter/facter-1.7.5.tar.gz')
+            decompress('facter-1.7.5.tar.gz')
+            with api.cd('facter-1.7.5'):
+                run_install()
+
+            download('https://downloads.puppetlabs.com/puppet/puppet-3.4.3.tar.gz')
+            decompress('puppet-3.4.3.tar.gz')
+            with api.cd('puppet-3.4.3'):
+                run_install()
+
+            download('https://downloads.puppetlabs.com/hiera/hiera-1.3.0.tar.gz')
+            decompress('hiera-1.3.0.tar.gz')
+            with api.cd('hiera-1.3.0'):
+                run_install()
+        self.report("installing puppet pre-reqs")
+        api.run('sudo apt-get install -y ruby-dev ruby-json > /dev/null')
+        # required for puppet --parser=future
+        api.sudo('gem install rgen')
+
+        with api.quiet():
+            with api.settings(warn_only=True):
+                puppet_version = api.run('puppet --version')
+        puppet_installed = not puppet_version.failed
+        if puppet_installed:
+            puppet_version = puppet_version.strip().split('.')
+            puppet_version = map(int, puppet_version)
+            self.report("puppet is already installed")
+        else:
+            puppet_version = None
+            self.report("puppet not installed")
+            doit()
+        if puppet_version and puppet_version != [3, 4, 3]:
+            self.report(
+                "bad puppet version @ {0}, attempting uninstall".format(puppet_version))
+            pkgs = 'puppet facter hiera puppet-common'.split()
+            for pkg in pkgs:
+                self._remove_system_package(pkg)
+            doit()
+
+    def _get_ubuntu_version(self):
+        """ """
+        self.report("detecting ubuntu version:")
+        try:
+            with api.quiet():
+                v = run('cat /etc/lsb-release|grep DISTRIB_RELEASE')
+            result = v.strip().split('=')[-1]
+            self.report("  version {0}".format(result))
+            return map(int, result.split('.'))
+        except Exception as e:
+            self.report(blue("not ubuntu! ") + str(e))
+            return []
 
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
-        if 'section' in kargs:
-            print '-' * 80
-        template = '\x1b[31;01m{0}:\x1b[39;49;00m {1} {2}'
-        name = self._report_name()
-        # if Service subclasses are embedded directly into fabfiles, there
-        # is a need for a lot of private variables to control the namespace
-        # fabric publishes as commands.
-        name = name.replace('_', '')
-        print template.format(name, msg, args or '')
+        label = self._report_name()
+        return util.report(label, msg, *args, **kargs)
 
     def status(self):
         """ shows IP, ec2 status/tags, etc for this service """
         self.report('checking status', section=True)
         result = self._status()
-        for k,v in result.items():
-            self.report('  {0}: {1}'.format(k,v))
+        for k, v in result.items():
+            self.report('  {0}: {1}'.format(k, v))
         return result
 
     def _status(self):
-        """ retrieves service status information """
-        inst = util.get_instance_by_name(self.NAME, self.conn)
-        if inst:
-            #addresses = [ a for a in self.conn.get_all_addresses() \
-            #              if a.instance_id == inst.id]
-            result = dict(
-                instance=inst,
-                supervisor='http://{0}:{1}@{2}:{3}/'.format(
-                    self.SUPERVISOR_USER,
-                    self.SUPERVISOR_PASS,
-                    inst.ip_address,
-                    DEFAULT_SUPERVISOR_PORT),
-                tags=inst.tags,
-                status=inst.update(),
-                ip=inst.ip_address)
-        else:
-            result = dict(instance=None, ip=None, status='terminated?')
+        """ retrieves service status information.
+            use this instead of self.status() if you want to quietly
+            retrieve information for use without actually displaying it
+        """
+        instance = util.get_instance_by_name(self.NAME, self.conn)
+        result = dict(
+            instanceance=None, ip=None,
+            private_ip=None, tags=[],
+            status='terminated?',)
+        if instance:
+            result.update(
+                dict(
+                    instance=instance,
+                    tags=instance.tags,
+                    status=instance.update(),
+                    ip=instance.ip_address,
+                    private_ip=instance.private_ip_address,
+                ))
         return result
 
     def _bootstrap_puppet(self, force=False):
@@ -341,19 +404,34 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         _init_puppet("puppet")
 
     def setup(self):
-        """ setup service (operation should be after
-        'create', before 'provision')"""
+        """ setup service (operation should be after 'create', before 'provision')"""
+        return self._setup(failures=0)
+
+    # @retry(
+    #    retry_on_exception=catch_network_error,
+    #    wait_fixed=5000, stop_max_attempt_number=3)
+    def _setup(self, failures=0):
         self.report('setting up')
         cm_data = self._status()
         if cm_data['status'] == 'running':
             try:
                 self.setup_ip(cm_data['ip'])
-            except fabric.exceptions.NetworkError:
-                self.report("timed out, retrying")
-                self.setup()
+            except fabric.exceptions.NetworkError as e:
+                if failures > 5:
+                    self.report("CRITICAL: encountered 5+ network failures")
+                    self.report("  Is the security group setup correctly?")
+                    self.report("  Is the internet turned on??")
+                    raise SystemExit(1)
+                else:
+                    self.report(str(e))
+                    self.report("network error, sleeping and retrying")
+                    time.sleep(7)
+                    self._setup(failures=failures + 1)
         else:
-            self.report('No instance is running for this Service, create it first.')
-            self.report('If it was recently created, wait while and then try again')
+            self.report(
+                'No instance is running for this Service, create it first.')
+            self.report(
+                'If it was recently created, wait while and then try again')
 
     def _get_instance(self, strict=False):
         conn = self.conn
@@ -364,7 +442,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             self.report(err)
             raise SystemExit(1)
         return i
-
 
     def ssh_ctx(self):
         return util.ssh_ctx(
@@ -378,15 +455,16 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         i = self._get_instance(strict=True)
         json = self.to_json(simple=True)
         tags = dict(
-            description = json.get('service_description',''),
-            org = json.get('org_name',''),
-            app = json.get('app_name',''),
-            env = json.get("env_name",''),
-            )
-        for tag in json.get('tags',[]):
+            description=json.get('service_description', ''),
+            org=json.get('org_name', ''),
+            app=json.get('app_name', ''),
+            env=json.get("env_name", ''),
+        )
+        for tag in json.get('tags', []):
             tags[tag] = 'true'
         for tag in tags:
-            if not tags[tag]: tags.pop(tag)
+            if not tags[tag]:
+                tags.pop(tag)
         self.report('  {0}'.format(tags.keys()))
         i.add_tags(tags)
 
@@ -404,6 +482,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 print msg
                 result = restart()
                 count += 1
+
     def _compress_local_puppet_code(self):
         """ returns an absolute path to a temporary file
             containing puppet code for this service.
@@ -415,9 +494,22 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             api.local('tar -czf {0} puppet/ '.format(pfile))
         return pfile
 
-    def provision_ip(self, ip, fname=None):
+    def provision(self, fname=None):
+        """ provision this service """
+        self.report('provisioning {0}'.format(fname or ''))
+        if fname != 'None':
+            data = self._status()
+            if data['status'] == 'running':
+                self._provision_ip(data['ip'], fname=fname)
+            else:
+                self.report('no instance is running for this Service, '
+                            'is the service created?  use "fab status" '
+                            'to check again')
+                return False
+
+    def _provision_ip(self, ip, fname=None):
         """ """
-        self.report('installing build-essentials & puppet', section=True)
+        self.report('provisioning', section=True)
         self._clean_tmp_dir()
         if fname is not None:
             if fname not in self.PROVISION_LIST:
@@ -428,63 +520,102 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             provision_list = [fname]
         else:
             provision_list = self.PROVISION_LIST
-        remote_user_home = '/home/' + self.USERNAME
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
+                self.report("Provision list for this service:")
+                pprint.pprint(provision_list, indent=2)
                 # if clean==True, in the call below, the puppet deps
                 # which were installed in the `setup` phase would be
                 # destroyed.  not what is wanted for provisioning!
                 self.copy_puppet(clean=False)
-                self.report("Provision list for this service: {0}".format(
-                            provision_list), section=True)
-                for relative_puppet_file in provision_list:
-                    self.report('provision_list[{0}]: "{1}"'.format(
-                        provision_list.index(relative_puppet_file),
-                        relative_puppet_file))
-                    util._run_puppet(
-                        relative_puppet_file,
-                        parser=self.PUPPET_PARSER,
-                        facts=self.facts,
-                        )
-            #self._restart_supervisor()
+                for provision_item in provision_list:
+                    if '://' in provision_item:
+                        err = 'provision-protocol names may not include _.'
+                        assert '_' not in provision_item.split('://')[0], err
+                    provisioner = urlparse.urlparse(provision_item).scheme
+                    if provisioner == '':
+                        # for backwards compatability, puppet is the default
+                        provisioner = 'puppet'
+                        provision_instruction = provision_item
+                    else:
+                        provision_instruction = provision_item[
+                            len(provisioner) + len('://'):]
+                    self.report('provision_list[{0}]:'.format(
+                        provision_list.index(provision_item)))
+                    self._run_provisioner(provisioner, provision_instruction)
+        self.report("Finished with provision.")
+        self.report("You might want to restart services "
+                    " using `fab service` or `fab supervisor`")
+
+    def _run_provisioner(self, provisioner_name, provision_instruction, ):
+        self.report(' {0}'.format(
+            blue(provisioner_name + "://") + provision_instruction))
+        try:
+            provision_fxn = getattr(
+                self, '_provision_{0}'.format(provisioner_name))
+        except AttributeError:
+            self.report(
+                "Fatal: no sucher provisioner `{0}`".format(provisioner_name))
+        return provision_fxn(provision_instruction)
+
+    def _provision_puppet(self, provision_item):
+        """ runs puppet on remote host.  puppet files must already have been copied """
+        return util._run_puppet(
+            provision_item,
+            parser=self.PUPPET_PARSER,
+            facts=self.facts,
+        )
+
+    def _provision_local(self, provision_instruction):
+        """ runs a shell command on the local host,
+            for the purposes of provisioning the remote host.
+        """
+        cmd = provision_instruction.format(**self._template_data())
+        self.report("  translated to: {0}".format(cmd))
+        return local(cmd)
 
     def _clean_tmp_dir(self):
         """ necessary because puppet librarian is messy """
+        self.report("  .. cleaning puppet tmp dir")
         tdir = os.path.join(self.SERVICE_ROOT, 'puppet', '.tmp')
         if os.path.exists(tdir):
-            #'<root>/puppet/.tmp should be nixed'
+            # ~/puppet/.tmp should be nixed
             shutil.rmtree(tdir)
+
+    def _update_sys_packages(self):
+        """ must be run with ssh_ctx() """
+        self.report(" .. updating remote system package list")
+        run('sudo apt-get update > /dev/null')
 
     def setup_ip(self, ip):
         self.update_tags()
         self._setup_buckets()
         self._setup_eips()
-        self.report('installing build-essentials & puppet', section=True)
+        self.report('installing puppet & puppet deps', section=True)
         self._clean_tmp_dir()
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
             with lcd(self.SERVICE_ROOT):
-                run('sudo apt-get update > /dev/null')
+                self._update_sys_packages()
                 self._bootstrap_dev()
                 self.copy_puppet()
                 self._bootstrap_puppet(force=True)
                 for setup_item in self.SETUP_LIST:
-                    self.report('setup_list[{0}]: "{1}"'.format(
+                    self.report(' .. setup_list[{0}]: "{1}"'.format(
                         self.SETUP_LIST.index(setup_item),
                         setup_item
-                        ))
+                    ))
                     util._run_puppet(
                         setup_item,
                         puppet_dir='puppet',
                         facts=self.facts,
                         debug=self.YMIR_DEBUG,)
 
-
         self.report("Setup complete.  Now run `fab provision`")
 
     @property
     def facts(self):
         """ """
-        tmp  = self.SERVICE_DEFAULTS.copy()
+        tmp = self.SERVICE_DEFAULTS.copy()
         json = self._template_data(simple=True)
         tmp.update(
             dict(supervisor_user=json['supervisor_user'],
@@ -511,24 +642,29 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def _setup_buckets(self, quiet=False):
         report = self.report if not quiet else lambda *args, **kargs: None
-        report('setting up any s3 buckets this service requires')
+        if self.S3_BUCKETS:
+            report('setting up buckets for this service')
+        else:
+            self.report("no s3 buckets detected in service-definition")
         conn = self._s3_conn
         tmp = {}
         for name in self.S3_BUCKETS:
-            report("setting up s3 bucket: {0}".format(name))
+            report("  setting up s3 bucket: {0}".format(name))
             tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
         return tmp
 
     def _setup_eips(self, quiet=False):
         report = self.report if not quiet else lambda *args, **kargs: None
-        report('setting up any elastic IPs this service requires')
         tmp = {}
+        if not self.ELASTIC_IPS:
+            report('no elastic IPs detected in service definition')
+            return tmp
         for alloc_id in self.ELASTIC_IPS:
-            report("setting up elastic IP: {0}".format(alloc_id))
+            report(" IP: {0}".format(alloc_id))
             addr = self.conn.get_all_addresses(
                 filters=dict(allocation_id=alloc_id)) + \
                 self.conn.get_all_addresses(filters=dict())
-            if not addr or len(addr)>1:
+            if not addr or len(addr) > 1:
                 err = "Expected exactly one EIP would match filter, got {0}"
                 err = err.format(addr)
                 raise SystemExit(err)
@@ -546,17 +682,17 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def run(self, command):
         """ run command on service host """
         with util.ssh_ctx(
-            self._status()['ip'],
-            user=self.USERNAME,
-            pem=self.PEM):
+                self._status()['ip'],
+                user=self.USERNAME,
+                pem=self.PEM):
             run(command)
 
     def copy_puppet(self, clean=True):
         """ copy puppet code to remote host (refreshes any dependencies) """
         with util.ssh_ctx(
-            self._status()['ip'],
-            user=self.USERNAME,
-            pem=self.PEM):
+                self._status()['ip'],
+                user=self.USERNAME,
+                pem=self.PEM):
             remote_user_home = '/home/' + self.USERNAME
             pfile = self._compress_local_puppet_code()
             msg = '  flushing remote puppet codes and refreshing'
@@ -568,7 +704,8 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                         # this undoes `ymir setup` phase, ie the installation
                         # of puppet deps mentioned in metadata.json.
                         api.run('rm -rf puppet')
-                    api.run('tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
+                    api.run(
+                        'tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
             finally:
                 api.local('rm "{0}"'.format(pfile))
 
@@ -601,14 +738,14 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             class definition and class variables)
         """
         blacklist = 'fabric_commands'.split()
-        out = [x for x in dir(self.__class__) if x==x.upper()]
-        out = [ [x.lower(), getattr(self.__class__, x)] for x in out ]
+        out = [x for x in dir(self.__class__) if x == x.upper()]
+        out = [[x.lower(), getattr(self.__class__, x)] for x in out]
         out = dict(out)
         if not simple:
             data = self._status()
             extra = dict(host=self._host(data), ip=data['ip'],)
             out.update(extra)
-        [ out.pop(x, None) for x in blacklist ]
+        [out.pop(x, None) for x in blacklist]
         return out
 
     # TODO: cache for when simple is false
@@ -616,9 +753,10 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         """ reflects the template information back into itself """
         template_data = self.to_json(simple=simple)
         template_data.update(**self.SERVICE_DEFAULTS)
-        for k,v in template_data['service_defaults'].items():
+        for k, v in template_data['service_defaults'].items():
             if isinstance(v, basestring):
-                template_data['service_defaults'][k] = v.format(**template_data)
+                template_data['service_defaults'][
+                    k] = v.format(**template_data)
         return template_data
 
     """ def _test_data(self, data):
@@ -639,25 +777,29 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 check_obj.url_t,
                 check_obj.msg))
 
-    def _check(self):
-        out = {}
+    def _check(self, names=[]):
         # include relevant sections of status results
-        #for x in 'status eb_health eb_status'.split():
+        # for x in 'status eb_health eb_status'.split():
         #    if x in data:
         #        out['aws://'+x] = ['read', data[x]]
         health_checks = []
         for check_name, (_type, url_t) in self.HEALTH_CHECKS.items():
-            check_obj = checks.Check(url_t=url_t, check_type=_type, name=check_name)
+            if names and check_name not in names:
+                continue
+            check_obj = checks.Check(
+                url_t=url_t, check_type=_type, name=check_name)
             health_checks.append(check_obj)
         for check_obj in health_checks:
             check_obj.run(self)
         self._display_checks(health_checks)
 
     def shell(self):
+        """ """
         return util.shell(
             conn=self.conn, Service=self, service=self)
 
     def show_facts(self):
+        """ show facts (puppet key-values available to templates)"""
         print self.facts
 
     def show_instances(self):
