@@ -1,6 +1,9 @@
+# -*- coding: utf-8 -*-
 """ ymir.validation
 """
 import os
+import re
+import glob
 import logging
 
 from fabric.api import (local, quiet,)
@@ -12,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class ValidationMixin(object):
+
     def _validate_named_sgs(self):
         """ validation for security groups.
             NB: this requires AWS credentials
@@ -21,9 +25,9 @@ class ValidationMixin(object):
         try:
             self.conn.get_all_security_groups(sgs)
         except EC2ResponseError:
-            errs.append("could not find security groups: "\
-                   + str(self.SECURITY_GROUPS))
-        #for x in set(self.SECURITY_GROUPS)-set(sgs):
+            errs.append("could not find security groups: "
+                        + str(self.SECURITY_GROUPS))
+        # for x in set(self.SECURITY_GROUPS)-set(sgs):
         #    errs.append('sg entry {0} is complex, ignoring it'.format(
         #        x.get('name')))
         return errs
@@ -55,8 +59,14 @@ class ValidationMixin(object):
                 checker_validator = getattr(
                     checker, 'validate', lambda url: None)
                 err = checker_validator(url)
-                if err: errs.append(err)
+                if err:
+                    errs.append(err)
         return errs
+
+    @property
+    def _puppet_dir(self):
+        pdir = os.path.join(self.SERVICE_ROOT, 'puppet')
+        return pdir
 
     def _validate_puppet(self, recurse=False):
         """ when recurse==True,
@@ -66,7 +76,7 @@ class ValidationMixin(object):
               only validate the files mentioned in SETUP_LIST / PROVISION_LIST
         """
         errs = []
-        pdir = os.path.join(self.SERVICE_ROOT, 'puppet')
+        pdir = self._puppet_dir
         if not os.path.exists(pdir):
             msg = 'puppet directory does not exist @ {0}'
             msg = msg.format(pdir)
@@ -78,10 +88,34 @@ class ValidationMixin(object):
                     logger.debug("validating {0}".format(filename))
                     result = local('puppet parser validate {0}'.format(
                         filename), capture=True)
-                    error = result.return_code!=0
+                    error = result.return_code != 0
                     if error:
-                        errs.append('{0}'.format(filename))
+                        short_fname = filename.replace(os.getcwd(), '.')
+                        error = "running `puppet parser validate {0}'".format(
+                            short_fname)
+                        errs.append(error)
         return errs
+
+    def _validate_puppet_templates(self):
+        """ validates that variables mentioned in puppet
+            templates are defined in service.json
+        """
+        errors = []
+        local_puppet_template_files = glob.glob(
+            os.path.join('puppet', 'modules', '*', 'templates', '*'))
+
+        default_facts = ['domain', 'operatingsystem', 'memoryfree']
+        service_vars = self._template_data().keys()
+        service_vars += default_facts
+        for f in local_puppet_template_files:
+            with open(f, 'r') as fhandle:
+                content = fhandle.read()
+                for template_var in re.findall('<%= @(.*?) %>', content):
+                    if template_var not in service_vars:
+                        msg = ("template {0} defines variable `{1}` "
+                               "which is not defined for service").format(f, template_var)
+                        errors.append(msg)
+        return errors
 
     def _validate_keypairs(self):
         errors = []
