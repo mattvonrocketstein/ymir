@@ -55,6 +55,8 @@ def _run_puppet(_fname, parser=None, debug=False, puppet_dir=None, facts={}):
     """ must be run within a fabric ssh context """
     _facts = {}
     for fact_name, val in facts.items():
+        if isinstance(val, dict):
+            continue
         if not fact_name.startswith('FACTER_'):
             _facts['FACTER_' + fact_name] = val
         else:
