@@ -56,23 +56,23 @@ class FabricMixin(object):
         'update_tags'
     ]
 
-    def put(self, *args):
+    def put(self, src, dest, *args, **kargs):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
         """
-        self.report(
-            'putting "{0}" to remote'.format(
-                args))
+        owner = kargs.pop('owner')
+        if owner:
+            kargs['use_sudo'] = True
         with self.ssh_ctx():
-            return api.put(*args)
+            result = api.put(src, dest, *args, **kargs)
+        if owner:
+            api.sudo('chown {0}:{0} "{1}"'.format(owner, dest))
+        return result
 
     def get(self, fname, local_path='.'):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
         """
-        self.report(
-            'getting "{0}" from remote'.format(
-                fname))
         with self.ssh_ctx():
             return api.get(fname, local_path=local_path, use_sudo=True)
 
@@ -293,11 +293,17 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def _install_puppet(self):
         self.report("installing puppet")
 
+        def decompress(x):
+            """ unwraps tarball, removing the original file if it was successful """
+            if not api.run('tar -zxf "{0}"'.format(x)).failed:
+                api.run('rm "{0}"'.format(x))
+
         def doit():
             """ see https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html """
             run_install = lambda: api.sudo('ruby install.rb')
-            download = lambda x: api.run('wget ' + x + ' > /dev/null')
-            decompress = lambda x: api.run('tar -zxvf ' + x + ' > /dev/null')
+            download = lambda x: api.run(
+                'wget -O {0} {1}'.format(
+                    os.path.basename(x), x))
 
             download('http://downloads.puppetlabs.com/facter/facter-1.7.5.tar.gz')
             decompress('facter-1.7.5.tar.gz')
