@@ -1,16 +1,17 @@
-{
+/home/vagrant/code/ymir/ymir/skeleton/service.json{
     // sets namespace  for this service.
-    // unused currently but should eventually
-    // be used in tagging, etc
+    // used in tagging, etc.
     "org_name": "OrgName",
     "app_name": "AppName",
     "env_name": "EnvName",
     "service_name": "ServiceName",
 
-    // sets the name for this service.
-    // this will be used in AWS tags: choose wisely
-    // for readability and any logging you add later
-    // Suggested format: "org_name-app_name-env_name"
+    // Sets the name for this service.
+    // This will be used in service discovery for provisioning, etc,
+    // after this service has been created.  Choose wisely!
+    //
+    // For readability and logging you might add later,
+    // the suggested format is: "org_name-app_name-env_name"
     "name" : "{org_name}-{app_name}-{env_name}",
     "service_description": "Service description goes here",
 
@@ -31,15 +32,18 @@
     "instance_type"   : "t2.micro",
 
     // Sets the supervisor credentials for this service.
-    // NB: these variables will be added to "facts" used by puppet
-    "supervisor_user" : "admin",
-    "supervisor_pass" : "testing",
-    "supervisor_port" : "9001",
+    //
+    // "supervisor_user" : "admin",
+    // "supervisor_pass" : "testing",
+    // "supervisor_port" : "9001",
 
     // location of the pem file for this service.
     // this will be used for ssh connections with the service,
     // and if it is not correct then no remote can be executed.
     "pem" : "~/.ssh/{app_name}.pem",
+
+    // allows sane iteration using rubyish `each` inside puppet files
+    'puppet_parser': 'future',
 
     // Sets up the AWS key_name for this service.
     // By default, the value for the "app_name" field
