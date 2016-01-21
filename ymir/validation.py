@@ -83,16 +83,19 @@ class ValidationMixin(object):
             errs.append(msg)
         else:
             with quiet():
+                parser = self._template_data().get('puppet_parser', '')
+                validation_cmd = 'puppet parser {0} validate '.format(
+                    '--parser {0}'.format(parser) if parser else '')
                 result = local('find {0}|grep .pp$'.format(pdir), capture=True)
                 for filename in result.split('\n'):
-                    logger.debug("validating {0}".format(filename))
-                    result = local('puppet parser validate {0}'.format(
-                        filename), capture=True)
+                    (" .. validating {0}".format(filename))
+                    result = local('{1} {0}'.format(
+                        filename, validation_cmd), capture=True)
                     error = result.return_code != 0
                     if error:
                         short_fname = filename.replace(os.getcwd(), '.')
-                        error = "running `puppet parser validate {0}'".format(
-                            short_fname)
+                        error = "running `{1} {0}'".format(
+                            short_fname, validation_cmd)
                         errs.append(error)
         return errs
 
