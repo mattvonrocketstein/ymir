@@ -47,6 +47,7 @@ class FabricMixin(object):
         'logs', 'mosh',
         'provision', 'put',
         'run',
+        'sync_eips',
         'setup', 's3', 'shell',
         'status',
         'service', 'ssh', 'show',
@@ -596,7 +597,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def setup_ip(self, ip):
         self.update_tags()
         self._setup_buckets()
-        self._setup_eips()
+        self.sync_eips()
         self.report('installing puppet & puppet deps', section=True)
         self._clean_tmp_dir()
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
@@ -659,31 +660,25 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
         return tmp
 
-    def _setup_eips(self, quiet=False):
+    def sync_eips(self, quiet=False):
+        """ synchronizes elastic IPs with service.json data """
         report = self.report if not quiet else lambda *args, **kargs: None
-        tmp = {}
+        service_instance_id = self._status()['instance'].id
         if not self.ELASTIC_IPS:
             report('no elastic IPs detected in service definition')
-            return tmp
-        for alloc_id in self.ELASTIC_IPS:
-            report(" IP: {0}".format(alloc_id))
-            addr = self.conn.get_all_addresses(
-                filters=dict(allocation_id=alloc_id)) + \
-                self.conn.get_all_addresses(filters=dict())
-            if not addr or len(addr) > 1:
-                err = "Expected exactly one EIP would match filter, got {0}"
-                err = err.format(addr)
-                raise SystemExit(err)
-            addr = addr[0]
-            status = self._status()
-            instance_id = status['instance'].id
-            if addr.instance_id is None:
-                addr.associate(instance_id=instance_id)
-                report(" + {0}: {1}".format(addr.allocation_id, addr))
+            return
+        addresses = [x for x in self.conn.get_all_addresses(
+        ) if x.public_ip in self.ELASTIC_IPS]
+        for aws_address in addresses:
+            report(" Address: {0}".format(aws_address))
+            if aws_address.instance_id is None:
+                report("   -> currently unassigned.  associating with this instance")
+                aws_address.associate(instance_id=service_instance_id)
+            elif aws_address.instance_id == service_instance_id:
+                report("   -> already associated with this service")
             else:
-                report(" - already assigned: {0}: {1}".format(
-                    addr.allocation_id, addr))
-        return tmp
+                report("   -> assigned to another instance {0}! (that seems bad)".format(
+                    aws_address.instance_id))
 
     def run(self, command):
         """ run command on service host """
