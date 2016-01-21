@@ -27,7 +27,6 @@ BaseSchema = {
     Optional("supervisor_pass"): unicode,
     Optional("supervisor_port", default='9001'): unicode,
     Optional("env_name", default='env'): unicode,
-    Optional("eip", default=""): unicode,
 }
 
 
