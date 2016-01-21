@@ -11,6 +11,7 @@ from functools import wraps
 
 import boto.ec2
 
+from fabric.api import quiet, local
 from fabric.api import settings, run, shell_env, env
 
 from ymir.data import STATUS_DEAD
@@ -122,8 +123,6 @@ def get_instance_by_id(id, conn):
         #          on this working as written
         if tmp[0].update() not in ['terminated']:
             return tmp
-
-from fabric.api import quiet, local
 
 
 def has_gem(name):
