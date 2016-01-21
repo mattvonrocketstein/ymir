@@ -221,5 +221,14 @@ def copytree(src, dst, symlinks=False, ignore=None):
                 shutil.copy2(s, d)
 
 
-def working_dir_is_ymir():
-    return '.ymir' in os.listdir(os.getcwd())
+# def working_dir_is_ymir():
+#    return '.ymir' in os.listdir(os.getcwd())
+
+def get_or_guess_service_json_file(args=None):
+    service_json_file = os.environ.get(
+        'YMIR_SERVICE_JSON',
+        os.path.join(os.getcwd(), 'service.json'))
+    if not os.path.exists(service_json_file):
+        raise SystemExit("no service.json found")
+    assert os.path.exists(service_json_file)
+    return service_json_file

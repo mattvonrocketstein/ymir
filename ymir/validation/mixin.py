@@ -5,11 +5,10 @@ import os
 import re
 import glob
 import logging
-
 from fabric.api import (local, quiet,)
 from boto.exception import EC2ResponseError
-
 from ymir import checks
+
 from ymir import util
 logger = logging.getLogger(__name__)
 
@@ -65,12 +64,12 @@ class ValidationMixin(object):
 
     @property
     def _puppet_dir(self):
-        pdir = os.path.join(self.SERVICE_ROOT, 'puppet')
+        pdir = os.path.join(self._ymir_service_root, 'puppet')
         return pdir
 
     def _validate_puppet(self, recurse=False):
         """ when recurse==True,
-              all puppet under SERVICE_ROOT/puppet will be checked
+              all puppet under _ymir_service_root/puppet will be checked
 
             otherwise,
               only validate the files mentioned in SETUP_LIST / PROVISION_LIST

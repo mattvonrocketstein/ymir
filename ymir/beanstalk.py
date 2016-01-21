@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ ymir.beanstalk
 """
 import logging
@@ -8,6 +9,7 @@ from goulash.cache import cached
 from ymir.service import AbstractService
 
 logging.captureWarnings(True)
+
 
 class ElasticBeanstalkService(AbstractService):
     """ This is a wrapper so that elasticbeanstalk-managed stuff
@@ -20,12 +22,12 @@ class ElasticBeanstalkService(AbstractService):
     """
     S3_LOCATION = Location.DEFAULT
     ENV_NAME = None
-    HEALTH_CHECKS = {'http://{host}' : 'http_200',
-                     'http://{ip}'   : 'http_200' }
+    HEALTH_CHECKS = {'http://{host}': 'http_200',
+                     'http://{ip}': 'http_200'}
 
     def __init__(self, *args, **kargs):
         err = "ElasticBeanstalkService.ENV_NAME must be set"
-        assert self.ENV_NAME != None, err
+        assert self.ENV_NAME is not None, err
         super(ElasticBeanstalkService, self).__init__(*args, **kargs)
 
     @cached('ymir_status', timeout=10)
@@ -40,10 +42,10 @@ class ElasticBeanstalkService(AbstractService):
                 result = local('eb status 2>&1', capture=True)
         result = result.split('\n')
         header = 'Environment details for:'
-        assert result[0].strip().startswith(header),'weird output: '+str(result)
-        #eb_env = result[0][len(header):].strip()
+        assert result[0].strip().startswith(
+            header), 'weird output: ' + str(result)
         result = [x.split(':') for x in result[1:]]
-        result = [[ 'eb_' + x[0].strip().lower().replace(' ', '_'),
+        result = [['eb_' + x[0].strip().lower().replace(' ', '_'),
                    ':'.join(x[1:]).strip()] for x in result]
         result = dict(result)
         out.update(**result)
@@ -51,8 +53,8 @@ class ElasticBeanstalkService(AbstractService):
 
     def _report_name(self):
         return '{0} [{1}]'.format(
-            super(ElasticBeanstalkService,self)._report_name(),
-             self.ENV_NAME)
+            super(ElasticBeanstalkService, self)._report_name(),
+            self.ENV_NAME)
 
     def _eb_ctx(self):
         return prefix('eb use {0}'.format(self.NAME))
@@ -64,13 +66,13 @@ class ElasticBeanstalkService(AbstractService):
 
     def provision(self):
         """ same as 'eb deploy' """
-        with lcd(self.SERVICE_ROOT):
+        with lcd(self._ymir_service_root):
             with self._eb_ctx():
                 local('eb deploy')
 
     def ssh(self):
         """ same as 'eb ssh' """
-        with lcd(self.SERVICE_ROOT):
+        with lcd(self._ymir_service_root):
             with self._eb_ctx():
                 local('eb ssh')
 

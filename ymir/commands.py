@@ -6,19 +6,15 @@ import os
 
 import boto
 import addict
-import voluptuous
 import demjson
 
 from fabric.colors import red, green
 from fabric.contrib.console import confirm
 
 from ymir import util
+from ymir import api as yapi
 
-from ymir.base import report
-from ymir import schema as yschema
-from ymir.service import AbstractService
-from ymir.beanstalk import ElasticBeanstalkService
-from ymir.schema import SGFileSchema, _choose_schema
+from ymir.schema import SGFileSchema
 from ymir.security_groups import sg_sync
 
 OK = green('  ok')
@@ -71,113 +67,20 @@ def ymir_sg(args):
                 )
 
 
-def _load_json(fname):
-    """ loads json and allows for
-        templating / value reflection
-    """
-    with open(fname) as fhandle:
-        tmp = demjson.decode(fhandle.read())
-        return _reflect(service_json=tmp)
-
-
-def _validate_file(fname):
-    """ simple schema validation, this
-        returns error message or None """
-    tmp = _load_json(fname)
-    schema = _choose_schema(tmp)
-    is_eb = schema.schema_name == 'eb_schema'
-    # print 'Chose schema:\n ',schema.schema_name
-    try:
-        schema(tmp)
-    except voluptuous.Invalid, e:
-        msg = "error validating {0}\n\t{1}"
-        msg = msg.format(os.path.abspath(fname), e)
-        return msg
-    SERVICE_ROOT = os.path.dirname(fname)
-    SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
-    tmp.update(dict(SERVICE_ROOT=SERVICE_ROOT))
-    if is_eb:
-        return []
-    files = tmp['setup_list'] + tmp['provision_list']
-    for _file in files:
-        if '://' not in _file and not os.path.exists(os.path.join(SERVICE_ROOT, _file)):
-            err = ('Files mentioned in service json '
-                   'must exist relative to {0}, but {1}'
-                   ' was not found').format(
-                SERVICE_ROOT, _file)
-            return [err]
-    return []
-
-
-def _ymir_load(service_json, interactive=True, simple=False):
-    """ load service obj from service json """
-    SERVICE_ROOT = os.path.dirname(service_json)
-    SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
-    service_json = _load_json(service_json)
-    if interactive:
-        print red("Service root: "), '\n  ', SERVICE_ROOT
-        print red("Service JSON: ")
-
-    dct = dict([
-        [x.upper(), y] for x, y in service_json.items()])
-    dct.update(SERVICE_ROOT=SERVICE_ROOT)
-    classname = str(service_json.name).lower()
-    chosen_schema = _choose_schema(service_json)
-    if chosen_schema == yschema.eb_schema:
-        from ymir.beanstalk import ElasticBeanstalkService
-        BaseService = ElasticBeanstalkService
-    else:
-        BaseService = AbstractService
-    # print 'Chose service-class:\n ',BaseService.__name__
-    ServiceFromJSON = type(classname, (BaseService,), dct)
-    obj = ServiceFromJSON()
-    obj._schema = chosen_schema
-    obj = _reflect(service_obj=obj, simple=simple)
-    if interactive:
-        print red("Service definition loaded from JSON")
-    return obj
-
-
 def ymir_shell(args):
     """ """
-    service_json = os.environ.get(
-        'YMIR_SERVICE_JSON',
-        os.path.join(os.getcwd(), 'service.json'))
-    if os.path.exists(service_json):
-        print 'found service.json, loading service..'
-        fake_args = addict.Dict(service_json=service_json)
-        user_ns = dict(
-            conn=util.get_conn(),
-            service=ymir_load(fake_args))
-        from smashlib import embed
-        embed(user_ns=user_ns,)
-    else:
-        print "no service.json found"
+    service = yapi.load_service_from_json()
+    user_ns = dict(
+        conn=util.get_conn(),
+        service=service)
+    from smashlib import embed
+    embed(user_ns=user_ns,)
 
 
 def ymir_load(args, interactive=True):
     """ """
-    report('profile', os.environ.get('AWS_PROFILE', 'default'))
-    ymir_validate(args['service_json'], simple=True, interactive=False)
-    return _ymir_load(args, interactive=interactive)
-
-
-def _reflect(service_json=None, service_obj=None, simple=True):
-    """ """
-    assert service_json or service_obj
-    if service_obj:
-        tdata = service_obj._template_data(simple=simple)
-        for k, v in tdata['service_defaults'].items():
-            tmp = service_obj.SERVICE_DEFAULTS[k]
-            if isinstance(tmp, basestring):
-                service_obj.SERVICE_DEFAULTS[k] = tmp.format(**tdata)
-
-        return service_obj
-    if service_json:
-        for k, v in service_json.items():
-            if isinstance(v, basestring) and '{' in v:
-                service_json[k] = v.format(**service_json)
-        return addict.Dict(service_json)
+    raise RuntimeError(
+        "this function is deprecated.  use ymir.load_service_from_json")
 
 
 def ymir_init(args):
@@ -206,58 +109,6 @@ def ymir_init(args):
     print red('creating directory: ') + init_dir
     print red('copying ymir skeleton: '), skeleton_dir
     util.copytree(skeleton_dir, init_dir)
-
-
-def ymir_validate(service_json, simple=True, interactive=True):
-    """ """
-    def print_errs(msg, _errs, die=False):
-        assert isinstance(_errs, list), str(_errs)
-        if interactive:
-            print msg
-        if not _errs:
-            print OK
-            return
-        for e in _errs:
-            print red('  ERROR: ') + str(e)
-        if die:
-            raise SystemExit(str(_errs))
-
-    errs = _validate_file(service_json)
-    if interactive:
-        print_errs(
-            'Validating the overall file schema..',
-            errs, die=True)
-
-    if simple:
-        return True
-
-    # simple validation has succeded, begin second phase.
-    # the schema can be loaded, so build a service object.
-    # the service object can then begin to validate itself
-
-    print 'Instantiating service to scrutinize it..'
-    service = _ymir_load(service_json, interactive=False, simple=True)
-    print OK
-    errs = service._validate_health_checks()
-    print_errs(
-        'Validating content in `health_checks` field..',
-        errs)
-    if not isinstance(service, ElasticBeanstalkService):
-        errors = service._validate_keypairs()
-        print_errs('Validating AWS keypair at field `key_name`..',
-                   errors)
-        errs = service._validate_puppet_librarian()
-        print_errs('Validating puppet-librarian\'s metadata.json', errs)
-        errs = service._validate_named_sgs()
-        print_errs(
-            'Validating simple AWS security groups in field `security_groups`..',
-            errs)
-        errs = service._validate_puppet()
-        print_errs(
-            'Validating puppet code..',
-            errs)
-        errs = service._validate_puppet_templates()
-        print_errs('Validating puppet templates..', errs)
 
 
 def ymir_keypair(args):

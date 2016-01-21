@@ -27,7 +27,7 @@ from ymir import util
 from ymir import checks
 from ymir.base import Reporter
 from ymir.schema import default_schema
-from ymir.validation import ValidationMixin
+from ymir.validation.mixin import ValidationMixin
 
 # capture warnings because Fabric and
 # it's dependencies can be pretty noisy
@@ -172,7 +172,7 @@ class FabricMixin(object):
     def _validate_puppet_librarian(self):
         errs = []
         metadata = os.path.join(
-            self.SERVICE_ROOT, 'puppet', 'metadata.json')
+            self._ymir_service_root, 'puppet', 'metadata.json')
         if not os.path.exists(metadata):
             errs.append('{0} does not exist!'.format(metadata))
         else:
@@ -206,7 +206,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     PEM = None
     INSTANCE_TYPE = None
     PUPPET_PARSER = None
-    SERVICE_ROOT = None
+    _ymir_service_root = None
     USERNAME = None
     APP_NAME = None
     ORG_NAME = None
@@ -269,9 +269,10 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def _report_name(self):
         return super(AbstractService, self)._report_name()
 
-    def __init__(self, conn=None):
+    def __init__(self, conn=None, service_root=None, ):
         """"""
         self.conn = conn or util.get_conn()
+        self._ymir_service_root = service_root
 
     def _bootstrap_dev(self):
         """ """
@@ -495,7 +496,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             containing puppet code for this service.
             NB: caller is responsible for deletion
         """
-        with lcd(self.SERVICE_ROOT):
+        with lcd(self._ymir_service_root):
             pfile = tempfile.mktemp(suffix='.tgz')
             # build a local tarball to copy and unzip on the remote side
             api.local('tar -czf {0} puppet/ '.format(pfile))
@@ -528,7 +529,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         else:
             provision_list = self.PROVISION_LIST
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
-            with lcd(self.SERVICE_ROOT):
+            with lcd(self._ymir_service_root):
                 self.report("Provision list for this service:")
                 pprint.pprint(provision_list, indent=2)
                 # if clean==True, in the call below, the puppet deps
@@ -584,7 +585,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def _clean_tmp_dir(self):
         """ necessary because puppet librarian is messy """
         self.report("  .. cleaning puppet tmp dir")
-        tdir = os.path.join(self.SERVICE_ROOT, 'puppet', '.tmp')
+        tdir = os.path.join(self._ymir_service_root, 'puppet', '.tmp')
         if os.path.exists(tdir):
             # ~/puppet/.tmp should be nixed
             shutil.rmtree(tdir)
@@ -601,7 +602,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         self.report('installing puppet & puppet deps', section=True)
         self._clean_tmp_dir()
         with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
-            with lcd(self.SERVICE_ROOT):
+            with lcd(self._ymir_service_root):
                 self._update_sys_packages()
                 self._bootstrap_dev()
                 self.copy_puppet()

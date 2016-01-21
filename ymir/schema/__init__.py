@@ -95,7 +95,6 @@ schema.update({
     Required("setup_list"): _validate_sl_field,
     Required("security_groups"): _validate_sg_field,
     Required("provision_list"): _validate_pl_field,
-
     Optional("puppet_parser"): _validate_puppet_parser,
 })
 
