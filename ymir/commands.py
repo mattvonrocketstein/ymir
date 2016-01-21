@@ -12,8 +12,9 @@ import demjson
 from fabric.colors import red, green
 from fabric.contrib.console import confirm
 
+from ymir import util
+
 from ymir.base import report
-from ymir.util import copytree
 from ymir import schema as yschema
 from ymir.service import AbstractService
 from ymir.beanstalk import ElasticBeanstalkService
@@ -108,11 +109,11 @@ def _validate_file(fname):
     return []
 
 
-def _ymir_load(args, interactive=True, simple=False):
+def _ymir_load(service_json, interactive=True, simple=False):
     """ load service obj from service json """
-    SERVICE_ROOT = os.path.dirname(args.service_json)
+    SERVICE_ROOT = os.path.dirname(service_json)
     SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
-    service_json = _load_json(args.service_json)
+    service_json = _load_json(service_json)
     if interactive:
         print red("Service root: "), '\n  ', SERVICE_ROOT
         print red("Service JSON: ")
@@ -139,20 +140,25 @@ def _ymir_load(args, interactive=True, simple=False):
 
 def ymir_shell(args):
     """ """
-    wd_json = os.path.join(os.getcwd(), 'service.json')
-    if os.path.exists(wd_json):
-        print 'found service.json import working directory, loading service..'
-        fake_args = addict.Dict(service_json=wd_json)
+    service_json = os.environ.get(
+        'YMIR_SERVICE_JSON',
+        os.path.join(os.getcwd(), 'service.json'))
+    if os.path.exists(service_json):
+        print 'found service.json, loading service..'
+        fake_args = addict.Dict(service_json=service_json)
         user_ns = dict(
+            conn=util.get_conn(),
             service=ymir_load(fake_args))
-    from smashlib import embed
-    embed(user_ns=user_ns)
+        from smashlib import embed
+        embed(user_ns=user_ns,)
+    else:
+        print "no service.json found"
 
 
 def ymir_load(args, interactive=True):
     """ """
     report('profile', os.environ.get('AWS_PROFILE', 'default'))
-    ymir_validate(args, simple=True, interactive=False)
+    ymir_validate(args['service_json'], simple=True, interactive=False)
     return _ymir_load(args, interactive=interactive)
 
 
@@ -164,8 +170,8 @@ def _reflect(service_json=None, service_obj=None, simple=True):
         for k, v in tdata['service_defaults'].items():
             tmp = service_obj.SERVICE_DEFAULTS[k]
             if isinstance(tmp, basestring):
-                service_obj.SERVICE_DEFAULTS[k] = tmp.format(
-                    tdata)
+                service_obj.SERVICE_DEFAULTS[k] = tmp.format(**tdata)
+
         return service_obj
     if service_json:
         for k, v in service_json.items():
@@ -199,10 +205,10 @@ def ymir_init(args):
         raise SystemExit(err)
     print red('creating directory: ') + init_dir
     print red('copying ymir skeleton: '), skeleton_dir
-    copytree(skeleton_dir, init_dir)
+    util.copytree(skeleton_dir, init_dir)
 
 
-def ymir_validate(args, simple=True, interactive=True):
+def ymir_validate(service_json, simple=True, interactive=True):
     """ """
     def print_errs(msg, _errs, die=False):
         assert isinstance(_errs, list), str(_errs)
@@ -216,7 +222,7 @@ def ymir_validate(args, simple=True, interactive=True):
         if die:
             raise SystemExit(str(_errs))
 
-    errs = _validate_file(args.service_json)
+    errs = _validate_file(service_json)
     if interactive:
         print_errs(
             'Validating the overall file schema..',
@@ -230,7 +236,7 @@ def ymir_validate(args, simple=True, interactive=True):
     # the service object can then begin to validate itself
 
     print 'Instantiating service to scrutinize it..'
-    service = _ymir_load(args, interactive=False, simple=True)
+    service = _ymir_load(service_json, interactive=False, simple=True)
     print OK
     errs = service._validate_health_checks()
     print_errs(
