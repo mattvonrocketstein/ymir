@@ -32,7 +32,6 @@ class ValidationMixin(object):
         return errs
 
     def _validate_health_checks(self):
-        errs = []
         # fake the host value just for validation because we don't know
         # whether this service has been bootstrapped or not
         service_json = self._template_data(simple=True)

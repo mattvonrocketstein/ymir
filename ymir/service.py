@@ -47,15 +47,33 @@ class FabricMixin(object):
         'logs', 'mosh',
         'provision', 'put',
         'run',
-        'sync_eips',
-        'setup', 's3', 'shell',
+        's3',
+        'service',
+        'setup',
+        'shell',
+        'show', 'show_facts', 'show_instances',
+        'ssh',
         'status',
-        'service', 'ssh', 'show',
-        'show_facts', 'show_instances',
         'supervisor', 'supervisorctl',
-        'tail', 'test',
+        'sync_eips',
+        'tail', 'test', 'terminate',
         'update_tags'
     ]
+
+    def terminate(self, force=False):
+        """ terminate this service (delete from ec2) """
+        instance = self._status()['instance']
+        if force is True:
+            return self.conn.terminate_instances(
+                instance_ids=[instance.id])
+        else:
+            msg = ("This will terminate the instance {0} ({1}) and can "
+                   "involve data loss.  Are you sure? [y/n] ")
+            answer = None
+            while answer not in ['y', 'n']:
+                answer = raw_input(msg.format(instance, self.NAME))
+            if answer == 'y':
+                self.terminate(force=True)
 
     def put(self, src, dest, *args, **kargs):
         """ thin wrapper around fabric's scp command

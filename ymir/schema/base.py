@@ -19,6 +19,7 @@ BaseSchema = {
     Optional("ymir_debug", default=False): bool,
     Optional("s3_buckets", default=[]): list_of_strings,
     Optional("elastic_ips", default=[]): list_of_strings,
+    Optional("volumes", default=[]): dict,
     Optional("org_name", default="org"): unicode,
     Optional("app_name", default="app"): unicode,
     Optional("service_defaults", default={}): dict,

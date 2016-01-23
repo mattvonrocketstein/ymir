@@ -9,10 +9,9 @@ from argparse import ArgumentParser
 
 from ymir.version import __version__
 from ymir.commands import (
-    ymir_init, ymir_load, ymir_validate, ymir_sg,
+    ymir_init, ymir_load, ymir_sg,
     ymir_eip, ymir_keypair, ymir_shell)
-
-from ymir.util import working_dir_is_ymir
+from ymir import validation
 logger = logging.getLogger(__name__)
 
 LOG_LEVELS = [logging.CRITICAL,  # 50
@@ -55,11 +54,8 @@ def get_parser():
 
     sgkargs = dict(metavar='security_group_json',
                    type=str,)
-    if working_dir_is_ymir():
-        # in this case, the security group json
-        # positional argument may be implied
-        sgkargs.update(
-            dict(nargs='?', default='security_groups.json'))
+    sgkargs.update(
+        dict(nargs='?', default='security_groups.json'))
     sg_parser = subparsers.add_parser(
         'sg', help='shortcut for security_group command')
     sg_parser.set_defaults(subcommand='sg')
@@ -89,11 +85,9 @@ def get_parser():
     vpkargs = dict(metavar='service_json',
                    type=str,
                    help='a (new) directory to initial a ymir project in')
-    if working_dir_is_ymir():
-        # in this case, the service_json
-        # positional argument may be implied
-        vpkargs.update(
-            dict(nargs='?', default='service.json'))
+
+    vpkargs.update(
+        dict(nargs='?', default='service.json'))
     validate_parser.add_argument('service_json', **vpkargs)
 
     validate_parser.set_defaults(subcommand='validate')
@@ -132,7 +126,8 @@ def entry(settings=None):
         level=level,
         format="%(levelname)s [%(filename)s:%(lineno)s] %(message)s",
     )
-    validate = lambda args: ymir_validate(args, simple=False)
+    validate = lambda args: validation.validate(
+        args.service_json, simple=False)
     subcommand_map = dict(
         help=parser.print_help,
         eip=ymir_eip,
