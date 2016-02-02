@@ -11,23 +11,28 @@
 #     `logs`, `log_dirs`
 
 from voluptuous import Invalid
-from voluptuous import Schema as _Schema
-from voluptuous import Required, Optional
 
-from .base import BaseSchema, Schema
-from .util import list_of_strings, list_of_dicts
+from ymir.base import report as _report
+from .base import Schema, BeanstalkSchema, EC2Schema
+from ymir.schema.util import list_of_dicts
+report = lambda *args: _report("ymir.schema", *args)
 
 
 def _choose_schema(json):
-    json = json.copy()
-    if json.get('instance_type') in [u'elastic_beanstalk', u'elasticbeanstalk']:
+    """ """
+    instance_type = json.get('instance_type')
+    if instance_type in [u'elastic_beanstalk', u'elasticbeanstalk']:
         schema = eb_schema
     else:
         schema = default_schema
+    report("chose schema {0} from instance_type {1}".format(
+        schema.schema_name, instance_type))
     return schema
+choose_schema = _choose_schema
 
 
 def validate_single_rule(rule):
+    """ validate a single aws security group rule"""
     if not isinstance(rule, list):
         err = "every item in `rules` must be a list but {0} is {1}"
         err = err.format(rule, type(rule))
@@ -70,44 +75,11 @@ def _validate_sg_entry(dct, index=0):
         validate_single_rule(rule)
 
 
-_validate_sg_field = lambda lst: list_of_strings(lst, key='security_groups')
-_validate_pl_field = lambda lst: list_of_strings(lst, key='provision_list')
-_validate_sl_field = lambda lst: list_of_strings(lst, key='setup_list')
-
-
 def sg_schema(lst):
     list_of_dicts(lst, key='security_group_file')
     for x in lst:
         _validate_sg_entry(x, lst.index(x))
+SGFileSchema = Schema(sg_schema)
 
-
-def _validate_puppet_parser(x):
-    if x != 'future':
-        err = "puppet_parser has only one acceptable value: 'future'"
-        raise Invalid(err)
-
-SGFileSchema = _Schema(sg_schema)
-
-schema = BaseSchema.copy()
-schema.update({
-    Required("ami"): unicode,
-    Required("key_name"): unicode,
-    Required("setup_list"): _validate_sl_field,
-    Required("security_groups"): _validate_sg_field,
-    Required("provision_list"): _validate_pl_field,
-    Optional("puppet_parser"): _validate_puppet_parser,
-})
-
-schema = default_schema = Schema(schema, default=dict(),)
-default_schema.schema_name = 'default_schema'
-
-eb_schema = BaseSchema.copy()
-
-eb_schema.update({
-    Optional("supervisor_user"): unicode,
-    Optional("supervisor_pass"): unicode,
-    Required("env_name", default='dev'): unicode,
-    # Required("instance_type") : lambda x: x=='elasticbeanstalk',
-})
-eb_schema = Schema(eb_schema, default=dict(),)
-eb_schema.schema_name = 'eb_schema'
+default_schema = Schema(EC2Schema, name='ec2_schema')
+eb_schema = Schema(BeanstalkSchema, name='beanstalk_schema')

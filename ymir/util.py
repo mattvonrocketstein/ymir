@@ -232,3 +232,11 @@ def get_or_guess_service_json_file(args=None):
         raise SystemExit("no service.json found")
     assert os.path.exists(service_json_file)
     return service_json_file
+
+
+def unexpand(path):
+    """ the opposite of os.path.expanduser """
+    home = os.environ.get('HOME')
+    if home:
+        path = path.replace(home, '~')
+    return path

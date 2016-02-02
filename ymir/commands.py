@@ -16,12 +16,15 @@ from ymir import api as yapi
 
 from ymir.schema import SGFileSchema
 from ymir.security_groups import sg_sync
+from ymir.base import report as _report
 
 OK = green('  ok')
 YMIR_SRC = os.path.dirname(__file__)
 
 import logging
 logger = logging.getLogger(__name__)
+
+report = lambda *args: _report("ymir.commands", *args)
 
 
 def ymir_sg(args):
@@ -63,17 +66,21 @@ def ymir_sg(args):
         name = entry['name']
         descr = entry['description']
         rules = entry['rules']
-        sg_sync(name=name, description=descr, rules=rules,
-                )
+        sg_sync(name=name, description=descr, rules=rules,)
 
 
 def ymir_shell(args):
     """ """
     service = yapi.load_service_from_json()
+    report("starting shell")
     user_ns = dict(
         conn=util.get_conn(),
         service=service)
-    from smashlib import embed
+    report("namespace: \n\n{0}\n\n".format(user_ns))
+    try:
+        from smashlib import embed
+    except ImportError:
+        raise SystemExit("need smashlib should be installed first")
     embed(user_ns=user_ns,)
 
 

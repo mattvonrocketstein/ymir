@@ -8,29 +8,38 @@ from fabric.colors import red
 from ymir import data as ydata
 from ymir import schema as yschema
 from ymir.base import report as base_report
-
+from ymir.beanstalk import ElasticBeanstalkService
 logger = logging.getLogger(__name__)
 
 report = lambda x: base_report('ymir.validation', x)
 
 
-def validate(service_json, simple=True,):
-    """ """
-    def print_errs(msg, _errs, die=False, report=report):
-        assert isinstance(_errs, list), str([type(_errs), _errs])
+def print_errs(msg, _errs, quiet=False, die=False, report=report):
+    """ helper for main validation function """
+    assert isinstance(_errs, list), str([type(_errs), _errs])
+    if msg:
         report(msg)
-        if not _errs:
-            report(ydata.OK)
-        else:
-            for e in _errs:
-                report(red('  ERROR: ') + str(e))
-            if die:
-                raise SystemExit(str(_errs))
+    if not _errs:
+        quiet or report(ydata.OK)
+        return True
+    else:
+        for e in _errs:
+            report('ERROR\n')
+            report(red('  error {0}: '.format(_errs.index(e))) + str(e))
+        if die:
+            raise SystemExit(str(_errs))
 
-    from ymir.beanstalk import ElasticBeanstalkService
 
-    print_errs('Validating overall file schema',
-               _validate_file(service_json), die=True)
+def validate(service_json, schema=None, simple=True,):
+    """ validate service json is 2 step.  when simple==True,
+        validation exits early after running against the main
+        JSON schema.  otherwise, the service will be instantiated
+        and sanity-checked against real-world requirements such as
+        actually existing security-groups, keyfiles, etc.
+    """
+    print_errs('',
+               _validate_file(service_json, schema),
+               quiet=True, die=True)
 
     if simple:
         return True
@@ -42,36 +51,37 @@ def validate(service_json, simple=True,):
     service = yapi.load_service_from_json(service_json)
 
     print_errs(
-        'Validating content in `health_checks` field..',
+        'checking content in `health_checks` field..',
         service._validate_health_checks(),
         report=service.report,)
     if not isinstance(service, ElasticBeanstalkService):
-        print_errs('Validating AWS keypair at field `key_name`..',
+        print_errs('checking AWS keypair at field `key_name`..',
                    service._validate_keypairs(), report=service.report,)
-        print_errs('Validating puppet-librarian\'s metadata.json',
+        print_errs('checking puppet-librarian\'s metadata.json',
                    service._validate_puppet_librarian(), report=service.report)
-        print_errs('Validating simple AWS security groups in field `security_groups`..',
+        print_errs('checking simple AWS security groups in field `security_groups`..',
                    service._validate_named_sgs(), report=service.report,)
-        print_errs('Validating puppet code..',
+        print_errs('checking puppet code..',
                    service._validate_puppet(), report=service.report,)
-        print_errs('Validating puppet templates..',
+        print_errs('checking puppet templates..',
                    service._validate_puppet_templates(), report=service.report,)
 
 
-def _validate_file(fname):
+def _validate_file(fname, schema=None):
     """ simple schema validation, this returns a
         list of [error_message] or None
     """
-
+    report('validating file using {0}'.format(schema))
     assert isinstance(fname, basestring)
     tmp = yapi.load_json(fname)
-    schema = yschema._choose_schema(tmp)
-    is_eb = schema.schema_name == 'eb_schema'
+    if schema is None:
+        schema = yschema.choose_schema(tmp)
+    is_eb = schema.schema_name == 'beanstalk_schema'
     # print 'Chose schema:\n ',schema.schema_name
     try:
         schema(tmp)
     except voluptuous.Invalid, e:
-        msg = "error validating {0}\n\t{1}"
+        msg = "error validating {0}:\n\n{1}"
         msg = msg.format(os.path.abspath(fname), e)
         return [msg]
     SERVICE_ROOT = os.path.dirname(fname)

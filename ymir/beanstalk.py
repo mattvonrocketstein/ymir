@@ -5,7 +5,7 @@ import logging
 
 from boto.s3.connection import Location
 from fabric.api import lcd, local, prefix, hide
-from goulash.cache import cached
+from ymir.caching import cached
 from ymir.service import AbstractService
 
 logging.captureWarnings(True)

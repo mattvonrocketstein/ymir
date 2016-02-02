@@ -10,7 +10,6 @@ import shutil
 import webbrowser
 import tempfile
 import logging
-
 import boto
 # from retrying import retry
 
@@ -18,6 +17,7 @@ import fabric
 from fabric.colors import blue
 from fabric.colors import yellow
 from fabric.contrib.files import exists
+
 from fabric import api
 from fabric.api import (
     cd, lcd, local, put,
@@ -28,6 +28,8 @@ from ymir import checks
 from ymir.base import Reporter
 from ymir.schema import default_schema
 from ymir.validation.mixin import ValidationMixin
+
+NOOP = lambda *args, **kargs: None
 
 # capture warnings because Fabric and
 # it's dependencies can be pretty noisy
@@ -46,7 +48,7 @@ class FabricMixin(object):
         'check', 'create', 'get',
         'logs', 'mosh',
         'provision', 'put',
-        'run',
+        'reboot', 'run',
         's3',
         'service',
         'setup',
@@ -56,8 +58,10 @@ class FabricMixin(object):
         'status',
         'supervisor', 'supervisorctl',
         'sync_eips',
+        'sync_elastic_ips',
+        'sync_volumes',
         'tail', 'test', 'terminate',
-        'update_tags'
+        'sync_tags'
     ]
 
     def terminate(self, force=False):
@@ -79,7 +83,7 @@ class FabricMixin(object):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
         """
-        owner = kargs.pop('owner')
+        owner = kargs.pop('owner', None)
         if owner:
             kargs['use_sudo'] = True
         with self.ssh_ctx():
@@ -99,18 +103,19 @@ class FabricMixin(object):
     def mosh(self):
         """ connect to this service with mosh """
         self.report('connecting with mosh')
-        self.report('connecting with ssh')
+        service_data = self._template_data()
         util.mosh(self.status()['ip'],
-                  username=self.USERNAME,
-                  pem=self.PEM)
+                  username=service_data['username'],
+                  pem=service_data['pem'])
 
     @util.require_running_instance
     def ssh(self):
         """ connect to this service with ssh """
         self.report('connecting with ssh')
+        service_data = self._template_data()
         util.ssh(self._status()['ip'],
-                 username=self.USERNAME,
-                 pem=self.PEM)
+                 username=service_data['username'],
+                 pem=service_data['pem'],)
 
     def show(self):
         """ open health-check webpages for this service in a browser """
@@ -136,18 +141,21 @@ class FabricMixin(object):
             self.report('  force is False, refusing to rebuild it')
             return
 
+        service_data = self._template_data()
         # HACK: deal with unfortunate vpc vs. ec2-classic differences
-        reservation_extras = self.RESERVATION_EXTRAS.copy()
+        reservation_extras = service_data['reservation_extras'].copy()
 
         if 'security_group_ids' in reservation_extras:
             # vpc-based (not ec2 classic style)
             pass
         else:
-            reservation_extras['security_groups'] = self.SECURITY_GROUPS
+            reservation_extras['security_groups'] = service_data[
+                'security_groups']
+
         reservation = conn.run_instances(
-            image_id=self.AMI,
-            key_name=self.KEY_NAME,
-            instance_type=self.INSTANCE_TYPE,
+            image_id=service_data['ami'],
+            key_name=service_data['key_name'],
+            instance_type=service_data['instance_type'],
             **reservation_extras
         )
 
@@ -167,15 +175,26 @@ class FabricMixin(object):
         time.sleep(5)
         self.report("Finished with creation.  Now run `fab setup`")
 
+    @util.require_running_instance
     def check(self, name=None):
         """ reports health for this service """
         self.report('checking health')
-        data = self._status()
-        if data['status'] == 'running':
-            return self._check(names=[name])
-        else:
-            self.report('no instance is running for this'
-                        ' service, create it first')
+        # include relevant sections of status results
+        # for x in 'status eb_health eb_status'.split():
+        #    if x in data:
+        #        out['aws://'+x] = ['read', data[x]]
+        health_checks = []
+        names = [name] if name is not None else self._service_data[
+            'health_checks'].keys()
+        for check_name, (_type, url_t) in self._service_data['health_checks'].items():
+            if names and check_name not in names:
+                continue
+            check_obj = checks.Check(
+                url_t=url_t, check_type=_type, name=check_name)
+            health_checks.append(check_obj)
+        for check_obj in health_checks:
+            check_obj.run(self)
+        self._display_checks(health_checks)
 
     def test(self):
         """ runs integration tests for this service """
@@ -211,33 +230,16 @@ class FabricMixin(object):
 
 class AbstractService(Reporter, FabricMixin, ValidationMixin):
     _schema = None
-    S3_BUCKETS = default_schema.get_default('s3_buckets')
     ELASTIC_IPS = default_schema.get_default('elastic_ips')
-    SUPERVISOR_USER = ''
-    SUPERVISOR_PASS = ''
-    SUPERVISOR_PORT = default_schema.get_default('supervisor_port')
     YMIR_DEBUG = default_schema.get_default('ymir_debug')
     SERVICE_DEFAULTS = {}
-    LOGS = default_schema.get_default('logs')
-    LOG_DIRS = default_schema.get_default('log_dirs')
-
-    PEM = None
-    INSTANCE_TYPE = None
-    PUPPET_PARSER = None
     _ymir_service_root = None
-    USERNAME = None
-    APP_NAME = None
-    ORG_NAME = None
-    ENV_NAME = None
-    SECURITY_GROUPS = None
-    RESERVATION_EXTRAS = default_schema.get_default('reservation_extras')
     HEALTH_CHECKS = {}
     INTEGRATION_CHECKS = {}
 
-    def list_log_files(self):
-        with self.ssh_ctx():
-            for remote_dir in self.LOG_DIRS:
-                print util.list_dir(remote_dir)
+    @property
+    def _service_data(self):
+        return self._template_data()
 
     def service(self, command):
         """ run `sudo service <cmd>` on the remote host"""
@@ -259,6 +261,11 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         """ list the known log files for this service"""
         if not args:
             self.list_log_files()
+
+    def list_log_files(self):
+        with self.ssh_ctx():
+            for remote_dir in self._service_data['log_dirs']:
+                print util.list_dir(remote_dir)
 
     def fabric_install(self):
         """ publish certain service-methods into the fabfile
@@ -459,6 +466,11 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             self.report(
                 'If it was recently created, wait while and then try again')
 
+    @property
+    def _instance(self):
+        """ return the aws instance """
+        return self._get_instance(strict=True)
+
     def _get_instance(self, strict=False):
         conn = self.conn
         i = util.get_instance_by_name(self.NAME, conn)
@@ -470,16 +482,17 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         return i
 
     def ssh_ctx(self):
+        service_data = self._template_data()
         return util.ssh_ctx(
             self._status()['ip'],
-            user=self.USERNAME,
-            pem=self.PEM)
+            user=service_data['username'],
+            pem=service_data['pem'])
 
-    def update_tags(self):
-        """ update instance tags from service.json """
+    @util.require_running_instance
+    def sync_tags(self):
+        """ update aws instance tags from service.json `tags` field """
         self.report('updating instance tags: ')
-        i = self._get_instance(strict=True)
-        json = self.to_json(simple=True)
+        json = self._template_data(simple=True)
         tags = dict(
             description=json.get('service_description', ''),
             org=json.get('org_name', ''),
@@ -492,7 +505,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             if not tags[tag]:
                 tags.pop(tag)
         self.report('  {0}'.format(tags.keys()))
-        i.add_tags(tags)
+        self._instance.add_tags(tags)
 
     def _restart_supervisor(self):
         self.report('  restarting everything')
@@ -546,7 +559,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             provision_list = [fname]
         else:
             provision_list = self.PROVISION_LIST
-        with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
+        with self.ssh_ctx():
             with lcd(self._ymir_service_root):
                 self.report("Provision list for this service:")
                 pprint.pprint(provision_list, indent=2)
@@ -586,9 +599,10 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def _provision_puppet(self, provision_item):
         """ runs puppet on remote host.  puppet files must already have been copied """
+        service_data = self._template_data()
         return util._run_puppet(
             provision_item,
-            parser=self.PUPPET_PARSER,
+            parser=service_data['puppet_parser'],
             facts=self.facts,
         )
 
@@ -614,12 +628,12 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         run('sudo apt-get update > /dev/null')
 
     def setup_ip(self, ip):
-        self.update_tags()
-        self._setup_buckets()
+        self.sync_tags()
+        self.sync_buckets()
         self.sync_eips()
         self.report('installing puppet & puppet deps', section=True)
         self._clean_tmp_dir()
-        with util.ssh_ctx(ip, user=self.USERNAME, pem=self.PEM):
+        with self.ssh_ctx():
             with lcd(self._ymir_service_root):
                 self._update_sys_packages()
                 self._bootstrap_dev()
@@ -641,17 +655,22 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     @property
     def facts(self):
         """ """
-        tmp = self.SERVICE_DEFAULTS.copy()
         json = self._template_data(simple=True)
-        tmp.update(
+        service_defaults = json['service_defaults']
+        service_defaults.update(
             dict(supervisor_user=json['supervisor_user'],
                  supervisor_pass=json['supervisor_pass'],
                  supervisor_port=json['supervisor_port']))
-        return tmp
+        for fact in service_defaults:
+            tmp = service_defaults[fact]
+            if isinstance(tmp, basestring) and ('{' in tmp or '}' in tmp):
+                raise SystemExit(
+                    "facts should not contain mustaches: {0}".format(tmp))
+        return service_defaults
 
     def s3(self):
         """ show summary of s3 information for this service """
-        buckets = self._setup_buckets(quiet=True).items()
+        buckets = self.sync_buckets(quiet=True).items()
         if not buckets:
             self.report("this service is not using S3 buckets")
         for bname, bucket in buckets:
@@ -666,9 +685,9 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def _s3_conn(self):
         return boto.connect_s3()
 
-    def _setup_buckets(self, quiet=False):
-        report = self.report if not quiet else lambda *args, **kargs: None
-        if self.S3_BUCKETS:
+    def sync_buckets(self, quiet=False):
+        report = self.report if not quiet else NOOP
+        if self._service_data['s3_buckets']:
             report('setting up buckets for this service')
         else:
             self.report("no s3 buckets detected in service-definition")
@@ -698,22 +717,18 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             else:
                 report("   -> assigned to another instance {0}! (that seems bad)".format(
                     aws_address.instance_id))
+    sync_elastic_ips = sync_eips
 
     def run(self, command):
         """ run command on service host """
-        with util.ssh_ctx(
-                self._status()['ip'],
-                user=self.USERNAME,
-                pem=self.PEM):
+        with self.ssh_ctx():
             run(command)
 
     def copy_puppet(self, clean=True):
         """ copy puppet code to remote host (refreshes any dependencies) """
-        with util.ssh_ctx(
-                self._status()['ip'],
-                user=self.USERNAME,
-                pem=self.PEM):
-            remote_user_home = '/home/' + self.USERNAME
+        service_data = self._template_data()
+        with self.ssh_ctx():
+            remote_user_home = '/home/' + service_data['username']
             pfile = self._compress_local_puppet_code()
             msg = '  flushing remote puppet codes and refreshing'
             self.report(msg)
@@ -729,15 +744,12 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             finally:
                 api.local('rm "{0}"'.format(pfile))
 
+    @util.require_running_instance
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
         self.report('rebooting service')
-        data = self._status()
-        if data['status'] == 'running':
-            with util.ssh_ctx(data['ip'], user=self.USERNAME, pem=self.PEM):
-                run('sudo reboot')
-        else:
-            self.report("service does not appear to be running")
+        with self.ssh_ctx():
+            run('sudo reboot')
 
     def _host(self, data=None):
         """ todo: move to beanstalk class """
@@ -757,20 +769,12 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             there IS no service.json (ie the developer is using a python
             class definition and class variables)
         """
-        blacklist = 'fabric_commands'.split()
-        out = [x for x in dir(self.__class__) if x == x.upper()]
-        out = [[x.lower(), getattr(self.__class__, x)] for x in out]
-        out = dict(out)
-        if not simple:
-            data = self._status()
-            extra = dict(host=self._host(data), ip=data['ip'],)
-            out.update(extra)
-        [out.pop(x, None) for x in blacklist]
-        return out
+        raise Exception("deprecated")
 
     # TODO: cache for when simple is false
     def _template_data(self, simple=False):
         """ reflects the template information back into itself """
+
         template_data = self.to_json(simple=simple)
         template_data.update(**self.SERVICE_DEFAULTS)
         for k, v in template_data['service_defaults'].items():
@@ -797,22 +801,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 check_obj.url_t,
                 check_obj.msg))
 
-    def _check(self, names=[]):
-        # include relevant sections of status results
-        # for x in 'status eb_health eb_status'.split():
-        #    if x in data:
-        #        out['aws://'+x] = ['read', data[x]]
-        health_checks = []
-        for check_name, (_type, url_t) in self.HEALTH_CHECKS.items():
-            if names and check_name not in names:
-                continue
-            check_obj = checks.Check(
-                url_t=url_t, check_type=_type, name=check_name)
-            health_checks.append(check_obj)
-        for check_obj in health_checks:
-            check_obj.run(self)
-        self._display_checks(health_checks)
-
     def shell(self):
         """ """
         return util.shell(
@@ -820,7 +808,10 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def show_facts(self):
         """ show facts (puppet key-values available to templates)"""
-        print self.facts
+        self.report("facts (template variables) available to puppet code:")
+        facts = sorted([[k, v] for k, v in self.facts.items()])
+        for k, v in facts:
+            print ' ', k, '=>', v
 
     def show_instances(self):
         """ show all ec2 instances """
