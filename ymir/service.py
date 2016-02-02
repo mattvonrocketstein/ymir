@@ -59,7 +59,7 @@ class FabricMixin(object):
         'supervisor', 'supervisorctl',
         'sync_eips',
         'sync_elastic_ips',
-        'sync_volumes',
+        # 'sync_volumes',
         'tail', 'test', 'terminate',
         'sync_tags'
     ]

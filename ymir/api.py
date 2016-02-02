@@ -4,10 +4,10 @@
 import os
 import demjson
 
-from ymir.base import report
 from ymir import util
-
+from ymir.base import report
 from ymir import schema as yschema
+from voluptuous import Optional, Undefined
 
 
 def str_reflect(obj, ctx, simple=True):
@@ -108,10 +108,10 @@ def _load_service_from_json_helper(service_json_file=None, service_json={}, simp
     obj._schema = chosen_schema
     service_json = _reflect(service_json=service_json, simple=True)
     for k, validator in chosen_schema.schema.items():
-        if type(k) == yschema.Optional:
+        if type(k) == Optional:
             default = chosen_schema.get_default(str(k))
             if str(k) not in service_json:
-                if type(default) != yschema.Undefined:
+                if type(default) != Undefined:
                     if service_json.get('ymir_debug', False):
                         report("ymir.api",
                                'using implied default: {0}'.format([k, '==', default]))

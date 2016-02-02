@@ -41,16 +41,20 @@ BaseSchema = {
     Optional("app_name", default="app"): unicode,
     Optional("service_defaults", default={}): dict,
     Optional("env_name", default='env'): unicode,
+}
+SupervisorSchema = {
     Optional("supervisor_user", default='admin'): unicode,
     Optional("supervisor_pass", default='676be646-c477-11e5-bfdc-0800272dfc6a'): unicode,
     Optional("supervisor_port", default='9001'): lambda x: isinstance(x, (unicode, int)),
 }
 EC2Schema = BaseSchema.copy()
+EC2Schema.update(SupervisorSchema)
 EC2Schema.update(AWSSchema)
 EC2Schema.update(ProvisionSchema)
 EC2Schema.update({
     Required("ami"): unicode,
 })
+
 BeanstalkSchema = BaseSchema.copy()
 BeanstalkSchema.update({})
 
