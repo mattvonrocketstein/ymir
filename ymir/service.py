@@ -26,6 +26,7 @@ from fabric.api import (
 from ymir import util
 from ymir import checks
 from ymir.base import Reporter
+from ymir.caching import cached
 from ymir.schema import default_schema
 from ymir.validation.mixin import ValidationMixin
 
@@ -64,10 +65,11 @@ class FabricMixin(object):
         'sync_tags'
     ]
 
+    @util.require_running_instance
     def terminate(self, force=False):
         """ terminate this service (delete from ec2) """
-        instance = self._status()['instance']
-        if force is True:
+        instance = self._instance
+        if force:
             return self.conn.terminate_instances(
                 instance_ids=[instance.id])
         else:
@@ -79,6 +81,7 @@ class FabricMixin(object):
             if answer == 'y':
                 self.terminate(force=True)
 
+    @util.require_running_instance
     def put(self, src, dest, *args, **kargs):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
@@ -126,7 +129,7 @@ class FabricMixin(object):
 
     def create(self, force=False):
         """ create new instance of this service ('force' defaults to False)"""
-        self.report('creating', section=True)
+        self.report('creating ec2 instance', section=True)
         conn = self.conn
         i = self._get_instance()
         if i is not None:
@@ -143,21 +146,34 @@ class FabricMixin(object):
 
         service_data = self._template_data()
         # HACK: deal with unfortunate vpc vs. ec2-classic differences
-        reservation_extras = service_data['reservation_extras'].copy()
+        reservation_extras = service_data.get('reservation_extras', {}).copy()
 
-        if 'security_group_ids' in reservation_extras:
-            # vpc-based (not ec2 classic style)
-            pass
-        else:
-            reservation_extras['security_groups'] = service_data[
-                'security_groups']
+        # set security group stuff in reservation extras
+        sg_names = service_data['security_groups']
+        if not sg_names:
+            err = ('without `security_groups` in service.json, '
+                   'cannot create instance reservation')
+            raise SystemExit(err)
+        self.report(
+            "service description uses {0} as a security groups".format(sg_names))
+        tmp = {}
+        sgs = dict([[sg.id, sg.name] for sg in conn.get_all_security_groups()])
+        for sg_name in sg_names:
+            if sg_name not in sgs.values():
+                err = "could not find {0} amongst security groups at {1}"
+                err = err.format(sg_names, sgs.values())
+                raise SystemExit(err)
+            else:
+                _id = [_id for _id in sgs if sgs[_id] == sg_name][0]
+                self.report("  sg '{0}' is id {1}".format(sgs[_id], _id))
+                tmp[_id] = sgs[_id]
+        reservation_extras['security_group_ids'] = tmp.keys()
 
         reservation = conn.run_instances(
             image_id=service_data['ami'],
             key_name=service_data['key_name'],
             instance_type=service_data['instance_type'],
-            **reservation_extras
-        )
+            **reservation_extras)
 
         instance = reservation.instances[0]
         self.report('  no instance found, creating it now.')
@@ -172,6 +188,7 @@ class FabricMixin(object):
         else:
             self.report('Weird instance status: ', status)
             return None
+
         time.sleep(5)
         self.report("Finished with creation.  Now run `fab setup`")
 
@@ -467,6 +484,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 'If it was recently created, wait while and then try again')
 
     @property
+    @cached('service._instance', 60 * 20)
     def _instance(self):
         """ return the aws instance """
         return self._get_instance(strict=True)

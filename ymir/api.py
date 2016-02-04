@@ -86,6 +86,22 @@ def load_service_from_json(filename=None):
 _load_service_from_json = load_service_from_json
 
 
+def set_schema_defaults(service_json, chosen_schema):
+    """ """
+    service_json = service_json.copy()
+    defaults = [[str(k), k.default] for k in chosen_schema.schema.keys()
+                if type(k) == Optional]
+    defaults = filter(lambda x: not isinstance(x[1], Undefined), defaults)
+    defaults = dict(defaults)
+    for k, default in defaults.items():
+        if k not in service_json:
+            default = default() if callable(default) else default
+            # report ("ymir.api",
+            #       'using implied default: {0}'.format([k, '==', default]))
+            service_json[k] = default
+    return service_json
+
+
 def _load_service_from_json_helper(service_json_file=None, service_json={}, simple=False):
     """ load service obj from service json """
     from ymir import validation
@@ -107,15 +123,7 @@ def _load_service_from_json_helper(service_json_file=None, service_json={}, simp
     obj = ServiceFromJSON(service_root=os.path.dirname(service_json_file))
     obj._schema = chosen_schema
     service_json = _reflect(service_json=service_json, simple=True)
-    for k, validator in chosen_schema.schema.items():
-        if type(k) == Optional:
-            default = chosen_schema.get_default(str(k))
-            if str(k) not in service_json:
-                if type(default) != Undefined:
-                    if service_json.get('ymir_debug', False):
-                        report("ymir.api",
-                               'using implied default: {0}'.format([k, '==', default]))
-                    service_json[str(k)] = default
+    service_json = set_schema_defaults(service_json, chosen_schema)
     service_json.update(service_json['service_defaults'])
     service_json.update(host=obj._host())
     ServiceFromJSON._template_data = lambda himself, **kargs: service_json
