@@ -114,7 +114,11 @@ def entry(settings=None):
     """ Main entry point """
     parser = get_parser()
     args = parser.parse_args(sys.argv[1:])
+    if not args.service_json or not os.path.exists(args.service_json):
+        args.service_json = os.environ.get('YMIR_SERVICE_JSON')
+        print 'using service_json:', args.service_json
 
+    args.service_json = args.service_json
     if args.debug:
         args.verbose = 4
     try:
