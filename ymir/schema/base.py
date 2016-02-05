@@ -23,7 +23,7 @@ AWSSchema = {
 ProvisionSchema = {
     Required("setup_list", default=[]): _validate_sl_field,
     Required("provision_list", default=[]): _validate_pl_field,
-    Optional("puppet_parser"): _validate_puppet_parser,
+    Optional("puppet_parser", default="future"): _validate_puppet_parser,
 }
 BaseSchema = {
     Required("name"): unicode,
