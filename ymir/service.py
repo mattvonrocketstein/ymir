@@ -420,6 +420,9 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             retrieve information for use without actually displaying it
         """
         instance = util.get_instance_by_name(self.NAME, self.conn)
+        if instance is None:
+            raise SystemExit("Could not find instance {} in AWS".format(self.NAME))
+
         result = dict(
             instanceance=None, ip=None,
             private_ip=None, tags=[],
