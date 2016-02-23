@@ -1,10 +1,15 @@
-/home/vagrant/code/ymir/ymir/skeleton/service.json{
+//
+// service.json for `my service`
+//
+{
     // sets namespace  for this service.
     // used in tagging, etc.
     "org_name": "OrgName",
     "app_name": "AppName",
     "env_name": "EnvName",
     "service_name": "ServiceName",
+    "ymir_debug": false,
+    "s3_buckets": [],
 
     // Sets the name for this service.
     // This will be used in service discovery for provisioning, etc,
@@ -14,6 +19,16 @@
     // the suggested format is: "org_name-app_name-env_name"
     "name" : "{org_name}-{app_name}-{env_name}",
     "service_description": "Service description goes here",
+
+    // AWS tags which are set to "true".
+    // this will be useful for sorting/filtering instances later
+    "tags": [],
+
+    // logs
+    "logs": ["/var/logs/syslog"],
+
+    // elastic (static) IP addresses
+    "elastic_ips": [],
 
     // Sets the ami for this service.
     //
