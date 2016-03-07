@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-""" ymir.cache
+""" ymir.caching
 
     dumb lightweight caching decorators, etc.
 
@@ -15,7 +15,7 @@ def cached(key_or_fxn, timeout=5 * 60, use_request_vars=False):
     """ dumb hack adapted from
         http://flask.pocoo.org/docs/patterns/viewdecorators/ """
     from werkzeug.contrib.cache import SimpleCache
-    from goulash import cache as c
+    from ymir import caching as c
     if not getattr(c, 'CACHE', None):
         c.CACHE = SimpleCache()
     cache = c.CACHE

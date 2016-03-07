@@ -5,16 +5,18 @@ import os
 import logging
 import voluptuous
 from fabric.colors import red
+from ymir import util
 from ymir import data as ydata
 from ymir import schema as yschema
 from ymir.base import report as base_report
 from ymir.beanstalk import ElasticBeanstalkService
+
 logger = logging.getLogger(__name__)
 
-report = lambda x: base_report('ymir.validation', x)
+_report = lambda x: base_report('ymir.validation', x)
 
 
-def print_errs(msg, _errs, quiet=False, die=False, report=report):
+def print_errs(msg, _errs, quiet=False, die=False, report=_report):
     """ helper for main validation function """
     assert isinstance(_errs, list), str([type(_errs), _errs])
     if msg:
@@ -30,15 +32,16 @@ def print_errs(msg, _errs, quiet=False, die=False, report=report):
             raise SystemExit(str(_errs))
 
 
-def validate(service_json, schema=None, simple=True,):
+def validate(service_json, schema=None, simple=True, quiet=False):
     """ validate service json is 2 step.  when simple==True,
         validation exits early after running against the main
         JSON schema.  otherwise, the service will be instantiated
         and sanity-checked against real-world requirements such as
         actually existing security-groups, keyfiles, etc.
     """
+    report = util.NOOP if quiet else _report
     print_errs('',
-               _validate_file(service_json, schema),
+               _validate_file(service_json, schema, report=report),
                quiet=True, die=True)
 
     if simple:
@@ -48,26 +51,27 @@ def validate(service_json, schema=None, simple=True,):
     # the schema can be loaded, so build a service object.
     # the service object can then begin to validate itself
     print 'Instantiating service to scrutinize it..'
-    service = yapi.load_service_from_json(service_json)
+    service = yapi.load_service_from_json(service_json, quiet=quiet)
+    report = util.NOOP if quiet else service.report
 
     print_errs(
         'checking content in `health_checks` field..',
         service._validate_health_checks(),
-        report=service.report,)
+        report=report,)
     if not isinstance(service, ElasticBeanstalkService):
         print_errs('checking AWS keypair at field `key_name`..',
-                   service._validate_keypairs(), report=service.report,)
+                   service._validate_keypairs(), report=report,)
         print_errs('checking puppet-librarian\'s metadata.json',
-                   service._validate_puppet_librarian(), report=service.report)
+                   service._validate_puppet_librarian(), report=report)
         print_errs('checking simple AWS security groups in field `security_groups`..',
-                   service._validate_named_sgs(), report=service.report,)
+                   service._validate_named_sgs(), report=report,)
         print_errs('checking puppet code..',
-                   service._validate_puppet(), report=service.report,)
+                   service._validate_puppet(), report=report,)
         print_errs('checking puppet templates..',
-                   service._validate_puppet_templates(), report=service.report,)
+                   service._validate_puppet_templates(), report=report,)
 
 
-def _validate_file(fname, schema=None):
+def _validate_file(fname, schema=None, report=util.NOOP, quiet=False):
     """ simple schema validation, this returns a
         list of [error_message] or None
     """
@@ -75,9 +79,8 @@ def _validate_file(fname, schema=None):
     assert isinstance(fname, basestring)
     tmp = yapi.load_json(fname)
     if schema is None:
-        schema = yschema.choose_schema(tmp)
+        schema = yschema.choose_schema(tmp, quiet=quiet)
     is_eb = schema.schema_name == 'beanstalk_schema'
-    # print 'Chose schema:\n ',schema.schema_name
     try:
         schema(tmp)
     except voluptuous.Invalid, e:

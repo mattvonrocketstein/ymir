@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+
 """ ymir.version
 
 """
 
-__version__ = 0.14
+__version__ = 0.15

@@ -7,28 +7,28 @@
 #     d[check_name] = [ check_type, url ]
 
 # TODO: enhance validation for the following fields, all lists of strings
-#     `provision_list`,`setup_list`, `security_groups`
-#     `logs`, `log_dirs`
+#     `logs`
 
 from voluptuous import Invalid
 
-from ymir.base import report as _report
+from ymir.base import report as base_report
 from .base import Schema, BeanstalkSchema, EC2Schema
 from ymir.schema.util import list_of_dicts
-report = lambda *args: _report("ymir.schema", *args)
+from ymir import util
+_report = lambda *args: base_report("ymir.schema", *args)
 
 
-def _choose_schema(json):
+def choose_schema(json, quiet=False):
     """ """
+    report = util.NOOP if quiet else _report
     instance_type = json.get('instance_type')
     if instance_type in [u'elastic_beanstalk', u'elasticbeanstalk']:
         schema = eb_schema
     else:
         schema = default_schema
-    report("chose schema {0} from instance_type {1}".format(
+    report("chose schema {0} based on instance_type `{1}`".format(
         schema.schema_name, instance_type))
     return schema
-choose_schema = _choose_schema
 
 
 def validate_single_rule(rule):

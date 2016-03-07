@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ ymir.checks
 
     This file describes 'check_types' which are available for
@@ -19,7 +20,9 @@
 
 import requests
 
+
 class Check(object):
+
     def __init__(self, name=None, check_type=None, url_t=None, url=None, msg=None):
         self.name = name
         self.check_type = check_type
@@ -33,13 +36,13 @@ class Check(object):
 
     def run(self, service):
         import ymir.checks as modyool
-        data = service._template_data(simple=False)
+        data = service.template_data(simple=False)
         self.url = self.url_t.format(**data)
         try:
             checker = getattr(modyool, self.check_type)
         except AttributeError:
             err = 'Cannot find checker "{0}"'.format(
-                check_type, self.url)
+                self.check_type, self.url)
             raise SystemExit(err)
         else:
             _url, message = checker(service, self.url)
@@ -53,14 +56,17 @@ def _get_request(url, **kargs):
         url, timeout=10, verify=False,
         allow_redirects=False, **kargs)
 
+
 def port_open(service, port):
-    ip  = service._status()['ip']
+    ip = service._status()['ip']
     url = 'is_open://{0}:{1}'.format(ip, port)
     return url, str(service.is_port_open(ip, port))
 
+
 def _port_open_validate(port):
     if not isinstance(port, int):
-        try: int(port)
+        try:
+            int(port)
         except ValueError:
             err = ("the `port_open` check requires a single argument "
                    "(the port number) which can be converted to an integer. "
@@ -68,14 +74,15 @@ def _port_open_validate(port):
             return err
 port_open.validate = _port_open_validate
 
+
 def supervisor(service, url):
     url = 'http://{0}:{1}@{2}:{3}'.format(
         service.SUPERVISOR_USER, service.SUPERVISOR_PASS,
         service._host(), '9001')
     return http_200(service, url)
 
+
 def http(service, url, assert_json=False, codes=[]):
-    #from smashlib import embed; embed()
     try:
         resp = _get_request(url)
     except requests.exceptions.ConnectionError, e:
@@ -98,21 +105,27 @@ def http(service, url, assert_json=False, codes=[]):
             msg = 'ok'
     return url, msg
 
+
 def json(service, url, **kargs):
     kargs.update(assert_json=True)
     return http(service, url, **kargs)
 
+
 def http_200(service, url):
     return http(service, url, codes=[200])
+
 
 def http_301(service, url):
     return http(service, url, codes=[301])
 
+
 def http_401(service, url):
     return http(service, url, codes=[401])
 
+
 def http_403(service, url):
     return http(service, url, codes=[403])
+
 
 def json_200(service, url):
     return json(service, url, codes=[200])

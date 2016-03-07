@@ -16,6 +16,8 @@ from fabric.api import settings, run, shell_env, env
 
 from ymir.data import STATUS_DEAD
 
+NOOP = lambda *args, **kargs: None
+
 
 def report(label, msg, *args, **kargs):
     """ 'print' shortcut that includes some color and formatting """

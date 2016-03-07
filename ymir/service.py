@@ -69,6 +69,7 @@ class FabricMixin(object):
     def terminate(self, force=False):
         """ terminate this service (delete from ec2) """
         instance = self._instance
+        self.report("{0} slated for termination.".format(instance))
         if force:
             return self.conn.terminate_instances(
                 instance_ids=[instance.id])
@@ -106,7 +107,7 @@ class FabricMixin(object):
     def mosh(self):
         """ connect to this service with mosh """
         self.report('connecting with mosh')
-        service_data = self._template_data()
+        service_data = self.template_data()
         util.mosh(self.status()['ip'],
                   username=service_data['username'],
                   pem=service_data['pem'])
@@ -115,7 +116,7 @@ class FabricMixin(object):
     def ssh(self):
         """ connect to this service with ssh """
         self.report('connecting with ssh')
-        service_data = self._template_data()
+        service_data = self.template_data()
         util.ssh(self._status()['ip'],
                  username=service_data['username'],
                  pem=service_data['pem'],)
@@ -125,7 +126,7 @@ class FabricMixin(object):
         self.report('showing webpages')
         for check_name in self.HEALTH_CHECKS:
             check, url = self.HEALTH_CHECKS[check_name]
-            self._show_url(url.format(**self._template_data()))
+            self._show_url(url.format(**self.template_data()))
 
     def create(self, force=False):
         """ create new instance of this service ('force' defaults to False)"""
@@ -144,7 +145,7 @@ class FabricMixin(object):
             self.report('  force is False, refusing to rebuild it')
             return
 
-        service_data = self._template_data()
+        service_data = self.template_data()
         # HACK: deal with unfortunate vpc vs. ec2-classic differences
         reservation_extras = service_data.get('reservation_extras', {}).copy()
 
@@ -256,7 +257,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     @property
     def _service_data(self):
-        return self._template_data()
+        return self.template_data()
 
     def service(self, command):
         """ run `sudo service <cmd>` on the remote host"""
@@ -410,18 +411,25 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         """ shows IP, ec2 status/tags, etc for this service """
         self.report('checking status', section=True)
         result = self._status()
+
         for k, v in result.items():
             self.report('  {0}: {1}'.format(k, v))
         return result
+
+    _status_computed = False
 
     def _status(self):
         """ retrieves service status information.
             use this instead of self.status() if you want to quietly
             retrieve information for use without actually displaying it
         """
-        instance = util.get_instance_by_name(self.NAME, self.conn)
+        if not self._status_computed:
+            self.report("handshaking with AWS..")
+
+        name = self.template_data()['name']
+        instance = util.get_instance_by_name(name, self.conn)
         result = dict(
-            instanceance=None, ip=None,
+            instance=None, ip=None,
             private_ip=None, tags=[],
             status='terminated?',)
         if instance:
@@ -433,6 +441,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                     ip=instance.ip_address,
                     private_ip=instance.private_ip_address,
                 ))
+        self._status_computed = True
         return result
 
     def _bootstrap_puppet(self, force=False):
@@ -499,8 +508,9 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             raise SystemExit(1)
         return i
 
+    @util.require_running_instance
     def ssh_ctx(self):
-        service_data = self._template_data()
+        service_data = self.template_data()
         return util.ssh_ctx(
             self._status()['ip'],
             user=service_data['username'],
@@ -510,7 +520,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def sync_tags(self):
         """ update aws instance tags from service.json `tags` field """
         self.report('updating instance tags: ')
-        json = self._template_data(simple=True)
+        json = self.template_data(simple=True)
         tags = dict(
             description=json.get('service_description', ''),
             org=json.get('org_name', ''),
@@ -572,7 +582,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             if fname not in self.PROVISION_LIST:
                 err = ('ERROR: Provisioning a single file requires that '
                        'the file should be mentioned in service.json, '
-                       'but "{0}" was not found.').format(fname)
+                       'but "{0}" was not found.').format(util.unexpand(fname))
                 raise SystemExit(err)
             provision_list = [fname]
         else:
@@ -617,7 +627,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def _provision_puppet(self, provision_item):
         """ runs puppet on remote host.  puppet files must already have been copied """
-        service_data = self._template_data()
+        service_data = self.template_data()
         return util._run_puppet(
             provision_item,
             parser=service_data['puppet_parser'],
@@ -628,7 +638,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         """ runs a shell command on the local host,
             for the purposes of provisioning the remote host.
         """
-        cmd = provision_instruction.format(**self._template_data())
+        cmd = provision_instruction.format(**self.template_data())
         self.report("  translated to: {0}".format(cmd))
         return local(cmd)
 
@@ -673,7 +683,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     @property
     def facts(self):
         """ """
-        json = self._template_data(simple=True)
+        json = self.template_data(simple=True)
         service_defaults = json['service_defaults']
         service_defaults.update(
             dict(supervisor_user=json['supervisor_user'],
@@ -744,7 +754,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def copy_puppet(self, clean=True):
         """ copy puppet code to remote host (refreshes any dependencies) """
-        service_data = self._template_data()
+        service_data = self.template_data()
         with self.ssh_ctx():
             remote_user_home = '/home/' + service_data['username']
             pfile = self._compress_local_puppet_code()
@@ -770,14 +780,12 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             run('sudo reboot')
 
     def _host(self, data=None):
-        """ todo: move to beanstalk class """
+        """ """
         data = data or self._status()
-        return data.get(
-            'eb_cname',
-            data.get('ip'))
+        return data.get('ip')
 
     def _show_url(self, url):
-        url = url.format(**self._template_data(simple=False))
+        url = url.format(**self.template_data(simple=False))
         self.report("showing: {0}".format(url))
         webbrowser.open(url)
 
@@ -790,7 +798,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         raise Exception("deprecated")
 
     # TODO: cache for when simple is false
-    def _template_data(self, simple=False):
+    def template_data(self, simple=False):
         """ reflects the template information back into itself """
 
         template_data = self.to_json(simple=simple)
@@ -800,16 +808,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 template_data['service_defaults'][
                     k] = v.format(**template_data)
         return template_data
-
-    """ def _test_data(self, data):
-        #run integration tests given 'status' data
-        out = {}
-        self.check_data(data)
-        for check_name  in self.INTEGRATION_CHECKS:
-            check_type, url = self.INTEGRATION_CHECKS[check_name]
-            _url, result = self._run_check(check_type, url)
-            out[_url] = [check_name, check_type, result]
-        self._display_checks(out) """
+    _template_data = template_data
 
     def _display_checks(self, checks):
         for check_obj in checks:

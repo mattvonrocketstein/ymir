@@ -5,9 +5,11 @@ import os
 import demjson
 
 from ymir import util
-from ymir.base import report
+from ymir.base import report as base_report
 from ymir import schema as yschema
 from voluptuous import Optional, Undefined
+
+NOOP = util.NOOP
 
 
 def str_reflect(obj, ctx, simple=True):
@@ -62,24 +64,32 @@ def load_json(fname):
     """ loads json and allows for
         templating / value reflection
     """
+    if not os.path.exists(fname):
+        err = ("\nERROR: Service description file '{0}' not found.\n\n"
+               "Set the YMIR_SERVICE_JSON environment "
+               "variable and retry this operation.")
+        raise SystemExit(err.format(util.unexpand(fname)))
     with open(fname) as fhandle:
         tmp = demjson.decode(fhandle.read())
     return tmp
 
 
-def load_service_from_json(filename=None):
+def load_service_from_json(filename=None, quiet=False):
     """ return a service object from ymir-style service.json file.
         when filename is not given it will be guessed based on cwd.
     """
     from ymir.version import __version__
+    report = NOOP if quiet else base_report
     report('aws profile', os.environ.get('AWS_PROFILE', 'default'))
     report('ymir', 'version {0}'.format(__version__))
     service_json_file = filename or util.get_or_guess_service_json_file()
     report('ymir', 'service.json is {0}'.format(
         util.unexpand(service_json_file)))
-    return _load_service_from_json_helper(
+    obj = _load_service_from_json_helper(
         service_json_file=service_json_file,
-        service_json=load_json(service_json_file))
+        service_json=load_json(service_json_file),
+        quiet=quiet)
+    return obj
 
 # NB: alias is frequently imported in fabfiles to avoid cluttering fabric
 # namespace
@@ -102,13 +112,15 @@ def set_schema_defaults(service_json, chosen_schema):
     return service_json
 
 
-def _load_service_from_json_helper(service_json_file=None, service_json={}, simple=False):
+def _load_service_from_json_helper(service_json_file=None,
+                                   service_json={}, quiet=False, simple=False):
     """ load service obj from service json """
     from ymir import validation
     from ymir.beanstalk import ElasticBeanstalkService
     from ymir.service import AbstractService
-    chosen_schema = yschema._choose_schema(service_json)
+    chosen_schema = yschema.choose_schema(service_json, quiet=True)
     validation.validate(service_json_file, chosen_schema, simple=True)
+    report = NOOP if quiet else base_report
     # report("ymir","ymir service.json version:")
     report('ymir.api', 'loading service object from description')
     # dynamically create the service instance's class
@@ -119,12 +131,15 @@ def _load_service_from_json_helper(service_json_file=None, service_json={}, simp
         BaseService = ElasticBeanstalkService
     else:
         BaseService = AbstractService
+    report('ymir.api', 'chose service class: {0}'.format(
+        BaseService.__name__))
     ServiceFromJSON = type(classname, (BaseService,), dct)
     obj = ServiceFromJSON(service_root=os.path.dirname(service_json_file))
     obj._schema = chosen_schema
     service_json = _reflect(service_json=service_json, simple=True)
     service_json = set_schema_defaults(service_json, chosen_schema)
+    ServiceFromJSON.template_data = lambda himself, **kargs: service_json
+
     service_json.update(service_json['service_defaults'])
     service_json.update(host=obj._host())
-    ServiceFromJSON._template_data = lambda himself, **kargs: service_json
     return obj

@@ -36,9 +36,9 @@ setup(
     install_requires=[
         'voluptuous',
         'demjson',
-        'goulash',
         'werkzeug',  # used for caching
         'boto',
+        'Importing',
         'requests',
     ],
     # package_data={'ymir': ['skeleton/*']},

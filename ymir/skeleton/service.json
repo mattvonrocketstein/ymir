@@ -24,6 +24,9 @@
     // this will be useful for sorting/filtering instances later
     "tags": [],
 
+    // s3 buckets
+    "s3_buckets": [],
+
     // logs
     "logs": ["/var/logs/syslog"],
 
@@ -92,9 +95,9 @@
 
     // health checks to execute against this service
     "health_checks": {
-        "supervisor" :
+        "homepage" :
         ['http_200',
-         'http://{supervisor_user}:{supervisor_pass}@{host}:{supervisor_port}'],
+         'http://{host}'],
     },
 
     // data that will be passed on to the puppet FACTer

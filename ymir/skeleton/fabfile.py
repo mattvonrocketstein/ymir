@@ -16,7 +16,7 @@ YMIR_SERVICE_JSON = os.path.abspath(
 
 # Create the ymir service from the service description
 _service = _load_service_from_json(YMIR_SERVICE_JSON)
-service_data = _service._template_data()
+service_data = _service.template_data()
 
 # Install the standard service operations
 # (like create, terminate, provision, etc) as fabric commands

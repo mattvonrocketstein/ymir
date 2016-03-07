@@ -34,7 +34,7 @@ class ValidationMixin(object):
     def _validate_health_checks(self):
         # fake the host value just for validation because we don't know
         # whether this service has been bootstrapped or not
-        service_json = self._template_data(simple=True)
+        service_json = self.template_data(simple=True)
         service_json.update(host='host_name')
         errs = []
         for check_name in service_json['health_checks']:
@@ -81,7 +81,7 @@ class ValidationMixin(object):
             errs.append(msg)
         else:
             with quiet():
-                parser = self._template_data().get('puppet_parser', '')
+                parser = self.template_data().get('puppet_parser', '')
                 validation_cmd = 'puppet parser {0} validate '.format(
                     '--parser {0}'.format(parser) if parser else '')
                 result = local('find {0}|grep .pp$'.format(pdir), capture=True)
@@ -106,7 +106,7 @@ class ValidationMixin(object):
             os.path.join('puppet', 'modules', '*', 'templates', '*'))
 
         default_facts = ['domain', 'operatingsystem', 'memoryfree']
-        service_vars = self._template_data().keys()
+        service_vars = self.template_data().keys()
         service_vars += default_facts
         for f in local_puppet_template_files:
             with open(f, 'r') as fhandle:

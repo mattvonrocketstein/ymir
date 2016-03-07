@@ -10,9 +10,11 @@ _validate_pl_field = lambda lst: list_of_strings(lst, key='provision_list')
 
 
 def _validate_puppet_parser(x):
+    """ """
     if x != 'future':
         err = "puppet_parser has only one acceptable value: 'future'"
         raise Invalid(err)
+
 AWSSchema = {
     Optional("s3_buckets", default=[]): list_of_strings,
     Optional("elastic_ips", default=[]): list_of_strings,
@@ -41,6 +43,7 @@ BaseSchema = {
     Optional("app_name", default="app"): unicode,
     Optional("service_defaults", default={}): dict,
     Optional("env_name", default='env'): unicode,
+    Optional("aws_region"): unicode,
 }
 SupervisorSchema = {
     Optional("supervisor_user", default='admin'): unicode,
@@ -56,7 +59,10 @@ EC2Schema.update({
 })
 
 BeanstalkSchema = BaseSchema.copy()
-BeanstalkSchema.update({})
+BeanstalkSchema.update({
+    Required("aws_secret_key"): unicode,
+    Required("aws_access_key"): unicode,
+})
 
 
 class Schema(_Schema):
