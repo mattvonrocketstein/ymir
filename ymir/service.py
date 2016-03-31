@@ -715,13 +715,14 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def sync_buckets(self, quiet=False):
         report = self.report if not quiet else NOOP
-        if self._service_data['s3_buckets']:
+        buckets = self._service_data['s3_buckets']
+        if buckets:
             report('setting up buckets for this service')
         else:
             self.report("no s3 buckets detected in service-definition")
         conn = self._s3_conn
         tmp = {}
-        for name in self.S3_BUCKETS:
+        for name in buckets:
             report("  setting up s3 bucket: {0}".format(name))
             tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
         return tmp
