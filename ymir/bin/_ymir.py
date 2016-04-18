@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 
 from ymir.version import __version__
 from ymir.commands import (
-    ymir_init, ymir_load, ymir_sg,
+    ymir_init, ymir_sg,
     ymir_eip, ymir_keypair, ymir_shell)
 from ymir import validation
 logger = logging.getLogger(__name__)
@@ -91,13 +91,6 @@ def get_parser():
     validate_parser.add_argument('service_json', **vpkargs)
 
     validate_parser.set_defaults(subcommand='validate')
-    load_parser = subparsers.add_parser(
-        'load', help='load service.json')
-    load_parser.add_argument(
-        'service_json', metavar='service_json',
-        type=str,
-        help='a (new) directory to initial a ymir project in')
-    load_parser.set_defaults(subcommand='load')
     init_parser = subparsers.add_parser('init', help='init ymir project')
     init_parser.add_argument('init_dir', metavar='directory', type=str,
                              help='a (new) directory to initial a ymir project in')
@@ -132,12 +125,11 @@ def entry(settings=None):
     validate = lambda args: validation.validate(
         args.service_json, simple=False)
     subcommand_map = dict(
-        help=parser.print_help,
+        help=lambda args: parser.print_help(),
         eip=ymir_eip,
         security_group=ymir_sg,
         init=ymir_init,
         validate=validate,
-        load=ymir_load,
         keypair=ymir_keypair,
         freeze=ymir_freeze,
         shell=ymir_shell,
@@ -149,5 +141,6 @@ def entry(settings=None):
         print 'ymir=={0}'.format(__version__)
         return
     subcommand_map[args.subcommand](args)
+
 if __name__ == '__main__':
     entry()
