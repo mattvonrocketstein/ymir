@@ -7,7 +7,6 @@
     memcache dependency.
 
 """
-import time
 from functools import wraps
 
 
@@ -45,48 +44,3 @@ def cached(key_or_fxn, timeout=5 * 60, use_request_vars=False):
             return rv
         return decorated_function
     return decorator
-
-# Adapted from:
-#  http://code.activestate.com/recipes/325905-memoize-decorator-with-timeout/
-
-
-class MWT(object):
-
-    """Memoize With Timeout"""
-    _caches = {}
-    _timeouts = {}
-
-    def __init__(self, timeout=2):
-        self.timeout = timeout
-
-    def collect(self):
-        """Clear cache of results which have timed out"""
-        for func in self._caches:
-            cache = {}
-            for key in self._caches[func]:
-                tmp = self._caches[func][key][1]
-                if (time.time() - tmp) < self._timeouts[func]:
-                    cache[key] = self._caches[func][key]
-            self._caches[func] = cache
-
-    def __call__(self, f):
-        self.cache = self._caches[f] = {}
-        self._timeouts[f] = self.timeout
-
-        def func(*args, **kwargs):
-            kw = sorted(kwargs.items())
-            key = (args, tuple(kw))
-            try:
-                v = self.cache[key]
-                # print("cache") # dbg
-                if (time.time() - v[1]) > self.timeout:
-                    raise KeyError
-            except KeyError:
-                # print("new") # dbg
-                v = self.cache[key] = [
-                    f(*args, **kwargs),
-                    time.time()]
-            return v[0]
-        func.func_name = f.__name__
-
-        return func
