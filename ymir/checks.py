@@ -19,6 +19,7 @@
 """
 
 import requests
+from ymir import util
 
 
 class Check(object):
@@ -60,7 +61,7 @@ def _get_request(url, **kargs):
 def port_open(service, port):
     ip = service._status()['ip']
     url = 'is_open://{0}:{1}'.format(ip, port)
-    return url, str(service.is_port_open(ip, port))
+    return url, str(util.is_port_open(ip, port))
 
 
 def _port_open_validate(port):

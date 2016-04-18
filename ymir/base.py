@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 """ ymir.base
 """
+
 
 class Reporter(object):
 
@@ -9,7 +11,7 @@ class Reporter(object):
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
         if 'section' in kargs:
-            print '-'*80
+            print '-' * 80
         template = '\x1b[31;01m{0}:\x1b[39;49;00m {1} {2}'
         name = self._report_name()
         # if Service subclasses are embedded directly into fabfiles, there
