@@ -76,13 +76,6 @@ def _port_open_validate(port):
 port_open.validate = _port_open_validate
 
 
-def supervisor(service, url):
-    url = 'http://{0}:{1}@{2}:{3}'.format(
-        service.SUPERVISOR_USER, service.SUPERVISOR_PASS,
-        service._host(), '9001')
-    return http_200(service, url)
-
-
 def http(service, url, assert_json=False, codes=[]):
     try:
         resp = _get_request(url)
