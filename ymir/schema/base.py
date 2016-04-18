@@ -66,6 +66,7 @@ BeanstalkSchema.update({
 
 
 class Schema(_Schema):
+
     """ """
 
     def __init__(self, schema, name='unknown_schema', required=False, extra=0):

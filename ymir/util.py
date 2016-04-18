@@ -4,9 +4,11 @@
     Mostly AWS utility functions
 """
 
-import shutil
 import os
 import time
+import shutil
+import socket
+
 from functools import wraps
 
 import boto.ec2
@@ -242,3 +244,10 @@ def unexpand(path):
     if home:
         path = path.replace(home, '~')
     return path
+
+
+def is_port_open(host, port):
+    """ used by ymir.checks """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((host, int(port)))
+    return result == 0

@@ -4,14 +4,12 @@
 import os
 import time
 import pprint
-import socket
 import urlparse
 import shutil
 import webbrowser
 import tempfile
 import logging
 import boto
-# from retrying import retry
 
 import fabric
 from fabric.colors import blue
@@ -27,7 +25,6 @@ from ymir import util
 from ymir import checks
 from ymir.base import Reporter
 from ymir.caching import cached
-from ymir.schema import default_schema
 from ymir.validation.mixin import ValidationMixin
 
 NOOP = lambda *args, **kargs: None
@@ -224,7 +221,13 @@ class FabricMixin(object):
             self.report('no instance is running for this'
                         ' service, start (or create) it first')
 
+
+class PuppetMixin(object):
+
+    """ """
+
     def _validate_puppet_librarian(self):
+        """ """
         errs = []
         metadata = os.path.join(
             self._ymir_service_root, 'puppet', 'metadata.json')
@@ -242,20 +245,151 @@ class FabricMixin(object):
             else:
                 errs.append(
                     'cannot validate.  '
-                    '"gem install metadata-json-lint" first')
+                    'run "gem install metadata-json-lint" first')
         return errs
 
+    def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
+        """ copy puppet code to remote host (refreshes any dependencies) """
+        service_data = self.template_data()
+        lcd = lcd or self._ymir_service_root
+        with self.ssh_ctx():
+            remote_user_home = '/home/' + service_data['username']
+            pfile = self._compress_local_puppet_code(puppet_dir, lcd=lcd)
+            msg = '  flushing remote puppet codes and refreshing'
+            self.report(msg)
+            try:
+                put(pfile, remote_user_home)
+                with api.cd(remote_user_home):
+                    if clean:
+                        # this undoes `ymir setup` phase, ie the installation
+                        # of puppet deps mentioned in metadata.json.
+                        api.run('rm -rf "{0}"'.format(puppet_dir))
+                    api.run(
+                        'tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
+            finally:
+                api.local('rm "{0}"'.format(pfile))
 
-class AbstractService(Reporter, FabricMixin, ValidationMixin):
+    def _clean_puppet_tmp_dir(self):
+        """ necessary because puppet librarian is messy """
+        self.report("  .. cleaning puppet tmp dir")
+        tdir = os.path.join(self._ymir_service_root, 'puppet', '.tmp')
+        if os.path.exists(tdir):
+            # ~/puppet/.tmp should be nixed
+            shutil.rmtree(tdir)
+
+    def _compress_local_puppet_code(self, puppet_dir='puppet/', lcd=None):
+        """ returns an absolute path to a temporary file
+            containing puppet code for this service.
+            NB: caller is responsible for deletion
+        """
+        assert lcd is not None
+        with api.lcd(lcd):
+            pfile = tempfile.mktemp(suffix='.tgz')
+            # build a local tarball to copy and unzip on the remote side
+            api.local('tar -czf {0} {1} '.format(pfile, puppet_dir))
+        return pfile
+
+    def _provision_puppet(self, provision_item, puppet_dir='puppet', extra_facts={}):
+        """ runs puppet on remote host.  puppet files must already have been copied """
+        service_data = self.template_data()
+        facts = self.facts
+        facts.update(**extra_facts)
+        return util._run_puppet(
+            provision_item,
+            parser=service_data['puppet_parser'],
+            facts=facts,
+            puppet_dir=puppet_dir,
+        )
+
+    def _bootstrap_puppet(self, force=False):
+        """ puppet itself is already installed at this point,
+            this sets up the provisioning dependencies
+        """
+        def _init_puppet(_dir):
+            if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
+                self.report("  puppet-librarian has already processed modules")
+                return
+            self.report("  puppet-librarian will install dependencies")
+            with cd(_dir):
+                api.run('librarian-puppet init')
+                api.run('librarian-puppet install --verbose')
+        self.report("  bootstrapping puppet dependencies on remote host")
+        util._run_puppet(
+            'puppet/modules/ymir/install_librarian.pp',
+            debug=self.YMIR_DEBUG)
+        _init_puppet("puppet")
+
+    def _install_puppet(self):
+        self.report("installing puppet")
+
+        def decompress(x):
+            """ unwraps tarball, removing the original file if it was successful """
+            if not api.run('tar -zxf "{0}"'.format(x)).failed:
+                api.run('rm "{0}"'.format(x))
+
+        def doit():
+            """ see https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html """
+            run_install = lambda: api.sudo('ruby install.rb')
+            download = lambda x: api.run(
+                'wget -O {0} {1}'.format(
+                    os.path.basename(x), x))
+
+            download(
+                'http://downloads.puppetlabs.com/facter/facter-1.7.5.tar.gz')
+            decompress('facter-1.7.5.tar.gz')
+            with api.cd('facter-1.7.5'):
+                run_install()
+
+            download(
+                'https://downloads.puppetlabs.com/puppet/puppet-3.4.3.tar.gz')
+            decompress('puppet-3.4.3.tar.gz')
+            with api.cd('puppet-3.4.3'):
+                run_install()
+
+            download(
+                'https://downloads.puppetlabs.com/hiera/hiera-1.3.0.tar.gz')
+            decompress('hiera-1.3.0.tar.gz')
+            with api.cd('hiera-1.3.0'):
+                run_install()
+        self.report("installing puppet pre-reqs")
+        api.run('sudo apt-get install -y ruby-dev ruby-json > /dev/null')
+
+        # required for puppet --parser=future
+        api.sudo('gem install rgen')
+
+        with api.quiet():
+            with api.settings(warn_only=True):
+                puppet_version = api.run('puppet --version')
+        puppet_installed = not puppet_version.failed
+        if puppet_installed:
+            puppet_version = puppet_version.strip().split('.')
+            puppet_version = map(int, puppet_version)
+            self.report("puppet is already installed")
+        else:
+            puppet_version = None
+            self.report("puppet not installed")
+            doit()
+        if puppet_version and puppet_version != [3, 4, 3]:
+            self.report(
+                "bad puppet version @ {0}, attempting uninstall".format(
+                    puppet_version))
+            pkgs = 'puppet facter hiera puppet-common'.split()
+            for pkg in pkgs:
+                self._remove_system_package(pkg)
+            doit()
+
+
+class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
     _schema = None
-    ELASTIC_IPS = default_schema.get_default('elastic_ips')
-    YMIR_DEBUG = default_schema.get_default('ymir_debug')
-    SERVICE_DEFAULTS = {}
+    # ELASTIC_IPS = default_schema.get_default('elastic_ips')
+    # YMIR_DEBUG = default_schema.get_default('ymir_debug')
+    # SERVICE_DEFAULTS = {}
+    # HEALTH_CHECKS = {}
+    # INTEGRATION_CHECKS = {}
     _ymir_service_root = None
-    HEALTH_CHECKS = {}
-    INTEGRATION_CHECKS = {}
 
     def __str__(self):
+        """ """
         try:
             return "<Service:{0}>".format(self._report_name())
         except:
@@ -284,7 +418,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             api.run('tail -f ' + filename)
 
     def logs(self, *args):
-        """ list the known log files for this service"""
+        """ lists the known log files for this service"""
         if not args:
             self.list_log_files()
 
@@ -295,7 +429,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
 
     def fabric_install(self):
         """ publish certain service-methods into the fabfile
-            namespace. this essentially is responsible for
+            namespace. this method is responsible for
             dynamically creating fabric commands.
         """
         import fabfile
@@ -313,9 +447,9 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 self.report("ERROR:")
                 raise SystemExit(err)
 
-    def __call__(self):
-        """ ---------------------------------------------------- """
-        pass
+    # def __call__(self):
+    #    """ ---------------------------------------------------- """
+    #    pass
 
     def __init__(self, conn=None, service_root=None, ):
         """"""
@@ -340,60 +474,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
             api.sudo('apt-get -y remove {0} {1}'.format(
                 pkg_name, '> /dev/null' if quiet else ''))
-
-    def _install_puppet(self):
-        self.report("installing puppet")
-
-        def decompress(x):
-            """ unwraps tarball, removing the original file if it was successful """
-            if not api.run('tar -zxf "{0}"'.format(x)).failed:
-                api.run('rm "{0}"'.format(x))
-
-        def doit():
-            """ see https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html """
-            run_install = lambda: api.sudo('ruby install.rb')
-            download = lambda x: api.run(
-                'wget -O {0} {1}'.format(
-                    os.path.basename(x), x))
-
-            download('http://downloads.puppetlabs.com/facter/facter-1.7.5.tar.gz')
-            decompress('facter-1.7.5.tar.gz')
-            with api.cd('facter-1.7.5'):
-                run_install()
-
-            download('https://downloads.puppetlabs.com/puppet/puppet-3.4.3.tar.gz')
-            decompress('puppet-3.4.3.tar.gz')
-            with api.cd('puppet-3.4.3'):
-                run_install()
-
-            download('https://downloads.puppetlabs.com/hiera/hiera-1.3.0.tar.gz')
-            decompress('hiera-1.3.0.tar.gz')
-            with api.cd('hiera-1.3.0'):
-                run_install()
-        self.report("installing puppet pre-reqs")
-        api.run('sudo apt-get install -y ruby-dev ruby-json > /dev/null')
-        # required for puppet --parser=future
-        api.sudo('gem install rgen')
-
-        with api.quiet():
-            with api.settings(warn_only=True):
-                puppet_version = api.run('puppet --version')
-        puppet_installed = not puppet_version.failed
-        if puppet_installed:
-            puppet_version = puppet_version.strip().split('.')
-            puppet_version = map(int, puppet_version)
-            self.report("puppet is already installed")
-        else:
-            puppet_version = None
-            self.report("puppet not installed")
-            doit()
-        if puppet_version and puppet_version != [3, 4, 3]:
-            self.report(
-                "bad puppet version @ {0}, attempting uninstall".format(puppet_version))
-            pkgs = 'puppet facter hiera puppet-common'.split()
-            for pkg in pkgs:
-                self._remove_system_package(pkg)
-            doit()
 
     def _get_ubuntu_version(self):
         """ """
@@ -450,31 +530,10 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         self._status_computed = True
         return result
 
-    def _bootstrap_puppet(self, force=False):
-        """ puppet itself is already installed at this point,
-            this sets up the provisioning dependencies
-        """
-        def _init_puppet(_dir):
-            if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
-                self.report("  puppet-librarian has already processed modules")
-                return
-            self.report("  puppet-librarian will install dependencies")
-            with cd(_dir):
-                api.run('librarian-puppet init')
-                api.run('librarian-puppet install --verbose')
-        self.report("  bootstrapping puppet dependencies on remote host")
-        util._run_puppet(
-            'puppet/modules/ymir/install_librarian.pp',
-            debug=self.YMIR_DEBUG)
-        _init_puppet("puppet")
-
     def setup(self):
         """ setup service (operation should be after 'create', before 'provision')"""
         return self._setup(failures=0)
 
-    # @retry(
-    #    retry_on_exception=catch_network_error,
-    #    wait_fixed=5000, stop_max_attempt_number=3)
     def _setup(self, failures=0):
         self.report('setting up')
         cm_data = self._status()
@@ -556,18 +615,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 result = restart()
                 count += 1
 
-    def _compress_local_puppet_code(self, puppet_dir='puppet/', lcd=None):
-        """ returns an absolute path to a temporary file
-            containing puppet code for this service.
-            NB: caller is responsible for deletion
-        """
-        assert lcd is not None
-        with api.lcd(lcd):
-            pfile = tempfile.mktemp(suffix='.tgz')
-            # build a local tarball to copy and unzip on the remote side
-            api.local('tar -czf {0} {1} '.format(pfile, puppet_dir))
-        return pfile
-
     def provision(self, fname=None, **kargs):
         """ provision this service """
         self.report('provisioning {0}'.format(fname or ''))
@@ -586,7 +633,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
             mentioned in service's provision_list """
 
         self.report('provisioning', section=True)
-        self._clean_tmp_dir()
+        self._clean_puppet_tmp_dir()
         if fname is not None:
             if not force and fname not in self.PROVISION_LIST:
                 err = ('ERROR: Provisioning a single file requires that '
@@ -635,18 +682,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
                 "Fatal: no sucher provisioner `{0}`".format(provisioner_name))
         return provision_fxn(provision_instruction, **kargs)
 
-    def _provision_puppet(self, provision_item, puppet_dir='puppet', extra_facts={}):
-        """ runs puppet on remote host.  puppet files must already have been copied """
-        service_data = self.template_data()
-        facts = self.facts
-        facts.update(**extra_facts)
-        return util._run_puppet(
-            provision_item,
-            parser=service_data['puppet_parser'],
-            facts=facts,
-            puppet_dir=puppet_dir,
-        )
-
     def _provision_local(self, provision_instruction):
         """ runs a shell command on the local host,
             for the purposes of provisioning the remote host.
@@ -654,14 +689,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         cmd = provision_instruction.format(**self.template_data())
         self.report("  translated to: {0}".format(cmd))
         return local(cmd)
-
-    def _clean_tmp_dir(self):
-        """ necessary because puppet librarian is messy """
-        self.report("  .. cleaning puppet tmp dir")
-        tdir = os.path.join(self._ymir_service_root, 'puppet', '.tmp')
-        if os.path.exists(tdir):
-            # ~/puppet/.tmp should be nixed
-            shutil.rmtree(tdir)
 
     def _update_sys_packages(self):
         """ must be run with ssh_ctx() """
@@ -673,7 +700,7 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         self.sync_buckets()
         self.sync_eips()
         self.report('installing puppet & puppet deps', section=True)
-        self._clean_tmp_dir()
+        self._clean_puppet_tmp_dir()
         with self.ssh_ctx():
             with api.lcd(self._ymir_service_root):
                 self._update_sys_packages()
@@ -752,7 +779,8 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         for aws_address in addresses:
             report(" Address: {0}".format(aws_address))
             if aws_address.instance_id is None:
-                report("   -> currently unassigned.  associating with this instance")
+                report(
+                    "   -> currently unassigned.  associating with this instance")
                 aws_address.associate(instance_id=service_instance_id)
             elif aws_address.instance_id == service_instance_id:
                 report("   -> already associated with this service")
@@ -770,33 +798,12 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         with self.ssh_ctx():
             api.run(command)
 
-    def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
-        """ copy puppet code to remote host (refreshes any dependencies) """
-        service_data = self.template_data()
-        lcd = lcd or self._ymir_service_root
-        with self.ssh_ctx():
-            remote_user_home = '/home/' + service_data['username']
-            pfile = self._compress_local_puppet_code(puppet_dir, lcd=lcd)
-            msg = '  flushing remote puppet codes and refreshing'
-            self.report(msg)
-            try:
-                put(pfile, remote_user_home)
-                with api.cd(remote_user_home):
-                    if clean:
-                        # this undoes `ymir setup` phase, ie the installation
-                        # of puppet deps mentioned in metadata.json.
-                        api.run('rm -rf "{0}"'.format(puppet_dir))
-                    api.run(
-                        'tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
-            finally:
-                api.local('rm "{0}"'.format(pfile))
-
     @util.require_running_instance
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
         self.report('rebooting service')
         with self.ssh_ctx():
-            api.run('sudo reboot')
+            api.sudo('reboot')
 
     def _host(self, data=None):
         """ """
@@ -807,14 +814,6 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
         url = url.format(**self.template_data(simple=False))
         self.report("showing: {0}".format(url))
         webbrowser.open(url)
-
-    # TODO: caching for when simple is false
-    def to_json(self, simple=False):
-        """ this is used to compute the equivalent of service.json if
-            there IS no service.json (ie the developer is using a python
-            class definition and class variables)
-        """
-        raise Exception("deprecated")
 
     # TODO: cache for when simple is false
     def template_data(self, simple=False):
@@ -852,10 +851,3 @@ class AbstractService(Reporter, FabricMixin, ValidationMixin):
     def show_instances(self):
         """ show all ec2 instances """
         util.show_instances(conn=self.conn)
-
-    @staticmethod
-    def is_port_open(host, port):
-        """ TODO: refactor into ymir.utils. this is used by ymir.checks """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.connect_ex((host, int(port)))
-        return result == 0

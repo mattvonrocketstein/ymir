@@ -18,6 +18,7 @@ ebssh_fabric = lazyModule('ebssh.fabric_commands')
 
 
 class ElasticBeanstalkService(AbstractService):
+
     """ This is a wrapper so that elasticbeanstalk-managed stuff
         can look like the usual service definition.  The 'eb'
         commandline tool mostly just does it's own thing, but
