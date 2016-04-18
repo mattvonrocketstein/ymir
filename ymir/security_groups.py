@@ -23,7 +23,7 @@ import logging
 import boto
 from fabric import colors
 from boto.exception import EC2ResponseError
-
+from ymir import data as ydata
 from ymir.util import get_conn
 
 logger = logging.getLogger(__name__)
@@ -120,4 +120,4 @@ def catch_ec2_error(fxn):
     except EC2ResponseError as e:
         print colors.red('failed:') + str(e)
     else:
-        print colors.green('ok')
+        print ydata.OK
