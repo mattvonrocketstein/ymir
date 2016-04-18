@@ -58,7 +58,9 @@ class FabricMixin(object):
         'sync_eips',
         'sync_elastic_ips',
         # 'sync_volumes',
-        'tail', 'test', 'terminate',
+        'tail',
+        'integration_test',
+        'terminate',
         'sync_tags'
     ]
 
@@ -211,7 +213,7 @@ class FabricMixin(object):
             check_obj.run(self)
         self._display_checks(health_checks)
 
-    def test(self):
+    def integration_test(self):
         """ runs integration tests for this service """
         self.report('running integration tests')
         data = self._status()
