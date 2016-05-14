@@ -77,8 +77,6 @@
         // install suite of devops packages suggested by ymir
         // this just includes nmap, tree, ruby and python core, etc
         "puppet/modules/ymir/packages.pp",
-        // creates /opt/ymir/logs which is used by supervisor, etc
-        "puppet/modules/ymir/log_dirs.pp"
         ],
 
     // a list of names for the AWS security groups this service will belong

@@ -6,7 +6,7 @@
 """
 import os
 from fabric import api
-from ymir import _load_service_from_json
+from ymir import load_service_from_json
 
 YMIR_SERVICE_JSON = os.path.abspath(
     os.environ.get(
@@ -15,7 +15,7 @@ YMIR_SERVICE_JSON = os.path.abspath(
                      'service.json')))
 
 # Create the ymir service from the service description
-_service = _load_service_from_json(YMIR_SERVICE_JSON)
+_service = load_service_from_json(YMIR_SERVICE_JSON)
 service_data = _service.template_data()
 
 # Install the standard service operations
@@ -30,6 +30,6 @@ def deploy(branch='master'):
 
 
 def tail():
-    """ """
+    """ tail syslog on remote server """
     with _service.ssh_ctx():
         api.sudo('tail /var/log/syslog')

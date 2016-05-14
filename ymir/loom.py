@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """ ymir.loom
+
     factories for fabric commands
 """
 import os
@@ -8,7 +9,8 @@ from fabric.contrib.console import confirm
 
 
 def create_version_bump_cmd(pkg_name=None, version_delta=0.1, **kargs):
-    """ """
+    """ a factory for generating a 'version-bump' function,
+        which can be called from service fabfiles """
     assert pkg_name is not None
     verbose_name = kargs.pop('verbose_name', pkg_name)
 

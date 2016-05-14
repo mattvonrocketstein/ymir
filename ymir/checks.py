@@ -20,15 +20,14 @@
 
 import requests
 from ymir import util
+from fabric.colors import blue, yellow, red, cyan
 
 
 class Check(object):
 
-    def __init__(self, name=None, check_type=None, url_t=None, url=None, msg=None):
+    def __init__(self, name=None, check_type=None, url_t=None):
         self.name = name
         self.check_type = check_type
-        self.msg = msg
-        self.url = url
         self.url_t = url_t
 
     def __repr__(self):
@@ -37,7 +36,7 @@ class Check(object):
 
     def run(self, service):
         import ymir.checks as modyool
-        data = service.template_data(simple=False)
+        data = service._service_data
         self.url = self.url_t.format(**data)
         try:
             checker = getattr(modyool, self.check_type)
@@ -46,9 +45,14 @@ class Check(object):
                 self.check_type, self.url)
             raise SystemExit(err)
         else:
-            _url, message = checker(service, self.url)
-            self.url = _url
-            self.msg = message
+            _url, success, message = checker(service, self.url)
+        print '  {4} [{0}] [?{1}] -- {2} {3} '.format(
+            yellow(self.name),
+            blue(self.check_type),
+            self.url,
+            message if message else '',
+            red('✖ fail') if not success else cyan('✓ ok')
+        )
         return self
 
 
@@ -59,9 +63,11 @@ def _get_request(url, **kargs):
 
 
 def port_open(service, port):
+    """ """
     ip = service._status()['ip']
     url = 'is_open://{0}:{1}'.format(ip, port)
-    return url, str(util.is_port_open(ip, port))
+    success = util.is_port_open(ip, port)
+    return url, success, ''
 
 
 def _port_open_validate(port):
@@ -77,27 +83,38 @@ port_open.validate = _port_open_validate
 
 
 def http(service, url, assert_json=False, codes=[]):
+    success = False
+    # might get handed ints or strings, need to normalize
+    codes = map(unicode, codes)
     try:
         resp = _get_request(url)
     except requests.exceptions.ConnectionError, e:
         if 'timed out' in str(e):
-            msg = 'requests.exceptions.ConnectionError (timed out)'
+            message = 'requests.exceptions.ConnectionError (timed out)'
         else:
-            msg = str(e)
+            message = str(e)
     except requests.exceptions.ReadTimeout, e:
         if 'timed out' in str(e):
-            msg = 'requests.exceptions.ReadTimeout'
+            message = 'requests.exceptions.ReadTimeout'
         else:
-            msg = str(e)
+            message = str(e)
     else:
         if codes:
-            msg = str(resp.status_code in codes)
+            success = unicode(resp.status_code) in codes
+            message = 'code={0}'.format(resp.status_code) \
+                      if success else 'bad code: {0}'.format(resp.status_code)
         else:
-            msg = str(resp.status_code)
+            success = True
+            message = str(resp.status_code)
         if assert_json:
-            resp.json()
-            msg = 'ok'
-    return url, msg
+            try:
+                resp.json()
+            except:
+                success = False
+                message = 'cannot convert response to JSON'
+            else:
+                success = True
+    return url, success, message
 
 
 def json(service, url, **kargs):

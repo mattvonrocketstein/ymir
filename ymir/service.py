@@ -2,6 +2,8 @@
 """ ymir.service
 """
 import os
+import glob
+import re
 import time
 import pprint
 import urlparse
@@ -13,19 +15,15 @@ import boto
 
 import fabric
 from fabric.colors import blue
-from fabric.colors import yellow
 from fabric.contrib.files import exists
 
 from fabric import api
-from fabric.api import (
-    cd, local, put,
-    quiet, settings)
 
 from ymir import util
+from ymir.util import puppet
 from ymir import checks
 from ymir.base import Reporter
 from ymir.caching import cached
-from ymir.validation.mixin import ValidationMixin
 
 NOOP = lambda *args, **kargs: None
 
@@ -35,34 +33,48 @@ logger = logging.getLogger(__name__)
 logging.captureWarnings(True)
 
 
-def catch_network_error(exc):
-    if isinstance(exc, fabric.exceptions.NetworkError):
-        util.report('NetworkError', 'sleeping and retrying')
-        return True
-
-
 class FabricMixin(object):
     FABRIC_COMMANDS = [
         'check', 'create', 'get',
-        'logs', 'mosh',
+        'integration_test', 'logs', 'mosh',
         'provision', 'put',
         'reboot', 'run',
-        's3',
-        'service',
-        'setup',
-        'shell',
-        'show', 'show_facts', 'show_instances',
-        'ssh',
-        'status',
+        's3', 'service', 'setup',
+        'shell', 'show', 'show_facts', 'show_instances',
+        'ssh', 'status',
         'supervisor', 'supervisorctl',
-        'sync_eips',
-        'sync_elastic_ips',
-        # 'sync_volumes',
-        'tail',
-        'integration_test',
-        'terminate',
-        'sync_tags'
+        'sync_eips', 'sync_elastic_ips',
+        'sync_tags',
+        'tail', 'terminate',
     ]
+
+    def status(self):
+        """ shows IP, ec2 status/tags, etc for this service """
+        self.report('checking status', section=True)
+        result = self._status()
+
+        for k, v in result.items():
+            self.report('  {0}: {1}'.format(k, v))
+        return result
+
+    @util.require_running_instance
+    def sync_tags(self):
+        """ update aws instance tags from service.json `tags` field """
+        self.report('updating instance tags: ')
+        json = self.template_data(simple=True)
+        tags = dict(
+            description=json.get('service_description', ''),
+            org=json.get('org_name', ''),
+            app=json.get('app_name', ''),
+            env=json.get("env_name", ''),
+        )
+        for tag in json.get('tags', []):
+            tags[tag] = 'true'
+        for tag in tags:
+            if not tags[tag]:
+                tags.pop(tag)
+        self.report('  {0}'.format(tags.keys()))
+        self._instance.add_tags(tags)
 
     @util.require_running_instance
     def terminate(self, force=False):
@@ -82,6 +94,12 @@ class FabricMixin(object):
                 self.terminate(force=True)
 
     @util.require_running_instance
+    def tail(self, filename):
+        """ tail a file on the service host """
+        with self.ssh_ctx():
+            api.run('tail -f ' + filename)
+
+    @util.require_running_instance
     def put(self, src, dest, *args, **kargs):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
@@ -95,6 +113,7 @@ class FabricMixin(object):
             api.sudo('chown {0}:{0} "{1}"'.format(owner, dest))
         return result
 
+    @util.require_running_instance
     def get(self, fname, local_path='.'):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
@@ -120,98 +139,31 @@ class FabricMixin(object):
                  username=service_data['username'],
                  pem=service_data['pem'],)
 
+    @util.require_running_instance
     def show(self):
         """ open health-check webpages for this service in a browser """
         self.report('showing webpages')
-        for check_name in self.HEALTH_CHECKS:
-            check, url = self.HEALTH_CHECKS[check_name]
+        health_checks = self.template_data()['health_checks']
+        for check_name in health_checks:
+            check, url = health_checks[check_name]
             self._show_url(url.format(**self.template_data()))
-
-    def create(self, force=False):
-        """ create new instance of this service ('force' defaults to False)"""
-        self.report('creating ec2 instance', section=True)
-        conn = self.conn
-        i = self._get_instance()
-        if i is not None:
-            msg = '  instance already exists: {0} ({1})'
-            msg = msg.format(i, i.update())
-            self.report(msg)
-            if force:
-                self.report('  force is True, terminating it & rebuilding')
-                util._block_while_terminating(i, conn)
-                # might need to block and wait here
-                return self.create(force=False)
-            self.report('  force is False, refusing to rebuild it')
-            return
-
-        service_data = self.template_data()
-        # HACK: deal with unfortunate vpc vs. ec2-classic differences
-        reservation_extras = service_data.get('reservation_extras', {}).copy()
-
-        # set security group stuff in reservation extras
-        sg_names = service_data['security_groups']
-        if not sg_names:
-            err = ('without `security_groups` in service.json, '
-                   'cannot create instance reservation')
-            raise SystemExit(err)
-        self.report(
-            "service description uses {0} as a security groups".format(sg_names))
-        tmp = {}
-        sgs = dict([[sg.id, sg.name] for sg in conn.get_all_security_groups()])
-        for sg_name in sg_names:
-            if sg_name not in sgs.values():
-                err = "could not find {0} amongst security groups at {1}"
-                err = err.format(sg_names, sgs.values())
-                raise SystemExit(err)
-            else:
-                _id = [_id for _id in sgs if sgs[_id] == sg_name][0]
-                self.report("  sg '{0}' is id {1}".format(sgs[_id], _id))
-                tmp[_id] = sgs[_id]
-        reservation_extras['security_group_ids'] = tmp.keys()
-
-        reservation = conn.run_instances(
-            image_id=service_data['ami'],
-            key_name=service_data['key_name'],
-            instance_type=service_data['instance_type'],
-            **reservation_extras)
-
-        instance = reservation.instances[0]
-        self.report('  no instance found, creating it now.')
-        self.report('  reservation-id:', instance.id)
-
-        util._block_while_pending(instance)
-        status = instance.update()
-        if status == 'running':
-            self.report('  instance is running.')
-            self.report('  setting tag for "Name": {0}'.format(self.NAME))
-            instance.add_tag("Name", self.NAME)
-        else:
-            self.report('Weird instance status: ', status)
-            return None
-
-        time.sleep(5)
-        self.report("Finished with creation.  Now run `fab setup`")
 
     @util.require_running_instance
     def check(self, name=None):
         """ reports health for this service """
         self.report('checking health')
-        # include relevant sections of status results
+        # TODO: include relevant sections of status results
         # for x in 'status eb_health eb_status'.split():
         #    if x in data:
         #        out['aws://'+x] = ['read', data[x]]
-        health_checks = []
         names = [name] if name is not None else self._service_data[
             'health_checks'].keys()
-        for check_name, (_type, url_t) in self._service_data['health_checks'].items():
-            if names and check_name not in names:
-                continue
-            check_obj = checks.Check(
-                url_t=url_t, check_type=_type, name=check_name)
-            health_checks.append(check_obj)
-        for check_obj in health_checks:
-            check_obj.run(self)
-        self._display_checks(health_checks)
+        service_health_checks = self._service_data['health_checks']
+        for check_name, (_type, url_t) in service_health_checks.items():
+            if check_name in names:
+                check_obj = checks.Check(
+                    url_t=url_t, check_type=_type, name=check_name)
+                check_obj.run(self)
 
     def integration_test(self):
         """ runs integration tests for this service """
@@ -223,36 +175,65 @@ class FabricMixin(object):
             self.report('no instance is running for this'
                         ' service, start (or create) it first')
 
+    @util.require_running_instance
+    def reboot(self):
+        """ TODO: blocking until reboot is complete? """
+        self.report('rebooting service')
+        with self.ssh_ctx():
+            api.sudo('reboot')
+
+    def s3(self):
+        """ show summary of s3 information for this service """
+        buckets = self.sync_buckets(quiet=True).items()
+        if not buckets:
+            self.report("this service is not using S3 buckets")
+        for bname, bucket in buckets:
+            keys = [k for k in bucket]
+            self.report("  {0} ({1} items) [{2}]".format(
+                bname, len(keys), bucket.get_acl()))
+            for key in keys:
+                print ("  {0} (size {1}) [{2}]".format(
+                    key.name, key.size, key.get_acl()))
+
 
 class PuppetMixin(object):
 
     """ """
 
-    def _validate_puppet_librarian(self):
-        """ """
-        errs = []
-        metadata = os.path.join(
-            self._ymir_service_root, 'puppet', 'metadata.json')
-        if not os.path.exists(metadata):
-            errs.append('{0} does not exist!'.format(metadata))
-        else:
-            if util.has_gem('metadata-json-lint'):
-                cmd_t = 'metadata-json-lint {0}'
-                with quiet():
-                    x = local(cmd_t.format(metadata), capture=True)
-                error = x.return_code != 0
-                if error:
-                    errs.append('could not validate {0}'.format(metadata))
-                    errs.append(x.stderr.strip())
-            else:
-                errs.append(
-                    'cannot validate.  '
-                    'run "gem install metadata-json-lint" first')
-        return errs
+    @property
+    def _puppet_dir(self):
+        pdir = os.path.join(self._ymir_service_root, 'puppet')
+        return pdir
+
+    @property
+    def _puppet_templates(self):
+        return self._get_puppet_templates()
+
+    @property
+    def _puppet_template_vars(self):
+        return self._get_puppet_template_vars()
+
+    def _get_puppet_templates(self):
+        """ return puppet template files relative to working directory """
+        return glob.glob(
+            os.path.join(self._puppet_dir, 'modules', '*', 'templates', '*'))
+
+    def _get_puppet_template_vars(self):
+        """ returns a dictionary of { puppet_file : [..,template_vars,..]}"""
+        out = {}
+        for f in self._get_puppet_templates():
+            with open(f, 'r') as fhandle:
+                content = fhandle.read()
+                out[f] = [x for x in re.findall('<%= @(.*?) %>', content)]
+        return out
+
+    @property
+    def _puppet_metadata(self):
+        return os.path.join(self._puppet_dir, 'metadata.json')
 
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
-        service_data = self.template_data()
+        service_data = self._service_data
         lcd = lcd or self._ymir_service_root
         with self.ssh_ctx():
             remote_user_home = '/home/' + service_data['username']
@@ -260,7 +241,7 @@ class PuppetMixin(object):
             msg = '  flushing remote puppet codes and refreshing'
             self.report(msg)
             try:
-                put(pfile, remote_user_home)
+                api.put(pfile, remote_user_home)
                 with api.cd(remote_user_home):
                     if clean:
                         # this undoes `ymir setup` phase, ie the installation
@@ -296,7 +277,7 @@ class PuppetMixin(object):
         service_data = self.template_data()
         facts = self.facts
         facts.update(**extra_facts)
-        return util._run_puppet(
+        return puppet.run_puppet(
             provision_item,
             parser=service_data['puppet_parser'],
             facts=facts,
@@ -312,17 +293,33 @@ class PuppetMixin(object):
                 self.report("  puppet-librarian has already processed modules")
                 return
             self.report("  puppet-librarian will install dependencies")
-            with cd(_dir):
+            with api.cd(_dir):
                 api.run('librarian-puppet init')
                 api.run('librarian-puppet install --verbose')
         self.report("  bootstrapping puppet dependencies on remote host")
-        util._run_puppet(
+        puppet.run_puppet(
             'puppet/modules/ymir/install_librarian.pp',
-            debug=self.YMIR_DEBUG)
+            debug=self.template_data()['ymir_debug'])
         _init_puppet("puppet")
 
     def _install_puppet(self):
         self.report("installing puppet")
+
+        FACTER_TARBALL_URL = 'http://downloads.puppetlabs.com/facter/facter-1.7.5.tar.gz'
+        PUPPET_TARBALL_URL = 'https://downloads.puppetlabs.com/puppet/puppet-3.4.3.tar.gz'
+        HIERA_TARBALL_URL = 'https://downloads.puppetlabs.com/hiera/hiera-1.3.0.tar.gz'
+
+        PUPPET_TARBALL_FILE = PUPPET_TARBALL_URL.split('/')[-1]
+        PUPPET_TARBALL_UNCOMPRESS_DIR = PUPPET_TARBALL_FILE.replace(
+            '.tar.gz', '')
+
+        FACTER_TARBALL_FILE = FACTER_TARBALL_URL.split('/')[-1]
+        FACTER_TARBALL_UNCOMPRESS_DIR = FACTER_TARBALL_FILE.replace(
+            '.tar.gz', '')
+
+        HIERA_TARBALL_FILE = HIERA_TARBALL_URL.split('/')[-1]
+        HIERA_TARBALL_UNCOMPRESS_DIR = HIERA_TARBALL_FILE.replace(
+            '.tar.gz', '')
 
         def decompress(x):
             """ unwraps tarball, removing the original file if it was successful """
@@ -333,26 +330,23 @@ class PuppetMixin(object):
             """ see https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html """
             run_install = lambda: api.sudo('ruby install.rb')
             download = lambda x: api.run(
-                'wget -O {0} {1}'.format(
-                    os.path.basename(x), x))
+                'wget -O {0} {1}'.format(os.path.basename(x), x))
 
-            download(
-                'http://downloads.puppetlabs.com/facter/facter-1.7.5.tar.gz')
-            decompress('facter-1.7.5.tar.gz')
-            with api.cd('facter-1.7.5'):
-                run_install()
+            work_to_do = [
+                [FACTER_TARBALL_URL, FACTER_TARBALL_FILE,
+                    FACTER_TARBALL_UNCOMPRESS_DIR],
+                [PUPPET_TARBALL_URL, PUPPET_TARBALL_FILE,
+                    PUPPET_TARBALL_UNCOMPRESS_DIR],
+                [HIERA_TARBALL_URL, HIERA_TARBALL_FILE,
+                    HIERA_TARBALL_UNCOMPRESS_DIR],
+            ]
 
-            download(
-                'https://downloads.puppetlabs.com/puppet/puppet-3.4.3.tar.gz')
-            decompress('puppet-3.4.3.tar.gz')
-            with api.cd('puppet-3.4.3'):
-                run_install()
+            for url, tarball, _dir in work_to_do:
+                download(url)
+                decompress(tarball)
+                with api.cd(_dir):
+                    run_install()
 
-            download(
-                'https://downloads.puppetlabs.com/hiera/hiera-1.3.0.tar.gz')
-            decompress('hiera-1.3.0.tar.gz')
-            with api.cd('hiera-1.3.0'):
-                run_install()
         self.report("installing puppet pre-reqs")
         api.run('sudo apt-get install -y ruby-dev ruby-json > /dev/null')
 
@@ -381,13 +375,8 @@ class PuppetMixin(object):
             doit()
 
 
-class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
+class AbstractService(Reporter, PuppetMixin, FabricMixin):
     _schema = None
-    # ELASTIC_IPS = default_schema.get_default('elastic_ips')
-    # YMIR_DEBUG = default_schema.get_default('ymir_debug')
-    # SERVICE_DEFAULTS = {}
-    # HEALTH_CHECKS = {}
-    # INTEGRATION_CHECKS = {}
     _ymir_service_root = None
 
     def __str__(self):
@@ -413,11 +402,6 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
         with self.ssh_ctx():
             api.run('sudo supervisorctl {0}'.format(command))
     supervisor = supervisorctl
-
-    def tail(self, filename):
-        """ tail a file on the service host """
-        with self.ssh_ctx():
-            api.run('tail -f ' + filename)
 
     def logs(self, *args):
         """ lists the known log files for this service"""
@@ -449,10 +433,6 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
                 self.report("ERROR:")
                 raise SystemExit(err)
 
-    # def __call__(self):
-    #    """ ---------------------------------------------------- """
-    #    pass
-
     def __init__(self, conn=None, service_root=None, ):
         """"""
         self.conn = conn or util.get_conn()
@@ -461,7 +441,7 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
     def _bootstrap_dev(self):
         """ """
         self.report("installing git & build-essentials")
-        with settings(warn_only=True):
+        with api.settings(warn_only=True):
             r1 = api.run(
                 'sudo apt-get install -y git build-essential > /dev/null')
         if r1.return_code != 0:
@@ -471,10 +451,16 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
             self._bootstrap_dev()
         self._install_puppet()
 
+    def _install_system_package(self, pkg_name, quiet=True):
+        """ FIXME: only works with ubuntu/debian """
+        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
+            return api.sudo('apt-get -y install {0} {1}'.format(
+                pkg_name, '> /dev/null' if quiet else ''))
+
     def _remove_system_package(self, pkg_name, quiet=True):
         """ FIXME: only works with ubuntu/debian """
         with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            api.sudo('apt-get -y remove {0} {1}'.format(
+            return api.sudo('apt-get -y remove {0} {1}'.format(
                 pkg_name, '> /dev/null' if quiet else ''))
 
     def _get_ubuntu_version(self):
@@ -495,15 +481,6 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
         label = self._report_name()
         return util.report(label, msg, *args, **kargs)
 
-    def status(self):
-        """ shows IP, ec2 status/tags, etc for this service """
-        self.report('checking status', section=True)
-        result = self._status()
-
-        for k, v in result.items():
-            self.report('  {0}: {1}'.format(k, v))
-        return result
-
     _status_computed = False
 
     def _status(self):
@@ -511,10 +488,10 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
             use this instead of self.status() if you want to quietly
             retrieve information for use without actually displaying it
         """
-        if not self._status_computed:
+        tdata = self._service_data
+        if not self._status_computed and tdata['ymir_debug']:
             self.report("handshaking with AWS..")
-
-        name = self.template_data()['name']
+        name = tdata['name']
         instance = util.get_instance_by_name(name, self.conn)
         result = dict(
             instance=None, ip=None,
@@ -583,31 +560,12 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
             user=service_data['username'],
             pem=service_data['pem'])
 
-    @util.require_running_instance
-    def sync_tags(self):
-        """ update aws instance tags from service.json `tags` field """
-        self.report('updating instance tags: ')
-        json = self.template_data(simple=True)
-        tags = dict(
-            description=json.get('service_description', ''),
-            org=json.get('org_name', ''),
-            app=json.get('app_name', ''),
-            env=json.get("env_name", ''),
-        )
-        for tag in json.get('tags', []):
-            tags[tag] = 'true'
-        for tag in tags:
-            if not tags[tag]:
-                tags.pop(tag)
-        self.report('  {0}'.format(tags.keys()))
-        self._instance.add_tags(tags)
-
     def _restart_supervisor(self):
         self.report('  restarting everything')
         retries = 3
         cmd = "sudo /etc/init.d/supervisor restart"
         restart = lambda: api.run(cmd).return_code
-        with settings(warn_only=True):
+        with api.settings(warn_only=True):
             result = restart()
             count = 0
             while result != 0 and count < retries:
@@ -616,6 +574,71 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
                 print msg
                 result = restart()
                 count += 1
+
+    def create(self, force=False):
+        """ create new instance of this service ('force' defaults to False)"""
+        self.report('creating ec2 instance', section=True)
+        conn = self.conn
+        i = self._get_instance()
+        if i is not None:
+            msg = '  instance already exists: {0} ({1})'
+            msg = msg.format(i, i.update())
+            self.report(msg)
+            if force:
+                self.report('  force is True, terminating it & rebuilding')
+                util._block_while_terminating(i, conn)
+                # might need to block and wait here
+                return self.create(force=False)
+            self.report('  force is False, refusing to rebuild it')
+            return
+
+        service_data = self.template_data()
+        # HACK: deal with unfortunate vpc vs. ec2-classic differences
+        reservation_extras = service_data.get('reservation_extras', {}).copy()
+
+        # set security group stuff in reservation extras
+        sg_names = service_data['security_groups']
+        if not sg_names:
+            err = ('without `security_groups` in service.json, '
+                   'cannot create instance reservation')
+            raise SystemExit(err)
+        self.report(
+            "service description uses {0} as a security groups".format(sg_names))
+        tmp = {}
+        sgs = dict([[sg.id, sg.name] for sg in conn.get_all_security_groups()])
+        for sg_name in sg_names:
+            if sg_name not in sgs.values():
+                err = "could not find {0} amongst security groups at {1}"
+                err = err.format(sg_names, sgs.values())
+                raise SystemExit(err)
+            else:
+                _id = [_id for _id in sgs if sgs[_id] == sg_name][0]
+                self.report("  sg '{0}' is id {1}".format(sgs[_id], _id))
+                tmp[_id] = sgs[_id]
+        reservation_extras['security_group_ids'] = tmp.keys()
+
+        reservation = conn.run_instances(
+            image_id=service_data['ami'],
+            key_name=service_data['key_name'],
+            instance_type=service_data['instance_type'],
+            **reservation_extras)
+
+        instance = reservation.instances[0]
+        self.report('  no instance found, creating it now.')
+        self.report('  reservation-id:', instance.id)
+
+        util._block_while_pending(instance)
+        status = instance.update()
+        if status == 'running':
+            self.report('  instance is running.')
+            self.report('  setting tag for "Name": {0}'.format(self.NAME))
+            instance.add_tag("Name", self.NAME)
+        else:
+            self.report('Weird instance status: ', status)
+            return None
+
+        time.sleep(5)
+        self.report("Finished with creation.  Now run `fab setup`")
 
     def provision(self, fname=None, **kargs):
         """ provision this service """
@@ -690,7 +713,7 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
         """
         cmd = provision_instruction.format(**self.template_data())
         self.report("  translated to: {0}".format(cmd))
-        return local(cmd)
+        return api.local(cmd)
 
     def _update_sys_packages(self):
         """ must be run with ssh_ctx() """
@@ -703,6 +726,7 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
         self.sync_eips()
         self.report('installing puppet & puppet deps', section=True)
         self._clean_puppet_tmp_dir()
+        ymir_debug = self.template_data()['ymir_debug']
         with self.ssh_ctx():
             with api.lcd(self._ymir_service_root):
                 self._update_sys_packages()
@@ -714,11 +738,11 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
                         self.SETUP_LIST.index(setup_item),
                         setup_item
                     ))
-                    util._run_puppet(
+                    puppet.run_puppet(
                         setup_item,
                         puppet_dir='puppet',
                         facts=self.facts,
-                        debug=self.YMIR_DEBUG,)
+                        debug=ymir_debug,)
 
         self.report("Setup complete.  Now run `fab provision`")
 
@@ -737,19 +761,6 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
                 raise SystemExit(
                     "facts should not contain mustaches: {0}".format(tmp))
         return service_defaults
-
-    def s3(self):
-        """ show summary of s3 information for this service """
-        buckets = self.sync_buckets(quiet=True).items()
-        if not buckets:
-            self.report("this service is not using S3 buckets")
-        for bname, bucket in buckets:
-            keys = [k for k in bucket]
-            self.report("  {0} ({1} items) [{2}]".format(
-                bname, len(keys), bucket.get_acl()))
-            for key in keys:
-                print ("  {0} (size {1}) [{2}]".format(
-                    key.name, key.size, key.get_acl()))
 
     @property
     def _s3_conn(self):
@@ -773,11 +784,12 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
         """ synchronizes elastic IPs with service.json data """
         report = self.report if not quiet else lambda *args, **kargs: None
         service_instance_id = self._status()['instance'].id
-        if not self.ELASTIC_IPS:
+        eips = self.template_data()['elastic_ips']
+        if not eips:
             report('no elastic IPs detected in service definition')
             return
         addresses = [x for x in self.conn.get_all_addresses(
-        ) if x.public_ip in self.ELASTIC_IPS]
+        ) if x.public_ip in eips]
         for aws_address in addresses:
             report(" Address: {0}".format(aws_address))
             if aws_address.instance_id is None:
@@ -799,13 +811,6 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
         """ run command on service host """
         with self.ssh_ctx():
             api.run(command)
-
-    @util.require_running_instance
-    def reboot(self):
-        """ TODO: blocking until reboot is complete? """
-        self.report('rebooting service')
-        with self.ssh_ctx():
-            api.sudo('reboot')
 
     def _host(self, data=None):
         """ """
@@ -829,14 +834,6 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin, ValidationMixin):
                     k] = v.format(**template_data)
         return template_data
     _template_data = template_data
-
-    def _display_checks(self, checks):
-        for check_obj in checks:
-            self.report(' [{0}] [?{1}] -- {2} {3}'.format(
-                yellow(check_obj.name),
-                blue(check_obj.check_type),
-                check_obj.url_t,
-                check_obj.msg))
 
     def shell(self):
         """ """

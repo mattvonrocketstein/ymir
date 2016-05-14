@@ -8,13 +8,15 @@ import os
 import time
 import shutil
 import socket
-
+from .backports import TemporaryDirectory
 from functools import wraps
+__all__ = [
+    x.__name__ for x in [
+        TemporaryDirectory, ]]
 
 import boto.ec2
-
-from fabric.api import quiet, local
-from fabric.api import settings, run, shell_env, env
+from boto.provider import ProfileNotFoundError
+from fabric import api
 
 from ymir.data import STATUS_DEAD
 
@@ -48,32 +50,12 @@ def require_running_instance(fxn):
 
 def list_dir(dir_=None):
     """ returns a list of files in a directory (dir_) as absolute paths """
-    dir_ = dir_ or env.cwd
+    dir_ = dir_ or api.env.cwd
     if not dir_.endswith('/'):
         dir_ += '/'
-    string_ = run("for i in %s*; do echo $i; done" % dir_)
+    string_ = api.run("for i in %s*; do echo $i; done" % dir_)
     files = string_.replace("\r", "").split("\n")
     return files
-
-
-def _run_puppet(_fname, parser=None, debug=False, puppet_dir=None, facts={}):
-    """ must be run within a fabric ssh context """
-    _facts = {}
-    for fact_name, val in facts.items():
-        if isinstance(val, dict):
-            continue
-        if not fact_name.startswith('FACTER_'):
-            _facts['FACTER_' + fact_name] = val
-        else:
-            _facts[fact_name] = val
-    with shell_env(**_facts):
-        # sudo -E preserves the invoking enviroment,
-        # thus we are able to pass through the facts
-        run("sudo -E puppet apply {parser} {debug} --modulepath={pdir}/modules {fname}".format(
-            parser=('--parser ' + parser) if parser else '',
-            debug='--debug' if debug else '',
-            pdir=puppet_dir or os.path.dirname(_fname),
-            fname=_fname))
 
 
 def shell(conn=None, **namespace):
@@ -93,8 +75,8 @@ def mosh(ip, username='ubuntu', pem=None):
     pem = '-i ' + pem if pem else ''
     cmd = 'mosh --ssh="ssh {pem}" {user}@{host}'.format(
         pem=pem, user=username, host=ip)
-    with settings(warn_only=True):
-        return local(cmd)
+    with api.settings(warn_only=True):
+        return api.local(cmd)
 
 
 def ssh(ip, username='ubuntu', pem=None):
@@ -103,8 +85,8 @@ def ssh(ip, username='ubuntu', pem=None):
     cmd = "ssh -l {0} {1}".format(username, ip)
     if pem is not None:
         cmd += ' -i {0}'.format(pem)
-    with settings(warn_only=True):
-        local(cmd)
+    with api.settings(warn_only=True):
+        api.local(cmd)
 
 
 def ssh_ctx(ip, user='ubuntu', pem=None):
@@ -113,11 +95,11 @@ def ssh_ctx(ip, user='ubuntu', pem=None):
     ctx = dict(user=user, host_string=ip)
     if pem is not None:
         ctx.update(key_filename=pem)
-    return settings(**ctx)
+    return api.settings(**ctx)
 
 
 def get_instance_by_id(id, conn):
-    """ returns the id for the instance"""
+    """ returns the id for the instance """
     tmp = conn.get_only_instances([id])
     if not tmp:
         return
@@ -130,22 +112,29 @@ def get_instance_by_id(id, conn):
 
 
 def has_gem(name):
-    """ TODO: move to goulash """
-    with quiet():
-        x = local('gem list|grep {0}'.format(name), capture=True)
+    """ tests whether localhost has a gem by the given name """
+    with api.quiet():
+        x = api.local('gem list|grep {0}'.format(name), capture=True)
     error = x.return_code != 0
     return not error
 
 
 def get_conn(key_name=None, region='us-east-1'):
-    # print 'creating ec2 connection'
+    """ get ec2 connection for aws API """
     try:
         conn = boto.ec2.connect_to_region(
             region, profile_name=os.environ['AWS_PROFILE'])
     except (KeyError, boto.exception.NoAuthHandlerFound):
         err = ("ERROR: no AWS credentials could be found.\n  "
-               "Set AWS_PROFILE environment variable, or use ~/.boto, then try again")
+               "Set AWS_PROFILE environment variable, or "
+               "use ~/.boto, then try again")
         raise SystemExit(err)
+    except (ProfileNotFoundError,) as exc:
+        err = ("ERROR: found AWS_PROFILE {0}, but boto raises "
+               "ProfileNotFound.  Set AWS_PROFILE environment "
+               "variable, or use ~/.boto, then try again.  Original"
+               " Exception follows: {1}")
+        raise SystemExit(err.format(os.environ.get('AWS_PROFILE'), str(exc)))
     if key_name is not None:
         keypair = conn.get_key_pair(key_name)
         if keypair is None:
@@ -206,29 +195,15 @@ def _block_while_terminating(instance, conn):
         time.sleep(3)
     print '  terminated successfully'
 
-# TODO: move to goulash
-# http://stackoverflow.com/questions/1868714/how-do-i-copy-an-entire-directory-of-files-into-an-existing-directory-using-pyth
 
+def get_keypair_names(conn=None):
+    """ return all keypair names associated with current $AWS_PROFILE """
+    conn = conn or get_conn()
+    return [k.name for k in conn.get_all_key_pairs()]
 
-def copytree(src, dst, symlinks=False, ignore=None):
-    """ shutil.copytree is broken/weird """
-    if not os.path.exists(dst):
-        os.makedirs(dst)
-    for item in os.listdir(src):
-        s = os.path.join(src, item)
-        d = os.path.join(dst, item)
-        if os.path.isdir(s):
-            copytree(s, d, symlinks, ignore)
-        else:
-            if not os.path.exists(d) or \
-                    os.stat(src).st_mtime - os.stat(dst).st_mtime > 1:
-                shutil.copy2(s, d)
-
-
-# def working_dir_is_ymir():
-#    return '.ymir' in os.listdir(os.getcwd())
 
 def get_or_guess_service_json_file(args=None):
+    """ """
     service_json_file = os.environ.get(
         'YMIR_SERVICE_JSON',
         os.path.join(os.getcwd(), 'service.json'))
@@ -251,3 +226,20 @@ def is_port_open(host, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     result = sock.connect_ex((host, int(port)))
     return result == 0
+
+# http://stackoverflow.com/questions/1868714/how-do-i-copy-an-entire-directory-of-files-into-an-existing-directory-using-pyth
+
+
+def copytree(src, dst, symlinks=False, ignore=None):
+    """ shutil.copytree is broken/weird """
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+    for item in os.listdir(src):
+        s = os.path.join(src, item)
+        d = os.path.join(dst, item)
+        if os.path.isdir(s):
+            copytree(s, d, symlinks, ignore)
+        else:
+            if not os.path.exists(d) or \
+                    os.stat(src).st_mtime - os.stat(dst).st_mtime > 1:
+                shutil.copy2(s, d)
