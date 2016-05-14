@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
+""" ymir.api
 """
 import os
 import demjson
@@ -116,27 +116,31 @@ def _load_service_from_json_helper(service_json_file=None,
                                    service_json={}, quiet=False, simple=False):
     """ load service obj from service json """
     from ymir import validation
-    from ymir.beanstalk import ElasticBeanstalkService
+    # from ymir.beanstalk import ElasticBeanstalkService
     from ymir.service import AbstractService
     chosen_schema = yschema.choose_schema(service_json, quiet=True)
     validation.validate(service_json_file, chosen_schema, simple=True)
-    report = NOOP if quiet else base_report
+    report = NOOP if (quiet or service_json.get(
+        "ymir_debug", False)) else base_report
     # report("ymir","ymir service.json version:")
     report('ymir.api', 'loading service object from description')
     # dynamically create the service instance's class
-    dct = dict([
-        [x.upper(), y] for x, y in service_json.items()])
+    dct = dict([[x.upper(), y] for x, y in service_json.items()])
+    # NB: reflection has to happen prior to class creation, otherwise
+    # kls.__name__ is wrong
+    service_json = _reflect(service_json=service_json, simple=True)
     classname = str(service_json["name"]).lower()
-    if chosen_schema == yschema.eb_schema:
-        BaseService = ElasticBeanstalkService
-    else:
-        BaseService = AbstractService
+    # if chosen_schema == yschema.eb_schema:
+    #    BaseService = ElasticBeanstalkService
+    # else:
+    BaseService = AbstractService
+
     report('ymir.api', 'chose service class: {0}'.format(
         BaseService.__name__))
     ServiceFromJSON = type(classname, (BaseService,), dct)
     obj = ServiceFromJSON(service_root=os.path.dirname(service_json_file))
     obj._schema = chosen_schema
-    service_json = _reflect(service_json=service_json, simple=True)
+
     service_json = set_schema_defaults(service_json, chosen_schema)
     ServiceFromJSON.template_data = lambda himself, **kargs: service_json
 

@@ -5,20 +5,18 @@
 import os
 
 import boto
-import addict
 import demjson
 
-from fabric.colors import red, green
+from fabric.colors import red
 from fabric.contrib.console import confirm
 
 from ymir import util
 from ymir import api as yapi
-
+from ymir import validation
 from ymir.schema import SGFileSchema
 from ymir.security_groups import sg_sync
 from ymir.base import report as _report
 
-OK = green('  ok')
 YMIR_SRC = os.path.dirname(__file__)
 
 import logging
@@ -28,18 +26,12 @@ report = lambda *args: _report("ymir.commands", *args)
 
 
 def ymir_sg(args):
-    def unpack_rule(r):
-        return addict.Dict(
-            ip_protocol=r[0],
-            from_port=r[1],
-            to_port=r[2],
-            cidr_ip=r[3])
-
     def supports_ssh(_rules):
-        """ FIXME: dumb heuristic """
+        """ a dumb heuristic to prevent people from
+            creating inaccessible EC2 resources
+        """
         for _rule in _rules:
-            _rule = unpack_rule(_rule)
-            if _rule.to_port == 22:
+            if _rule[2] == 22:
                 return True
         return False
 
@@ -69,6 +61,16 @@ def ymir_sg(args):
         sg_sync(name=name, description=descr, rules=rules,)
 
 
+def ymir_validate(args):
+    if args.service_json is None:
+        err = 'either $YMIR_SERVICE_JSON must be set or ./service.json should exist'
+        report(err)
+        raise SystemExit(1)
+    else:
+        return validation.validate(
+            args.service_json, simple=False)
+
+
 def ymir_shell(args):
     """ """
     service = yapi.load_service_from_json()
@@ -82,12 +84,6 @@ def ymir_shell(args):
     except ImportError:
         raise SystemExit("need smashlib should be installed first")
     embed(user_ns=user_ns,)
-
-
-def ymir_load(args, interactive=True):
-    """ """
-    raise RuntimeError(
-        "this function is deprecated.  use ymir.load_service_from_json")
 
 
 def ymir_init(args):
@@ -118,8 +114,22 @@ def ymir_init(args):
     util.copytree(skeleton_dir, init_dir)
 
 
+def ymir_list(args):
+    """ responsible for executing the 'ymir list' command,
+        which lists AWS resources associated with the current
+        $AWS_PROFILE
+    """
+
+    if args.keypairs:
+        print util.get_keypair_names()
+    else:
+        print "not sure what to list"
+
+
 def ymir_keypair(args):
-    """ """
+    """ responsible for executing the 'ymir keypair' command,
+        which creates new AWS keypairs on demand
+    """
     name = args.keypair_name
     ec2 = boto.connect_ec2()
     if not args.force:
@@ -132,7 +142,6 @@ def ymir_keypair(args):
             return
         if not result:
             return
-        # boto.ec2.keypair.KeyPair
     key = ec2.create_key_pair(name)
     key.save(os.getcwd())
 

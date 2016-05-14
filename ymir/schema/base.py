@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """ ymir.schema.base
 """
+
 from voluptuous import Schema as _Schema
 from voluptuous import Required, Optional, Undefined, Invalid
+
 from .util import list_of_strings
+
 _validate_sl_field = lambda lst: list_of_strings(lst, key='setup_list')
 _validate_sg_field = lambda lst: list_of_strings(lst, key='security_groups')
 _validate_pl_field = lambda lst: list_of_strings(lst, key='provision_list')

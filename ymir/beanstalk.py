@@ -12,6 +12,7 @@ from ymir.service import AbstractService
 
 
 logging.captureWarnings(True)
+
 ebssh = lazyModule('ebssh')
 ebssh_decorators = lazyModule('ebssh.decorators')
 ebssh_fabric = lazyModule('ebssh.fabric_commands')
@@ -144,6 +145,3 @@ class ElasticBeanstalkService(AbstractService):
 
     def create(self, force=False):
         """ not implemented for beanstalk-based services """
-
-    def _validate_keypairs(self):
-        print "EB service does not validate keypairs"

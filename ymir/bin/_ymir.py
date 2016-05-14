@@ -9,9 +9,8 @@ from argparse import ArgumentParser
 
 from ymir.version import __version__
 from ymir.commands import (
-    ymir_init, ymir_sg,
-    ymir_eip, ymir_keypair, ymir_shell)
-from ymir import validation
+    ymir_init, ymir_sg, ymir_list,
+    ymir_eip, ymir_keypair, ymir_shell, ymir_validate)
 logger = logging.getLogger(__name__)
 
 LOG_LEVELS = [logging.CRITICAL,  # 50
@@ -51,6 +50,11 @@ def get_parser():
     eip_parser.set_defaults(subcommand='eip')
     eip_parser.add_argument('-f', '--force', action='store_true',
                             help='force noninteractive mode')
+
+    list_parser = subparsers.add_parser('list', help='list AWS resources')
+    list_parser.set_defaults(subcommand='list')
+    list_parser.add_argument('-k', '--keypairs', action='store_true',
+                             help='list keypairs')
 
     sgkargs = dict(metavar='security_group_json',
                    type=str,)
@@ -107,9 +111,11 @@ def entry(settings=None):
     """ Main entry point """
     parser = get_parser()
     args = parser.parse_args(sys.argv[1:])
-    if 'service_json' in args and (not args.service_json or not os.path.exists(args.service_json)):
+    service_json_not_found = (not getattr(args, 'service_json', None) or
+                              not os.path.exists(args.service_json))
+    if 'service_json' in args and service_json_not_found:
         args.service_json = os.environ.get('YMIR_SERVICE_JSON')
-        print 'using service_json:', args.service_json
+        # print 'using service_json:', args.service_json
 
     if args.debug:
         args.verbose = 4
@@ -122,17 +128,16 @@ def entry(settings=None):
         level=level,
         format="%(levelname)s [%(filename)s:%(lineno)s] %(message)s",
     )
-    validate = lambda args: validation.validate(
-        args.service_json, simple=False)
     subcommand_map = dict(
         help=lambda args: parser.print_help(),
         eip=ymir_eip,
         security_group=ymir_sg,
         init=ymir_init,
-        validate=validate,
+        validate=ymir_validate,
         keypair=ymir_keypair,
         freeze=ymir_freeze,
         shell=ymir_shell,
+        list=ymir_list,
     )
     logger.debug('log level is: {0}'.format(level))
     if args.subcommand == 'sg':
