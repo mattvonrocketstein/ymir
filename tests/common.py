@@ -2,13 +2,12 @@
 """
 """
 import os
-import inspect
 import contextlib
 
 import mock
 from ymir import skeleton
 
-skeleton_dir = os.path.dirname(inspect.getfile(skeleton))
+skeleton_dir = os.path.dirname(skeleton.__file__)
 
 skeleton_json_path = os.path.join(skeleton_dir, 'service.json')
 
