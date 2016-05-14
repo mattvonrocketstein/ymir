@@ -10,7 +10,7 @@
 from functools import wraps
 
 
-def cached(key_or_fxn, timeout=5 * 60, use_request_vars=False):
+def cached(key_or_fxn, timeout=5 * 60):
     """ dumb hack adapted from
         http://flask.pocoo.org/docs/patterns/viewdecorators/ """
     from werkzeug.contrib.cache import SimpleCache
@@ -18,18 +18,7 @@ def cached(key_or_fxn, timeout=5 * 60, use_request_vars=False):
     if not getattr(c, 'CACHE', None):
         c.CACHE = SimpleCache()
     cache = c.CACHE
-    if use_request_vars:
-        tmp1 = key_or_fxn
-        assert isinstance(key_or_fxn, basestring)
-
-        def cache_key_fxn():
-            from flask import request
-            req = request
-            z = sorted(req.values.items())
-            import json
-            key = tmp1 + json.dumps(z)
-            return key
-    elif isinstance(key_or_fxn, basestring):
+    if isinstance(key_or_fxn, basestring):
         cache_key_fxn = lambda: key_or_fxn
 
     def decorator(f):
