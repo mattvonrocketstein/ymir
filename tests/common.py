@@ -8,7 +8,7 @@ import mock
 from fabric import api
 from ymir.util import TemporaryDirectory
 from ymir import skeleton
-
+from ymir import api as yapi
 skeleton_dir = os.path.dirname(skeleton.__file__)
 
 skeleton_json_path = os.path.join(skeleton_dir, 'service.json')
@@ -22,12 +22,14 @@ def fake_aws_conn():
 def mock_aws(fxn):
     def newf(*args, **kargs):
         with contextlib.nested(
-                mock.patch.dict(os.environ, dict(AWS_PROFILE="nonsense!")),
+                mock.patch.dict(os.environ, dict(AWS_PROFILE="!nonsense!")),
                 mock.patch('ymir.util.get_conn', fake_aws_conn),
                 mock.patch('ymir.util.get_tags', lambda *args: {}),
                 mock.patch('ymir.util.get_keypair_names', lambda *args: [])):
             return fxn(*args, **kargs)
     return newf
+
+import demjson
 
 
 @contextlib.contextmanager
@@ -41,10 +43,22 @@ def demo_service():
             err = '`ymir init` did not create directory'
             assert os.path.exists(service_dir), err
             with api.lcd(service_dir):
-                yield addict.Dict(
+                service_json = os.path.join(service_dir, 'service.json')
+                #
+                get_service = lambda: yapi.load_service_from_json(service_json)
+                get_json = lambda: demjson.decode_file(service_json)
+
+                def rewrite_json(new_json):
+                    with open(service_json, 'w') as fhandle:
+                        fhandle.write(demjson.encode(new_json))
+                test_service_ctx = addict.Dict(
+                    get_service=get_service,
+                    get_json=get_json,
+                    rewrite_json=rewrite_json,
                     service_name=service_name,
                     service_dir=service_dir,
-                    service_json=os.path.join(service_dir, 'service.json'),
+                    service_json=service_json,
                     tmpdir=tmp_dir,
                     tmp_dir=tmp_dir,
                 )
+                yield test_service_ctx
