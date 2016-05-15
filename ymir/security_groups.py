@@ -21,31 +21,12 @@
 import logging
 
 import boto
+import boto.vpc
 from fabric import colors
-from boto.exception import EC2ResponseError
-from ymir import data as ydata
-from ymir.util import get_conn
+
+from ymir import util
 
 logger = logging.getLogger(__name__)
-
-
-def _sg_update(sg=None, conn=None, rules=[]):
-    assert rules
-    logger.debug('  setting up rules for sg {0}'.format(sg))
-    return sg
-
-
-"""
-def sg_update(sg_name, conn=None):
-    print 'editing security group'
-    conn = conn or _get_conn()
-    groups = conn.get_all_security_groups([sg_name])
-    assert groups, 'security group does not exist yet.'
-    print '  syncing security group, creating it'
-    sg = groups[0]
-    return _sg_update(sg, conn)
-"""
-import boto.vpc
 
 
 def get_or_create_security_group(c, group_name, description=""):
@@ -81,7 +62,7 @@ def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
     logger.debug("Synchronizing security group: {0} -- {1}".format(
         name, description))
     assert rules and name
-    conn = conn or get_conn()
+    conn = conn or util.get_conn()
     description = description or name
     csg_kargs = {}
     if vpc is not None:
@@ -106,18 +87,9 @@ def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
 
     for rule in new_rules:
         print colors.blue('authorizing') + ' new rule: {0}'.format(rule),
-        catch_ec2_error(lambda rule=rule: sg.authorize(*rule))
+        util.catch_ec2_error(lambda rule=rule: sg.authorize(*rule))
 
     for rule in stale_rules:
         print colors.red('revoking:') + \
             ' old rule: {0}'.format(rule)
-        catch_ec2_error(lambda rule=rule: sg.revoke(*rule))
-
-
-def catch_ec2_error(fxn):
-    try:
-        fxn()
-    except EC2ResponseError as e:
-        print colors.red('failed:') + str(e)
-    else:
-        print ydata.OK
+        util.catch_ec2_error(lambda rule=rule: sg.revoke(*rule))

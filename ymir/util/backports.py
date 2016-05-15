@@ -11,7 +11,7 @@ import os as _os
 from tempfile import mkdtemp
 
 
-class TemporaryDirectory(object):
+class TemporaryDirectory(object):  # pragma: no cover
     """Create and return a temporary directory.  This has the same
     behavior as mkdtemp but can be used as a context manager.  For
     example:

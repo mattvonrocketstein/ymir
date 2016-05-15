@@ -221,7 +221,7 @@ class PuppetMixin(object):
     def _get_puppet_template_vars(self):
         """ returns a dictionary of { puppet_file : [..,template_vars,..]}"""
         out = {}
-        for f in self._get_puppet_templates():
+        for f in self._puppet_templates:
             with open(f, 'r') as fhandle:
                 content = fhandle.read()
                 out[f] = [x for x in re.findall('<%= @(.*?) %>', content)]

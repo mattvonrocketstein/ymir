@@ -8,19 +8,23 @@ import os
 import time
 import shutil
 import socket
-from .backports import TemporaryDirectory
 from functools import wraps
+
+from fabric import colors
+import boto.ec2
+from boto.provider import ProfileNotFoundError
+from boto.exception import EC2ResponseError
+from fabric import api
+
+
+from ymir import data as ydata
+from .backports import TemporaryDirectory
+
+NOOP = lambda *args, **kargs: None
+
 __all__ = [
     x.__name__ for x in [
         TemporaryDirectory, ]]
-
-import boto.ec2
-from boto.provider import ProfileNotFoundError
-from fabric import api
-
-from ymir.data import STATUS_DEAD
-
-NOOP = lambda *args, **kargs: None
 
 
 def report(label, msg, *args, **kargs):
@@ -155,7 +159,7 @@ def show_instances(conn):
 def get_instance_by_name(name, conn):
     """ returns the id for the instance """
     for i, tags in get_tags(None, conn).items():
-        if tags.get('Name') == name and tags['status'] not in STATUS_DEAD:
+        if tags.get('Name') == name and tags['status'] not in ydata.STATUS_DEAD:
             return conn.get_only_instances([i.id])[0]
 
 
@@ -194,6 +198,16 @@ def _block_while_terminating(instance, conn):
         print '  polling for terminate completion'
         time.sleep(3)
     print '  terminated successfully'
+
+
+def catch_ec2_error(fxn):
+    """ """
+    try:
+        fxn()
+    except EC2ResponseError as e:
+        print colors.red('failed:') + str([e, fxn])
+    else:
+        print ydata.OK
 
 
 def get_keypair_names(conn=None):
