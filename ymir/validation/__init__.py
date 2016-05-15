@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 _report = lambda msg: base_report('ymir.validation', msg)
 
 
-def validate_puppet(service, recurse=False):
-    """ when recurse==True, all puppet under
-        <_ymir_service_root>/puppet will be checked.
-        otherwise, only validate the files mentioned in
-        SETUP_LIST / PROVISION_LIST
+def validate_puppet(service):
+    """ runs puppet parser validation on puppet files contained
+        inside the given service.  NB: this checks all the puppet
+        code, not just things things in the service.json `setup_list`
+        and `provision_list` fields
     """
     errors, messages = [], []
     pdir = service._puppet_dir
@@ -35,12 +35,14 @@ def validate_puppet(service, recurse=False):
         msg = msg.format(pdir)
         errors.append(msg)
     else:
+        parser = service.template_data().get('puppet_parser', '')
+        validation_cmd = 'puppet parser {0} validate '.format(
+            '--parser {0}'.format(parser) if parser else '')
         with api.quiet():
-            parser = service.template_data().get('puppet_parser', '')
-            validation_cmd = 'puppet parser {0} validate '.format(
-                '--parser {0}'.format(parser) if parser else '')
             result = api.local('find {0}|grep .pp$'.format(pdir), capture=True)
             for filename in result.split('\n'):
+                if not filename:
+                    continue
                 (" .. validating {0}".format(filename))
                 result = api.local('{1} {0}'.format(
                     filename, validation_cmd), capture=True)
@@ -97,16 +99,15 @@ def validate_named_sgs(service):
         in service.json are defined according to AWS
         with the current account
     """
-    groups = service._service_data['security_groups'],
-    conn = service.conn
     """ validation for security groups.
     NB: this requires AWS credentials
     """
+    groups = service._service_data['security_groups'],
     errors, messages = [], []
-    conn = conn or util.get_conn()
+
     sgs = [x for x in groups if isinstance(x, basestring)]
     try:
-        conn.get_all_security_groups(sgs)
+        service.conn.get_all_security_groups(sgs)
     except EC2ResponseError:
         errors.append("could not find security groups: "
                       + str(groups))
@@ -129,6 +130,7 @@ def validate_health_checks(service):
             err = '  check-type "{0}" does not exist in ymir.checks'
             err = err.format(check_type)
             errors.append(err)
+            return errors, messages
         tmp = service_json.copy()
         tmp.update(dict(host='host'))
         try:
@@ -208,7 +210,9 @@ def validate(service_json, schema=None, simple=True, quiet=False):
 def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
     """ naive schema validation for service.json """
     errors, messages = [], []
-    report('validating file using {0}'.format(schema))
+    report = report if not quiet else util.NOOP
+    if schema:
+        report('validating file using explicit schema: {0}'.format(schema))
     err = 'got {0} instead of string for fname'.format(fname)
     assert isinstance(fname, basestring), err
     tmp = yapi.load_json(fname)
