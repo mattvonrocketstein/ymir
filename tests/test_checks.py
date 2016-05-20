@@ -1,18 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 """
-import os
-import shutil
-import contextlib
-import pytest
 import mock
-import demjson
-from fabric import api
+import pytest
 import requests
-from ymir import validation
-from ymir.util import TemporaryDirectory
-from ymir import api as yapi
-from tests import common as test_common
+
 from ymir import checks
 
 

@@ -34,7 +34,7 @@ def test_validate_skeleton_json():
 @test_common.mock_aws
 @mock.patch('ymir.validation.validate_file')
 @mock.patch('ymir.validation.validate_health_checks')
-@mock.patch('ymir.validation.validate_named_sgs')
+@mock.patch('ymir.validation.validate_security_groups')
 @mock.patch('ymir.validation.validate_puppet_templates')
 @mock.patch('ymir.validation.validate_puppet')
 @mock.patch('ymir.validation.validate_keypairs')

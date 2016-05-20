@@ -16,7 +16,9 @@ skeleton_json_path = os.path.join(skeleton_dir, 'service.json')
 
 def fake_aws_conn():
     """ """
-    return mock.Mock()
+    conn = mock.Mock()
+    conn.get_all_security_groups.return_value = []
+    return conn
 
 
 def mock_aws(fxn):
