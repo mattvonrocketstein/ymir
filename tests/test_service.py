@@ -17,9 +17,7 @@ def test_load_skeleton_service():
 
 def test_service_has_important_callables():
     service = test_load_skeleton_service()
-    assert callable(service.run)
-    assert callable(service.sudo)
+    for x in service.FABRIC_COMMANDS:
+        assert callable(getattr(service, x))
     assert callable(service.ssh_ctx)
     assert callable(service.fabric_install)
-    assert callable(service.provision)
-#from smashlib import embed; embed()
