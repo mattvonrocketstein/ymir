@@ -8,7 +8,6 @@ import voluptuous
 from fabric import api
 from fabric.colors import red, green
 from peak.util.imports import lazyModule
-from boto.exception import EC2ResponseError
 
 from ymir import util
 from ymir import schema as yschema
@@ -94,7 +93,7 @@ def validate_keypairs(service):
     return errors, messages
 
 
-def validate_named_sgs(service):
+def validate_security_groups(service):
     """ validates that named security groups mentioned
         in service.json are defined according to AWS
         with the current account
@@ -102,15 +101,16 @@ def validate_named_sgs(service):
     """ validation for security groups.
     NB: this requires AWS credentials
     """
-    groups = service._service_data['security_groups'],
+    groups = service._service_data['security_groups']
     errors, messages = [], []
-
-    sgs = [x for x in groups if isinstance(x, basestring)]
-    try:
-        service.conn.get_all_security_groups(sgs)
-    except EC2ResponseError:
-        errors.append("could not find security groups: "
-                      + str(groups))
+    # filter for only named groups, in case the security_groups field
+    # eventually supports more complete data (like security_groups.json)
+    configured_sgs = [x for x in groups if isinstance(x, basestring)]
+    actual_sgs = [x.name for x in service.conn.get_all_security_groups()]
+    for sg in configured_sgs:
+        if sg not in actual_sgs:
+            err = "name `{0}` mentioned in security_groups is missing from AWS"
+            errors.append(err.format(sg))
     return errors, messages
 
 
@@ -200,7 +200,7 @@ def validate(service_json, schema=None, simple=True, quiet=False):
                    report=report)
         print_errs(
             'checking AWS security groups in field `security_groups` exist..',
-            validate_named_sgs(service), report=report,)
+            validate_security_groups(service), report=report,)
         print_errs('checking puppet code validates with puppet parser..',
                    validate_puppet(service), report=report,)
         print_errs('checking puppet templates for undefined variables..',
