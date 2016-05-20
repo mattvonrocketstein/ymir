@@ -23,18 +23,24 @@ from ymir import util
 from fabric.colors import blue, yellow, red, cyan
 
 
+class InvalidCheckType(RuntimeError):
+    pass
+
+
 class Check(object):
 
     def __init__(self, name=None, check_type=None, url_t=None):
         self.name = name
         self.check_type = check_type
         self.url_t = url_t
+        self.failed = None
+        self.success = None
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: nocover
         return "<Check: {0}>".format(self.name)
     __str__ = __repr__
 
-    def run(self, service):
+    def run(self, service, quiet=False):
         import ymir.checks as modyool
         data = service._service_data
         self.url = self.url_t.format(**data)
@@ -43,20 +49,23 @@ class Check(object):
         except AttributeError:
             err = 'Cannot find checker "{0}"'.format(
                 self.check_type, self.url)
-            raise SystemExit(err)
-        else:
-            _url, success, message = checker(service, self.url)
-        print '  {4} [{0}] [?{1}] -- {2} {3} '.format(
-            yellow(self.name),
-            blue(self.check_type),
-            self.url,
-            message if message else '',
-            red('✖ fail') if not success else cyan('✓ ok')
-        )
+            raise InvalidCheckType(err)
+
+        _url, success, message = checker(service, self.url)
+        self.success = success
+        self.failed = not self.success
+        if not quiet:
+            print '  {4} [{0}] [?{1}] -- {2} {3} '.format(
+                yellow(self.name),
+                blue(self.check_type),
+                self.url,
+                message if message else '',
+                red('✖ fail') if not success else cyan('✓ ok')
+            )
         return self
 
 
-def _get_request(url, **kargs):
+def _get_request(url, **kargs):  # pragma: nocover
     return requests.get(
         url, timeout=10, verify=False,
         allow_redirects=False, **kargs)
@@ -82,18 +91,25 @@ def _port_open_validate(port):
 port_open.validate = _port_open_validate
 
 
-def http(service, url, assert_json=False, codes=[]):
+def http(service, url, assert_json=False, codes=[]):  # NOQA
+    """ an ugly function but this is the single core implementation
+        that drives the other checks (like http_200, http_301, etc).
+        without the `NOQA` directive above git-hooks will not allow us
+        to commit any changes.
+    """
     success = False
     # might get handed ints or strings, need to normalize
     codes = map(unicode, codes)
     try:
         resp = _get_request(url)
     except requests.exceptions.ConnectionError, e:
+        success = False
         if 'timed out' in str(e):
             message = 'requests.exceptions.ConnectionError (timed out)'
         else:
             message = str(e)
     except requests.exceptions.ReadTimeout, e:
+        success = False
         if 'timed out' in str(e):
             message = 'requests.exceptions.ReadTimeout'
         else:
@@ -103,6 +119,8 @@ def http(service, url, assert_json=False, codes=[]):
             success = unicode(resp.status_code) in codes
             message = 'code={0}'.format(resp.status_code) \
                       if success else 'bad code: {0}'.format(resp.status_code)
+            if not success:
+                return url, success, message
         else:
             success = True
             message = str(resp.status_code)
@@ -118,6 +136,7 @@ def http(service, url, assert_json=False, codes=[]):
 
 
 def json(service, url, **kargs):
+    """ """
     kargs.update(assert_json=True)
     return http(service, url, **kargs)
 

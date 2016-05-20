@@ -2,28 +2,24 @@
 """ ymir.service
 """
 import os
-import glob
-import re
 import time
 import pprint
 import urlparse
-import shutil
 import webbrowser
-import tempfile
 import logging
 import boto
 
 import fabric
-from fabric.colors import blue
-from fabric.contrib.files import exists
-
 from fabric import api
+from fabric.colors import blue
 
 from ymir import util
-from ymir.util import puppet
 from ymir import checks
 from ymir.base import Reporter
+from ymir.util import puppet
+from ymir.puppet import PuppetMixin
 from ymir.caching import cached
+from ymir import data as ydata
 
 NOOP = lambda *args, **kargs: None
 
@@ -89,7 +85,8 @@ class FabricMixin(object):
                    "involve data loss.  Are you sure? [y/n] ")
             answer = None
             while answer not in ['y', 'n']:
-                answer = raw_input(msg.format(instance, self.NAME))
+                answer = raw_input(msg.format(
+                    instance, self._service_data['name']))
             if answer == 'y':
                 self.terminate(force=True)
 
@@ -196,190 +193,62 @@ class FabricMixin(object):
                     key.name, key.size, key.get_acl()))
 
 
-class PuppetMixin(object):
-
+class PackageMixin(object):
     """ """
+    _require_pacapt_already_run = False
 
-    @property
-    def _puppet_dir(self):
-        pdir = os.path.join(self._ymir_service_root, 'puppet')
-        return pdir
+    def _require_pacapt(self):
+        """ installs pacapt (a universal front-end for apt/yum/dpkg)
+            on the remote server if it does not already exist there
 
-    @property
-    def _puppet_templates(self):
-        return self._get_puppet_templates()
-
-    @property
-    def _puppet_template_vars(self):
-        return self._get_puppet_template_vars()
-
-    def _get_puppet_templates(self):
-        """ return puppet template files relative to working directory """
-        return glob.glob(
-            os.path.join(self._puppet_dir, 'modules', '*', 'templates', '*'))
-
-    def _get_puppet_template_vars(self):
-        """ returns a dictionary of { puppet_file : [..,template_vars,..]}"""
-        out = {}
-        for f in self._puppet_templates:
-            with open(f, 'r') as fhandle:
-                content = fhandle.read()
-                out[f] = [x for x in re.findall('<%= @(.*?) %>', content)]
-        return out
-
-    @property
-    def _puppet_metadata(self):
-        return os.path.join(self._puppet_dir, 'metadata.json')
-
-    def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
-        """ copy puppet code to remote host (refreshes any dependencies) """
-        service_data = self._service_data
-        lcd = lcd or self._ymir_service_root
-        with self.ssh_ctx():
-            remote_user_home = '/home/' + service_data['username']
-            pfile = self._compress_local_puppet_code(puppet_dir, lcd=lcd)
-            msg = '  flushing remote puppet codes and refreshing'
-            self.report(msg)
-            try:
-                api.put(pfile, remote_user_home)
-                with api.cd(remote_user_home):
-                    if clean:
-                        # this undoes `ymir setup` phase, ie the installation
-                        # of puppet deps mentioned in metadata.json.
-                        api.run('rm -rf "{0}"'.format(puppet_dir))
-                    api.run(
-                        'tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
-            finally:
-                api.local('rm "{0}"'.format(pfile))
-
-    def _clean_puppet_tmp_dir(self):
-        """ necessary because puppet librarian is messy """
-        self.report("  .. cleaning puppet tmp dir")
-        tdir = os.path.join(self._ymir_service_root, 'puppet', '.tmp')
-        if os.path.exists(tdir):
-            # ~/puppet/.tmp should be nixed
-            shutil.rmtree(tdir)
-
-    def _compress_local_puppet_code(self, puppet_dir='puppet/', lcd=None):
-        """ returns an absolute path to a temporary file
-            containing puppet code for this service.
-            NB: caller is responsible for deletion
+            see: https://github.com/icy/pacapt
         """
-        assert lcd is not None
-        with api.lcd(lcd):
-            pfile = tempfile.mktemp(suffix='.tgz')
-            # build a local tarball to copy and unzip on the remote side
-            api.local('tar -czf {0} {1} '.format(pfile, puppet_dir))
-        return pfile
-
-    def _provision_puppet(self, provision_item, puppet_dir='puppet', extra_facts={}):
-        """ runs puppet on remote host.  puppet files must already have been copied """
-        service_data = self.template_data()
-        facts = self.facts
-        facts.update(**extra_facts)
-        return puppet.run_puppet(
-            provision_item,
-            parser=service_data['puppet_parser'],
-            facts=facts,
-            puppet_dir=puppet_dir,
-        )
-
-    def _bootstrap_puppet(self, force=False):
-        """ puppet itself is already installed at this point,
-            this sets up the provisioning dependencies
-        """
-        def _init_puppet(_dir):
-            if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
-                self.report("  puppet-librarian has already processed modules")
-                return
-            self.report("  puppet-librarian will install dependencies")
-            with api.cd(_dir):
-                api.run('librarian-puppet init')
-                api.run('librarian-puppet install --verbose')
-        self.report("  bootstrapping puppet dependencies on remote host")
-        puppet.run_puppet(
-            'puppet/modules/ymir/install_librarian.pp',
-            debug=self.template_data()['ymir_debug'])
-        _init_puppet("puppet")
-
-    def _install_puppet(self):
-        self.report("installing puppet")
-
-        FACTER_TARBALL_URL = 'http://downloads.puppetlabs.com/facter/facter-1.7.5.tar.gz'
-        PUPPET_TARBALL_URL = 'https://downloads.puppetlabs.com/puppet/puppet-3.4.3.tar.gz'
-        HIERA_TARBALL_URL = 'https://downloads.puppetlabs.com/hiera/hiera-1.3.0.tar.gz'
-
-        PUPPET_TARBALL_FILE = PUPPET_TARBALL_URL.split('/')[-1]
-        PUPPET_TARBALL_UNCOMPRESS_DIR = PUPPET_TARBALL_FILE.replace(
-            '.tar.gz', '')
-
-        FACTER_TARBALL_FILE = FACTER_TARBALL_URL.split('/')[-1]
-        FACTER_TARBALL_UNCOMPRESS_DIR = FACTER_TARBALL_FILE.replace(
-            '.tar.gz', '')
-
-        HIERA_TARBALL_FILE = HIERA_TARBALL_URL.split('/')[-1]
-        HIERA_TARBALL_UNCOMPRESS_DIR = HIERA_TARBALL_FILE.replace(
-            '.tar.gz', '')
-
-        def decompress(x):
-            """ unwraps tarball, removing the original file if it was successful """
-            if not api.run('tar -zxf "{0}"'.format(x)).failed:
-                api.run('rm "{0}"'.format(x))
-
-        def doit():
-            """ see https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html """
-            run_install = lambda: api.sudo('ruby install.rb')
-            download = lambda x: api.run(
-                'wget -O {0} {1}'.format(os.path.basename(x), x))
-
-            work_to_do = [
-                [FACTER_TARBALL_URL, FACTER_TARBALL_FILE,
-                    FACTER_TARBALL_UNCOMPRESS_DIR],
-                [PUPPET_TARBALL_URL, PUPPET_TARBALL_FILE,
-                    PUPPET_TARBALL_UNCOMPRESS_DIR],
-                [HIERA_TARBALL_URL, HIERA_TARBALL_FILE,
-                    HIERA_TARBALL_UNCOMPRESS_DIR],
-            ]
-
-            for url, tarball, _dir in work_to_do:
-                download(url)
-                decompress(tarball)
-                with api.cd(_dir):
-                    run_install()
-
-        self.report("installing puppet pre-reqs")
-        api.run('sudo apt-get install -y ruby-dev ruby-json > /dev/null')
-
-        # required for puppet --parser=future
-        api.sudo('gem install rgen')
-
+        if self._require_pacapt_already_run:
+            return  # optimization hack: let's only run once per process
+        self.report("checking remote side for pacapt "
+                    "(an OS-agnostic package managemer)")
         with api.quiet():
-            with api.settings(warn_only=True):
-                puppet_version = api.run('puppet --version')
-        puppet_installed = not puppet_version.failed
-        if puppet_installed:
-            puppet_version = puppet_version.strip().split('.')
-            puppet_version = map(int, puppet_version)
-            self.report("puppet is already installed")
-        else:
-            puppet_version = None
-            self.report("puppet not installed")
-            doit()
-        if puppet_version and puppet_version != [3, 4, 3]:
-            self.report(
-                "bad puppet version @ {0}, attempting uninstall".format(
-                    puppet_version))
-            pkgs = 'puppet facter hiera puppet-common'.split()
-            for pkg in pkgs:
-                self._remove_system_package(pkg)
-            doit()
+            remote_missing_pacapt = api.run('ls /usr/bin/pacapt').failed
+        if remote_missing_pacapt:
+            self.report("pacapt does not exist, installing it now")
+            local_pacapt_path = os.path.join(
+                os.path.dirname(ydata.__file__), 'pacapt')
+            self.put(local_pacapt_path, '/usr/bin', use_sudo=True)
+            api.sudo('chmod o+x /usr/bin/pacapt')
+        self._require_pacapt_already_run = True
+
+    def _update_system_packages(self, quiet=True):
+        """ """
+        self._require_pacapt()
+        quiet = '> /dev/null' if quiet else ''
+        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
+            return api.sudo('pacapt --noconfirm -Sy {0}'.format(quiet)).succeeded
+    _update_sys_packages = _update_system_packages
+
+    def _install_system_package(self, pkg_name, quiet=False):
+        """ FIXME: only works with ubuntu/debian """
+        self._require_pacapt()
+        quiet = '> /dev/null' if quiet else ''
+        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
+            return api.sudo('pacapt --noconfirm -S {0} {1}'.format(
+                pkg_name, quiet)).succeeded
+
+    def _remove_system_package(self, pkg_name, quiet=True):
+        self._require_pacapt()
+        quiet = '> /dev/null' if quiet else ''
+        return api.sudo('pacapt -R {0} {1}'.format(pkg_name, quiet)).succeeded
+        # """ FIXME: only works with ubuntu/debian """
+        # with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
+        #    return api.sudo('apt-get -y remove {0} {1}'.format(
+        #        pkg_name, '> /dev/null' if quiet else ''))
 
 
-class AbstractService(Reporter, PuppetMixin, FabricMixin):
+class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
     _schema = None
     _ymir_service_root = None
+    _status_computed = False
 
-    def __str__(self):
+    def __str__(self):  # pragma:nocover
         """ """
         try:
             return "<Service:{0}>".format(self._report_name())
@@ -409,14 +278,21 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
             self.list_log_files()
 
     def list_log_files(self):
+        """ """
         with self.ssh_ctx():
-            for remote_dir in self._service_data['log_dirs']:
-                print util.list_dir(remote_dir)
+            for file_or_dir in self._service_data['logs']:
+                if util.remote_path_exists(file_or_dir):
+                    result = api.sudo(
+                        'ls -l {0}'.format(file_or_dir), capture=True).strip()
+                    self.report(" + {0}".format(str(result)))
+                else:
+                    self.report(" - {0}".format(file_or_dir))
 
     def fabric_install(self):
         """ publish certain service-methods into the fabfile
             namespace. this method is responsible for
-            dynamically creating fabric commands.
+            dynamically creating fabric commands, and should
+            only be called from inside fabfiles
         """
         import fabfile
         for x in self.FABRIC_COMMANDS:
@@ -442,46 +318,20 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
         """ """
         self.report("installing git & build-essentials")
         with api.settings(warn_only=True):
-            r1 = api.run(
-                'sudo apt-get install -y git build-essential > /dev/null')
-        if r1.return_code != 0:
+            results = [
+                self._install_system_package('git', quiet=True),
+                self._install_system_package('build-essential', quiet=True)]
+        if not all(results):
             self.report(
                 'bad return code bootstrapping dev.. waiting and trying again')
             time.sleep(35)
             self._bootstrap_dev()
         self._install_puppet()
 
-    def _install_system_package(self, pkg_name, quiet=True):
-        """ FIXME: only works with ubuntu/debian """
-        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            return api.sudo('apt-get -y install {0} {1}'.format(
-                pkg_name, '> /dev/null' if quiet else ''))
-
-    def _remove_system_package(self, pkg_name, quiet=True):
-        """ FIXME: only works with ubuntu/debian """
-        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            return api.sudo('apt-get -y remove {0} {1}'.format(
-                pkg_name, '> /dev/null' if quiet else ''))
-
-    def _get_ubuntu_version(self):
-        """ """
-        self.report("detecting ubuntu version:")
-        try:
-            with api.quiet():
-                v = api.run('cat /etc/lsb-release|grep DISTRIB_RELEASE')
-            result = v.strip().split('=')[-1]
-            self.report("  version {0}".format(result))
-            return map(int, result.split('.'))
-        except Exception as e:
-            self.report(blue("not ubuntu! ") + str(e))
-            return []
-
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
         label = self._report_name()
         return util.report(label, msg, *args, **kargs)
-
-    _status_computed = False
 
     def _status(self):
         """ retrieves service status information.
@@ -510,7 +360,8 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
         return result
 
     def setup(self):
-        """ setup service (operation should be after 'create', before 'provision')"""
+        """ setup service (operation should be after
+            'create', before 'provision') """
         return self._setup(failures=0)
 
     def _setup(self, failures=0):
@@ -544,10 +395,10 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
 
     def _get_instance(self, strict=False):
         conn = self.conn
-        i = util.get_instance_by_name(self.NAME, conn)
+        i = util.get_instance_by_name(self._service_data['name'], conn)
         if strict and i is None:
             err = "Could not acquire instance! Is the name '{0}' correct?"
-            err = err.format(self.NAME)
+            err = err.format(self._service_data['name'])
             self.report(err)
             raise SystemExit(1)
         return i
@@ -631,8 +482,9 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
         status = instance.update()
         if status == 'running':
             self.report('  instance is running.')
-            self.report('  setting tag for "Name": {0}'.format(self.NAME))
-            instance.add_tag("Name", self.NAME)
+            self.report('  setting tag for "Name": {0}'.format(
+                self._service_data['name']))
+            instance.add_tag("Name", self._service_data['name'])
         else:
             self.report('Weird instance status: ', status)
             return None
@@ -715,11 +567,6 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
         self.report("  translated to: {0}".format(cmd))
         return api.local(cmd)
 
-    def _update_sys_packages(self):
-        """ must be run with ssh_ctx() """
-        self.report(" .. updating remote system package list")
-        api.run('sudo apt-get update > /dev/null')
-
     def setup_ip(self, ip):
         self.sync_tags()
         self.sync_buckets()
@@ -731,7 +578,7 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
             with api.lcd(self._ymir_service_root):
                 self._update_sys_packages()
                 self._bootstrap_dev()
-                self.copy_puppet()
+                self.copy_puppet(clean=True)
                 self._bootstrap_puppet(force=True)
                 for setup_item in self.SETUP_LIST:
                     self.report(' .. setup_list[{0}]: "{1}"'.format(
@@ -769,10 +616,11 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
     def sync_buckets(self, quiet=False):
         report = self.report if not quiet else NOOP
         buckets = self._service_data['s3_buckets']
+        report("synchronizing s3 buckets")
         if buckets:
-            report('setting up buckets for this service')
+            report('  buckets to create: {0}'.format(buckets))
         else:
-            self.report("no s3 buckets detected in service-definition")
+            self.report("  no s3 buckets mentioned in service-definition")
         conn = self._s3_conn
         tmp = {}
         for name in buckets:
@@ -783,18 +631,19 @@ class AbstractService(Reporter, PuppetMixin, FabricMixin):
     def sync_eips(self, quiet=False):
         """ synchronizes elastic IPs with service.json data """
         report = self.report if not quiet else lambda *args, **kargs: None
+        report("synchronizing elastic ip's")
         service_instance_id = self._status()['instance'].id
         eips = self.template_data()['elastic_ips']
         if not eips:
-            report('no elastic IPs detected in service definition')
+            report('  no elastic IPs mentioned in service-definition')
             return
-        addresses = [x for x in self.conn.get_all_addresses(
-        ) if x.public_ip in eips]
+        addresses = [x for x in self.conn.get_all_addresses()
+                     if x.public_ip in eips]
         for aws_address in addresses:
             report(" Address: {0}".format(aws_address))
             if aws_address.instance_id is None:
-                report(
-                    "   -> currently unassigned.  associating with this instance")
+                report("   -> currently unassigned.  "
+                       "associating with this instance")
                 aws_address.associate(instance_id=service_instance_id)
             elif aws_address.instance_id == service_instance_id:
                 report("   -> already associated with this service")

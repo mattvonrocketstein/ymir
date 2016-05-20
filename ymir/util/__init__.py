@@ -15,7 +15,7 @@ import boto.ec2
 from boto.provider import ProfileNotFoundError
 from boto.exception import EC2ResponseError
 from fabric import api
-
+from fabric.contrib.files import exists as remote_exists
 
 from ymir import data as ydata
 from .backports import TemporaryDirectory
@@ -25,6 +25,8 @@ NOOP = lambda *args, **kargs: None
 __all__ = [
     x.__name__ for x in [
         TemporaryDirectory, ]]
+
+remote_path_exists = remote_exists
 
 
 def report(label, msg, *args, **kargs):
