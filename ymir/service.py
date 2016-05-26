@@ -36,7 +36,7 @@ class FabricMixin(object):
         'provision', 'put',
         'reboot', 'run',
         's3', 'service', 'setup',
-        'shell', 'show', 'show_facts', 'show_instances',
+        'shell', 'show', 'show_facts',
         'ssh', 'status',
         'supervisor', 'supervisorctl',
         'sync_eips', 'sync_elastic_ips',
@@ -695,7 +695,3 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         facts = sorted([[k, v] for k, v in self.facts.items()])
         for k, v in facts:
             print ' ', k, '=>', v
-
-    def show_instances(self):
-        """ show all ec2 instances """
-        util.show_instances(conn=self.conn)
