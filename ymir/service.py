@@ -339,7 +339,7 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
             retrieve information for use without actually displaying it
         """
         tdata = self._service_data
-        if not self._status_computed and tdata['ymir_debug']:
+        if not self._status_computed and self._debug_mode:
             self.report("handshaking with AWS..")
         name = tdata['name']
         instance = util.get_instance_by_name(name, self.conn)
@@ -567,13 +567,16 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         self.report("  translated to: {0}".format(cmd))
         return api.local(cmd)
 
+    @property
+    def _debug_mode(self):
+        return self.template_data()['ymir_debug']
+
     def setup_ip(self, ip):
         self.sync_tags()
         self.sync_buckets()
         self.sync_eips()
         self.report('installing puppet & puppet deps', section=True)
         self._clean_puppet_tmp_dir()
-        ymir_debug = self.template_data()['ymir_debug']
         with self.ssh_ctx():
             with api.lcd(self._ymir_service_root):
                 self._update_sys_packages()
@@ -589,7 +592,7 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
                         setup_item,
                         puppet_dir='puppet',
                         facts=self.facts,
-                        debug=ymir_debug,)
+                        debug=self._debug_mode,)
 
         self.report("Setup complete.  Now run `fab provision`")
 

@@ -85,11 +85,11 @@ def load_service_from_json(filename=None, quiet=False):
     service_json_file = filename or util.get_or_guess_service_json_file()
     report('ymir', 'service.json is {0}'.format(
         util.unexpand(service_json_file)))
-    obj = _load_service_from_json_helper(
+    service_obj = _load_service_from_json_helper(
         service_json_file=service_json_file,
         service_json=load_json(service_json_file),
         quiet=quiet)
-    return obj
+    return service_obj
 
 # NB: alias is frequently imported in fabfiles to avoid cluttering fabric
 # namespace
@@ -119,7 +119,8 @@ def _load_service_from_json_helper(service_json_file=None,
     # from ymir.beanstalk import ElasticBeanstalkService
     from ymir.service import AbstractService
     chosen_schema = yschema.choose_schema(service_json, quiet=True)
-    validation.validate(service_json_file, chosen_schema, simple=True)
+    validation.validate(service_json_file, chosen_schema,
+                        simple=True, quiet=quiet)
     report = NOOP if (quiet or service_json.get(
         "ymir_debug", False)) else base_report
     # report("ymir","ymir service.json version:")

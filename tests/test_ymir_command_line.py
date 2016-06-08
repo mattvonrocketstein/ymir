@@ -2,6 +2,7 @@
 import os
 import inspect
 import contextlib
+import pytest
 
 import mock
 from fabric import api
@@ -102,3 +103,20 @@ def test_skeleton_service_validation(mock_validate):
         commands.ymir_validate(
             addict.Dict(service_json=ctx.service_json))
         mock_validate.assert_called_with(ctx.service_json, simple=False)
+    with test_common.demo_service() as ctx:
+        with pytest.raises(SystemExit):
+            commands.ymir_validate(
+                addict.Dict(service_json=None))
+
+
+@test_common.mock_aws
+def test_sg_command():  # mock_validate):
+    # by default the `ymir sg` command should NOT work with skeleton,
+    # because there is no SSH rule defined
+    with test_common.demo_service() as ctx:
+        with pytest.raises(SystemExit):
+            commands.ymir_sg(addict.Dict(sg_json=ctx.sg_json,))
+        sg_json = ctx.get_sg_json()[0]
+        sg_json['rules'].append(['tcp', 22, 22, '0.0.0.0/22'])
+        ctx.rewrite_sg_json([sg_json])
+        commands.ymir_sg(addict.Dict(sg_json=ctx.sg_json,))
