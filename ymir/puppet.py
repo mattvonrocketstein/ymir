@@ -12,7 +12,7 @@ import tempfile
 from fabric import api
 from fabric.contrib.files import exists
 from fabric.contrib.project import rsync_project
-
+from fabric.colors import blue
 from ymir.util import puppet as util_puppet
 
 PUPPET_URL = 'http://downloads.puppetlabs.com'
@@ -30,6 +30,10 @@ HIERA_TARBALL_UNCOMPRESS_DIR = HIERA_TARBALL_FILE.replace('.tar.gz', '')
 class PuppetMixin(object):
 
     """ """
+
+    @property
+    def _supports_puppet(self):
+        return self._service_data['ymir_build_puppet']
 
     @property
     def _puppet_metadata(self):
@@ -137,19 +141,26 @@ class PuppetMixin(object):
         self.report("  bootstrapping puppet dependencies on remote host")
         util_puppet.run_puppet(
             'puppet/modules/ymir/install_librarian.pp',
-            debug=self.template_data()['ymir_debug'])
+            debug=self._debug_mode)
         _init_puppet("puppet")
 
     def _install_puppet(self):
+        """ """
+        # puppet build more or less follows the instructions here:
+        #   https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html
+        self.report("should we build puppet on the remote side? {0}".format(
+            blue(str(self._supports_puppet))))
+        if not self._supports_puppet:
+            return
         self.report("installing puppet")
 
         def decompress(x):
-            """ helper unwraps tarball, removing the
-                original file if it was successful """
+            """ helper to unwrap tarball, removing the
+                original file if it was successful
+            """
             if not api.run('tar -zxf "{0}"'.format(x)).failed:
                 api.run('rm "{0}"'.format(x))
 
-        # https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html
         def doit():
             run_install = lambda: api.sudo('ruby install.rb')
             download = lambda x: api.run(

@@ -8,7 +8,7 @@
     "app_name": "AppName",
     "env_name": "EnvName",
     "service_name": "ServiceName",
-    "ymir_debug": false,
+    "ymir_debug": true,
     "s3_buckets": [],
 
     // Sets the name for this service.

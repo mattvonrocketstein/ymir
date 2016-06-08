@@ -119,11 +119,11 @@ def ymir_list(args):
         which lists AWS resources associated with the current
         $AWS_PROFILE
     """
-
     if args.keypairs:
         print util.get_keypair_names()
     else:
-        print "not sure what to list"
+        msg = "not sure what to list."
+        raise SystemExit(msg)
 
 
 def ymir_keypair(args):
