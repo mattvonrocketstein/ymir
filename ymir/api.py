@@ -141,5 +141,5 @@ def _load_service_from_json_helper(service_json_file=None,
     ServiceFromJSON.template_data = lambda himself, **kargs: service_json
 
     service_json.update(service_json['service_defaults'])
-    service_json.update(host=obj._host())
+    #service_json.update(host=obj._host())
     return obj
