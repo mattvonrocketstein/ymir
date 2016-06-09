@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
-""" ymir.service
+""" ymir.service.base
 """
 import os
 import time
+import socket
 import pprint
 import urlparse
 import webbrowser
@@ -124,8 +124,15 @@ class FabricMixin(object):
         self.report('connecting with mosh')
         service_data = self.template_data()
         util.mosh(self.status()['ip'],
-                  username=service_data['username'],
+                  username=self._username,
                   pem=service_data['pem'])
+
+    @property
+    def _username(self):
+        """ username data is accessible only as a property because
+            it must overridden for i.e. vagrant-based services
+        """
+        return self.template_data()['username']
 
     @util.require_running_instance
     def ssh(self):
@@ -133,7 +140,7 @@ class FabricMixin(object):
         self.report('connecting with ssh')
         service_data = self.template_data()
         util.ssh(self._status()['ip'],
-                 username=service_data['username'],
+                 username=self._username,
                  pem=service_data['pem'],)
 
     @util.require_running_instance
@@ -172,12 +179,32 @@ class FabricMixin(object):
             self.report('no instance is running for this'
                         ' service, start (or create) it first')
 
+    def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
+        """ copy puppet code to remote host (refreshes any dependencies) """
+        lcd = lcd or self._ymir_service_root
+        with self.ssh_ctx():
+            remote_user_home = '/home/' + self._username
+            pfile = self._compress_local_puppet_code(puppet_dir, lcd=lcd)
+            msg = '  flushing remote puppet codes and refreshing'
+            self.report(msg)
+            try:
+                api.put(pfile, remote_user_home)
+                with api.cd(remote_user_home):
+                    if clean:
+                        # this undoes `ymir setup` phase, ie the installation
+                        # of puppet deps mentioned in metadata.json.
+                        api.run('rm -rf "{0}"'.format(puppet_dir))
+                    api.run(
+                        'tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
+            finally:
+                api.local('rm "{0}"'.format(pfile))
+
     @util.require_running_instance
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
         self.report('rebooting service')
         with self.ssh_ctx():
-            api.sudo('reboot')
+            api.run('sudo reboot')
 
     def s3(self):
         """ show summary of s3 information for this service """
@@ -356,7 +383,7 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
                     ip=instance.ip_address,
                     private_ip=instance.private_ip_address,
                 ))
-        self._status_computed = True
+        self._status_computed = result
         return result
 
     def setup(self):
@@ -395,20 +422,20 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
 
     def _get_instance(self, strict=False):
         conn = self.conn
-        i = util.get_instance_by_name(self._service_data['name'], conn)
+        name = self.template_data()['name']
+        i = util.get_instance_by_name(name, conn)
         if strict and i is None:
             err = "Could not acquire instance! Is the name '{0}' correct?"
-            err = err.format(self._service_data['name'])
+            err = err.format(name)
             self.report(err)
             raise SystemExit(1)
         return i
 
-    @util.require_running_instance
     def ssh_ctx(self):
         service_data = self.template_data()
         return util.ssh_ctx(
             self._status()['ip'],
-            user=service_data['username'],
+            user=self._username,
             pem=service_data['pem'])
 
     def _restart_supervisor(self):
@@ -572,9 +599,7 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         return self.template_data()['ymir_debug']
 
     def setup_ip(self, ip):
-        self.sync_tags()
-        self.sync_buckets()
-        self.sync_eips()
+        """ """
         self.report('installing puppet & puppet deps', section=True)
         self._clean_puppet_tmp_dir()
         with self.ssh_ctx():
@@ -583,9 +608,10 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
                 self._bootstrap_dev()
                 self.copy_puppet(clean=True)
                 self._bootstrap_puppet(force=True)
-                for setup_item in self.SETUP_LIST:
+                setup_list = self.template_data()['setup_list']
+                for setup_item in setup_list:
                     self.report(' .. setup_list[{0}]: "{1}"'.format(
-                        self.SETUP_LIST.index(setup_item),
+                        setup_list.index(setup_item),
                         setup_item
                     ))
                     puppet.run_puppet(
@@ -698,3 +724,10 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         facts = sorted([[k, v] for k, v in self.facts.items()])
         for k, v in facts:
             print ' ', k, '=>', v
+
+    @staticmethod
+    def is_port_open(host, port):
+        """ TODO: refactor into ymir.utils. this is used by ymir.checks """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex((host, int(port)))
+        return result == 0

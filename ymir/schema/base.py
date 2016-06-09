@@ -5,64 +5,28 @@
 from voluptuous import Schema as _Schema
 from voluptuous import Required, Optional, Undefined, Invalid
 
-from .util import list_of_strings
 
-_validate_sl_field = lambda lst: list_of_strings(lst, key='setup_list')
-_validate_sg_field = lambda lst: list_of_strings(lst, key='security_groups')
-_validate_pl_field = lambda lst: list_of_strings(lst, key='provision_list')
+from ymir.schema import data
+from ymir.schema import validators
 
-
-def _validate_puppet_parser(x):
-    """ """
-    if x != 'future':
-        err = "puppet_parser has only one acceptable value: 'future'"
-        raise Invalid(err)
-
-AWSSchema = {
-    Optional("s3_buckets", default=[]): list_of_strings,
-    Optional("elastic_ips", default=[]): list_of_strings,
-    Optional("reservation_extras", default={}): dict,
-    Required("security_groups", default=[]): _validate_sg_field,
-    Required("key_name"): unicode,
-}
-ProvisionSchema = {
-    Required("setup_list", default=[]): _validate_sl_field,
-    Required("provision_list", default=[]): _validate_pl_field,
-    Optional("puppet_parser", default="future"): _validate_puppet_parser,
-}
-BaseSchema = {
-    Required("name"): unicode,
-    Required("instance_type"): unicode,
-    Required("service_name"): unicode,
-    Required("service_description"): unicode,
-    Required("health_checks"): dict,
-    Required("username"): unicode,
-    Required("pem"): unicode,
-    Optional("tags", default=[]): list_of_strings,
-    Optional("logs", default=[]): list_of_strings,
-    Optional("ymir_debug", default=True): bool,
-    Optional("ymir_build_puppet", default=True): bool,
-    Optional("volumes", default=[]): dict,
-    Optional("org_name", default="org"): unicode,
-    Optional("app_name", default="app"): unicode,
-    Optional("service_defaults", default={}): dict,
-    Optional("env_name", default='env'): unicode,
-    Optional("aws_region"): unicode,
-}
 SupervisorSchema = {
     Optional("supervisor_user", default='admin'): unicode,
     Optional("supervisor_pass", default='676be646-c477-11e5-bfdc-0800272dfc6a'): unicode,
-    Optional("supervisor_port", default='9001'): lambda x: isinstance(x, (unicode, int)),
+    Optional("supervisor_port", default='9001'): validators.string_or_int,
 }
-EC2Schema = BaseSchema.copy()
+
+VagrantSchema = data.BASE_DATA.copy()
+VagrantSchema.update(data.PROVISION_DATA)
+
+EC2Schema = data.BASE_DATA.copy()
 EC2Schema.update(SupervisorSchema)
-EC2Schema.update(AWSSchema)
-EC2Schema.update(ProvisionSchema)
+EC2Schema.update(data.AWS_DATA)
+EC2Schema.update(data.PROVISION_DATA)
 EC2Schema.update({
     Required("ami"): unicode,
 })
 
-BeanstalkSchema = BaseSchema.copy()
+BeanstalkSchema = data.BASE_DATA.copy()
 BeanstalkSchema.update({
     Required("aws_secret_key"): unicode,
     Required("aws_access_key"): unicode,
@@ -81,6 +45,18 @@ class Schema(_Schema):
         return "<Schema:{0}>".format(self.schema_name)
     __repr__ = __str__
 
+    def get_service_class(self, service_json):
+        from ymir.service import AmazonService, VagrantService
+        _map = {
+            ('vagrant',): VagrantService,
+            }
+        kls = AmazonService
+        for itypes,proposed_kls in _map.items():
+            if service_json['instance_type'] in itypes:
+                kls = proposed_kls
+                break
+        return kls
+
     def get_field(self, name):
         return [x for x in self.schema.keys() if str(x) == name][0]
 
@@ -92,7 +68,7 @@ class Schema(_Schema):
     def get_default(self, name):
         """ """
         default = None
-        tmp = [k for k in BaseSchema.keys() if str(k) == name]
+        tmp = [k for k in data.BASE_DATA.keys() if str(k) == name]
         if tmp:
             default = tmp[0].default
             if default == Undefined:

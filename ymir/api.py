@@ -2,12 +2,14 @@
 """ ymir.api
 """
 import os
+
 import demjson
+from fabric.colors import yellow
+from voluptuous import Optional, Undefined
 
 from ymir import util
 from ymir.base import report as base_report
 from ymir import schema as yschema
-from voluptuous import Optional, Undefined
 
 NOOP = util.NOOP
 
@@ -119,26 +121,15 @@ def _load_service_from_json_helper(service_json_file=None,
     # from ymir.beanstalk import ElasticBeanstalkService
     from ymir.service import AbstractService
     chosen_schema = yschema.choose_schema(service_json, quiet=True)
-    validation.validate(service_json_file, chosen_schema,
-                        simple=True, quiet=quiet)
-    report = NOOP if (quiet or service_json.get(
-        "ymir_debug", False)) else base_report
-    # report("ymir","ymir service.json version:")
+    validation.validate(service_json_file, chosen_schema, simple=True)
+    report = NOOP if quiet else base_report
+    # report("ymir", "ymir service.json version:")
     report('ymir.api', 'loading service object from description')
-    # dynamically create the service instance's class
-    dct = dict([[x.upper(), y] for x, y in service_json.items()])
-    # NB: reflection has to happen prior to class creation, otherwise
-    # kls.__name__ is wrong
-    service_json = _reflect(service_json=service_json, simple=True)
     classname = str(service_json["name"]).lower()
-    # if chosen_schema == yschema.eb_schema:
-    #    BaseService = ElasticBeanstalkService
-    # else:
-    BaseService = AbstractService
-
+    BaseService = chosen_schema.get_service_class(service_json)
     report('ymir.api', 'chose service class: {0}'.format(
-        BaseService.__name__))
-    ServiceFromJSON = type(classname, (BaseService,), dct)
+        yellow(BaseService.__name__)))
+    ServiceFromJSON = type(classname, (BaseService,), {})
     obj = ServiceFromJSON(service_root=os.path.dirname(service_json_file))
     obj._schema = chosen_schema
 

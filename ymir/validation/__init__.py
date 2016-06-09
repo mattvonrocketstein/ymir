@@ -5,9 +5,12 @@ import os
 import logging
 
 import voluptuous
+
 from fabric import api
 from fabric.colors import red, green
 from peak.util.imports import lazyModule
+
+from fabric.colors import red, blue, yellow
 
 from ymir import util
 from ymir import schema as yschema
@@ -212,7 +215,7 @@ def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
     errors, messages = [], []
     report = report if not quiet else util.NOOP
     if schema:
-        report('validating file using explicit schema: {0}'.format(schema))
+        report('validating file using explicit schema: {0}'.format(yellow(schema.schema_name)))
     err = 'got {0} instead of string for fname'.format(fname)
     assert isinstance(fname, basestring), err
     tmp = yapi.load_json(fname)

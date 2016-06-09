@@ -49,6 +49,7 @@ def require_running_instance(fxn):
         if cm_data['status'] == 'running':
             return fxn(self, *args, **kargs)
         else:
+            self.report("need an instance to run `{0}` command".format(fxn.__name__))
             self.report("no instance found!")
             return None
     return newf
@@ -85,10 +86,12 @@ def mosh(ip, username='ubuntu', pem=None):
         return api.local(cmd)
 
 
-def ssh(ip, username='ubuntu', pem=None):
+def ssh(ip, username='ubuntu', port='22', pem=None):
     """ connect to remote host using mosh """
     assert ip is not None
-    cmd = "ssh -l {0} {1}".format(username, ip)
+    if ':' in ip:
+        ip, port = ip.split(':')
+    cmd = "ssh -p {2} -l {0} {1}".format(username, ip, port)
     if pem is not None:
         cmd += ' -i {0}'.format(pem)
     with api.settings(warn_only=True):
