@@ -68,10 +68,8 @@ class PuppetMixin(object):
 
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
-        service_data = self._service_data
         lcd = lcd or self._ymir_service_root
-        remote_user_home = '/home/' + service_data['username']
-        # pfile = self._compress_local_puppet_code(puppet_dir, lcd=lcd)
+        remote_user_home = '/home/' + self._username
         with self.ssh_ctx():
             self.report('  flushing remote puppet codes and refreshing')
             rsync_project(

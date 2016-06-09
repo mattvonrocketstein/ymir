@@ -22,11 +22,8 @@ from .backports import TemporaryDirectory
 
 NOOP = lambda *args, **kargs: None
 
-__all__ = [
-    x.__name__ for x in [
-        TemporaryDirectory, ]]
-
 remote_path_exists = remote_exists
+__all__ = [x.__name__ for x in [TemporaryDirectory, NOOP]]
 
 
 def report(label, msg, *args, **kargs):
@@ -49,7 +46,8 @@ def require_running_instance(fxn):
         if cm_data['status'] == 'running':
             return fxn(self, *args, **kargs)
         else:
-            self.report("need an instance to run `{0}` command".format(fxn.__name__))
+            self.report(
+                "need an instance to run `{0}` command".format(fxn.__name__))
             self.report("no instance found!")
             return None
     return newf

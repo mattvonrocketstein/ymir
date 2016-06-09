@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ ymir.service.base
 """
 import os
@@ -336,9 +337,8 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
                 self.report("ERROR:")
                 raise SystemExit(err)
 
-    def __init__(self, conn=None, service_root=None, ):
-        """"""
-        self.conn = conn or util.get_conn()
+    def __init__(self, service_root=None, ):
+        """ """
         self._ymir_service_root = service_root
 
     def _bootstrap_dev(self):
@@ -627,10 +627,10 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         """ """
         json = self.template_data(simple=True)
         service_defaults = json['service_defaults']
-        service_defaults.update(
-            dict(supervisor_user=json['supervisor_user'],
-                 supervisor_pass=json['supervisor_pass'],
-                 supervisor_port=json['supervisor_port']))
+        # service_defaults.update(
+        #    dict(supervisor_user=json['supervisor_user'],
+        #         supervisor_pass=json['supervisor_pass'],
+        #         supervisor_port=json['supervisor_port']))
         for fact in service_defaults:
             tmp = service_defaults[fact]
             if isinstance(tmp, basestring) and ('{' in tmp or '}' in tmp):

@@ -3,11 +3,12 @@
 """
 
 from voluptuous import Schema as _Schema
-from voluptuous import Required, Optional, Undefined, Invalid
+from voluptuous import Required, Optional, Undefined
 
 
 from ymir.schema import data
 from ymir.schema import validators
+from ymir.service import AmazonService, VagrantService
 
 SupervisorSchema = {
     Optional("supervisor_user", default='admin'): unicode,
@@ -46,12 +47,12 @@ class Schema(_Schema):
     __repr__ = __str__
 
     def get_service_class(self, service_json):
-        from ymir.service import AmazonService, VagrantService
+        """ """
         _map = {
             ('vagrant',): VagrantService,
-            }
+        }
         kls = AmazonService
-        for itypes,proposed_kls in _map.items():
+        for itypes, proposed_kls in _map.items():
             if service_json['instance_type'] in itypes:
                 kls = proposed_kls
                 break
