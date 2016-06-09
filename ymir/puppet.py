@@ -75,6 +75,7 @@ class PuppetMixin(object):
             rsync_project(
                 os.path.join(remote_user_home, puppet_dir),
                 local_dir=os.path.join(lcd, puppet_dir, '*'),
+                ssh_opts="-o StrictHostKeyChecking=no",
                 delete=clean,
                 exclude=['*.pyc'])
 

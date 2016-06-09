@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-from ymir.schema.util import (
+from ymir.schema.validators import (
     list_of_dicts, Invalid, list_of_strings)
 
 

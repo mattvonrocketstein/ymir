@@ -7,8 +7,9 @@
     boto, & puppet.
 
 """
-from ymir import loom
-from .api import load_service_from_json, _load_service_from_json
 
+from .api import load_service_from_json, _load_service_from_json
+# from ymir import loom
 __all__ = [x.__name__ for x in [
-    loom, load_service_from_json, _load_service_from_json]]
+    # loom,
+    load_service_from_json, _load_service_from_json]]

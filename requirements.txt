@@ -1,5 +1,7 @@
+#
 # requirements.txt for ymir
 #
+pycrypto
 Fabric==1.10.1
 boto==2.36.0
 requests==2.5.1

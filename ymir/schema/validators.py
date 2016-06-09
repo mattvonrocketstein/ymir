@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """ ymir.schema.validators
 """
 
-from voluptuous import Invalid  # Required, Optional, Undefined
+from voluptuous import Invalid
 
 
 def list_of_dicts(lst, key=None):
@@ -35,6 +36,7 @@ string_or_int = lambda x: isinstance(x, (unicode, int))
 _validate_sl_field = lambda lst: list_of_strings(lst, key='setup_list')
 _validate_sg_field = lambda lst: list_of_strings(lst, key='security_groups')
 _validate_pl_field = lambda lst: list_of_strings(lst, key='provision_list')
+
 
 def _validate_puppet_parser(x):
     """ """

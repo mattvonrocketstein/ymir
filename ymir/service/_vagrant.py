@@ -1,4 +1,8 @@
-"""
+# -*- coding: utf-8 -*-
+""" ymir.service._vagrant
+
+    this module is prefixed with an underscore to avoid confusion with
+    the module from python-vagrant.
 """
 import copy
 import vagrant as _vagrant
@@ -9,8 +13,12 @@ from .base import AbstractService
 class VagrantService(AbstractService):
 
     _vagrant = None
-    FABRIC_COMMANDS = copy.copy(AbstractService.FABRIC_COMMANDS)
-    FABRIC_COMMANDS.remove('mosh')
+    FABRIC_COMMANDS = copy.copy(AbstractService.FABRIC_COMMANDS) + \
+        ['up']
+
+    def up(self):
+        """ shortcut for vagrant up """
+        self.vagrant.up()
 
     def _status(self):
         """ retrieves service status information.
@@ -19,7 +27,7 @@ class VagrantService(AbstractService):
         """
         if not self._status_computed:
             self.report("handshaking with Vagrant..")
-        ip=None
+        ip = None
         result = dict(
             instance=None, ip=ip,
             status='terminated?',
@@ -28,15 +36,14 @@ class VagrantService(AbstractService):
         )
         status = self.vagrant and self.vagrant.status()
         if status:
-            # a list with potentially many items, depending
-            # on if the Vagrantfile supports multi-vm
+            # vagrant.status() is a list with potentially many items,
+            # depending on if the Vagrantfile supports multi-vm
             status = status.pop()
-            if status.state not in ['poweroff']:
+            if status.state not in ['poweroff', 'not_created']:
                 ip = self.vagrant.hostname()
             result.update(
                 dict(
-                    instance=str(self.vagrant),#instance,
-                    #tags=instance.tags,
+                    instance=str(self.vagrant),
                     status=status.state,
                     provider=status.provider,
                     name=status.name,
@@ -45,12 +52,24 @@ class VagrantService(AbstractService):
         self._status_computed = result
         return result
 
+    def create(self, force=False):
+        """ create new instance of this service ('force' defaults to False)"""
+        self.report('creating vagrant instance', section=True)
+        state = self._status()['status']
+        assert not force, 'force=True not supported for vagrant yet'
+        if state in ['not_created']:
+            self.vagrant.up()
+        else:
+            self.report("already created!  status={0}".format(state))
 
     @property
     def vagrant(self):
         if not self._vagrant:
             self.report("caching vagrant handle..")
-            self._vagrant = _vagrant.Vagrant()
+            self._vagrant = _vagrant.Vagrant(
+                quiet_stdout=False,
+                quiet_stderr=False,)
+
         return self._vagrant
 
     def _get_instance(self, strict=False):
@@ -68,9 +87,9 @@ class VagrantService(AbstractService):
     def ssh_ctx(self):
         """ """
         return util.ssh_ctx(
-                self._hostname_port,
-                user=self._username,
-                pem=self._pem,)
+            self._hostname_port,
+            user=self._username,
+            pem=self._pem,)
 
     @property
     def _username(self):

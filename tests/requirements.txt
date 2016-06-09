@@ -1,14 +1,10 @@
-# requirements.txt for ymir
 #
-fabric
-boto==2.36.0
-requests==2.5.1
-awsebcli==3.1.2
+# requirements.txt for ymir tests
+#
+addict
 pytest
 coverage==3.7.1
 pytest-cov
 pytest-xdist
 mock
 unittest2
-pycrypto
-addict

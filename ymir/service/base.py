@@ -8,7 +8,6 @@ import pprint
 import urlparse
 import webbrowser
 import logging
-import boto
 
 import fabric
 from fabric import api
@@ -22,27 +21,27 @@ from ymir.puppet import PuppetMixin
 from ymir.caching import cached
 from ymir import data as ydata
 
-NOOP = lambda *args, **kargs: None
 
 # capture warnings because Fabric and
 # it's dependencies can be pretty noisy
 logger = logging.getLogger(__name__)
 logging.captureWarnings(True)
 
+# disable stricthostkey checking everywhere in fabric
+api.env.disable_known_hosts = True
+
 
 class FabricMixin(object):
     FABRIC_COMMANDS = [
         'check', 'create', 'get',
-        'integration_test', 'logs', 'mosh',
+        'integration_test', 'logs',
         'provision', 'put',
         'reboot', 'run',
-        's3', 'service', 'setup',
+        'service', 'setup',
         'shell', 'show', 'show_facts',
         'ssh', 'status',
         'supervisor', 'supervisorctl',
-        'sync_eips', 'sync_elastic_ips',
-        'sync_tags',
-        'tail', 'terminate',
+        'tail',
     ]
 
     def status(self):
@@ -53,43 +52,6 @@ class FabricMixin(object):
         for k, v in result.items():
             self.report('  {0}: {1}'.format(k, v))
         return result
-
-    @util.require_running_instance
-    def sync_tags(self):
-        """ update aws instance tags from service.json `tags` field """
-        self.report('updating instance tags: ')
-        json = self.template_data(simple=True)
-        tags = dict(
-            description=json.get('service_description', ''),
-            org=json.get('org_name', ''),
-            app=json.get('app_name', ''),
-            env=json.get("env_name", ''),
-        )
-        for tag in json.get('tags', []):
-            tags[tag] = 'true'
-        for tag in tags:
-            if not tags[tag]:
-                tags.pop(tag)
-        self.report('  {0}'.format(tags.keys()))
-        self._instance.add_tags(tags)
-
-    @util.require_running_instance
-    def terminate(self, force=False):
-        """ terminate this service (delete from ec2) """
-        instance = self._instance
-        self.report("{0} slated for termination.".format(instance))
-        if force:
-            return self.conn.terminate_instances(
-                instance_ids=[instance.id])
-        else:
-            msg = ("This will terminate the instance {0} ({1}) and can "
-                   "involve data loss.  Are you sure? [y/n] ")
-            answer = None
-            while answer not in ['y', 'n']:
-                answer = raw_input(msg.format(
-                    instance, self._service_data['name']))
-            if answer == 'y':
-                self.terminate(force=True)
 
     @util.require_running_instance
     def tail(self, filename):
@@ -118,15 +80,6 @@ class FabricMixin(object):
         """
         with self.ssh_ctx():
             return api.get(fname, local_path=local_path, use_sudo=True)
-
-    @util.require_running_instance
-    def mosh(self):
-        """ connect to this service with mosh """
-        self.report('connecting with mosh')
-        service_data = self.template_data()
-        util.mosh(self.status()['ip'],
-                  username=self._username,
-                  pem=service_data['pem'])
 
     @property
     def _username(self):
@@ -207,19 +160,6 @@ class FabricMixin(object):
         with self.ssh_ctx():
             api.run('sudo reboot')
 
-    def s3(self):
-        """ show summary of s3 information for this service """
-        buckets = self.sync_buckets(quiet=True).items()
-        if not buckets:
-            self.report("this service is not using S3 buckets")
-        for bname, bucket in buckets:
-            keys = [k for k in bucket]
-            self.report("  {0} ({1} items) [{2}]".format(
-                bname, len(keys), bucket.get_acl()))
-            for key in keys:
-                print ("  {0} (size {1}) [{2}]".format(
-                    key.name, key.size, key.get_acl()))
-
 
 class PackageMixin(object):
     """ """
@@ -265,10 +205,6 @@ class PackageMixin(object):
         self._require_pacapt()
         quiet = '> /dev/null' if quiet else ''
         return api.sudo('pacapt -R {0} {1}'.format(pkg_name, quiet)).succeeded
-        # """ FIXME: only works with ubuntu/debian """
-        # with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-        #    return api.sudo('apt-get -y remove {0} {1}'.format(
-        #        pkg_name, '> /dev/null' if quiet else ''))
 
 
 class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
@@ -637,49 +573,6 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
                 raise SystemExit(
                     "facts should not contain mustaches: {0}".format(tmp))
         return service_defaults
-
-    @property
-    def _s3_conn(self):
-        return boto.connect_s3()
-
-    def sync_buckets(self, quiet=False):
-        report = self.report if not quiet else NOOP
-        buckets = self._service_data['s3_buckets']
-        report("synchronizing s3 buckets")
-        if buckets:
-            report('  buckets to create: {0}'.format(buckets))
-        else:
-            self.report("  no s3 buckets mentioned in service-definition")
-        conn = self._s3_conn
-        tmp = {}
-        for name in buckets:
-            report("  setting up s3 bucket: {0}".format(name))
-            tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
-        return tmp
-
-    def sync_eips(self, quiet=False):
-        """ synchronizes elastic IPs with service.json data """
-        report = self.report if not quiet else lambda *args, **kargs: None
-        report("synchronizing elastic ip's")
-        service_instance_id = self._status()['instance'].id
-        eips = self.template_data()['elastic_ips']
-        if not eips:
-            report('  no elastic IPs mentioned in service-definition')
-            return
-        addresses = [x for x in self.conn.get_all_addresses()
-                     if x.public_ip in eips]
-        for aws_address in addresses:
-            report(" Address: {0}".format(aws_address))
-            if aws_address.instance_id is None:
-                report("   -> currently unassigned.  "
-                       "associating with this instance")
-                aws_address.associate(instance_id=service_instance_id)
-            elif aws_address.instance_id == service_instance_id:
-                report("   -> already associated with this service")
-            else:
-                report("   -> assigned to another instance {0}! (that seems bad)".format(
-                    aws_address.instance_id))
-    sync_elastic_ips = sync_eips
 
     def sudo(self, *args, **kargs):
         with self.ssh_ctx():
