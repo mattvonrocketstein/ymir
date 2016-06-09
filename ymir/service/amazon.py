@@ -8,11 +8,10 @@ from ymir.service.base import AbstractService
 
 class AmazonService(AbstractService):
     """ """
-
-    def __init__(self, conn=None, **kargs):
+    def __init__(self, conn=None, **kargs ):
         """"""
-        super(AmazonService, self).__init__(**kargs)
         self.conn = conn or util.get_conn()
+        super(AmazonService,self).__init__(**kargs)
 
     def setup_ip(self, ip):
         """ """

@@ -141,7 +141,6 @@ def get_conn(key_name=None, region='us-east-1'):
                "ProfileNotFound.  Set AWS_PROFILE environment "
                "variable, or use ~/.boto, then try again.  Original"
                " Exception follows: {1}")
-        raise SystemExit(err.format(os.environ.get('AWS_PROFILE'), str(exc)))
     if key_name is not None:
         keypair = conn.get_key_pair(key_name)
         if keypair is None:
