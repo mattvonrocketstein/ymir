@@ -1,0 +1,72 @@
+//
+// vagrant.json
+//
+//   This file configures vagrant support for ymir.
+//
+//   See also: mattvonrocketstein.github.io/ymir/vagrant
+//
+{
+    // display extra debugging information
+    "ymir_debug": true,
+
+    // display extra debugging information
+    "ymir_build_puppet": false,
+
+    // Sets the namespace for this service.
+    // This is currently unused for vagrant-based configs,
+    // but these variables are potentially useful for templating.
+    "org_name": "ymir",
+    "app_name": "demos",
+    "env_name": "dev",
+    "service_name": "cabot",
+
+    "logs": [
+        // declare logfile locations on this service
+        // this can be used to tail/retrieve logs.
+    ],
+
+    // Sets the name for this service.
+    // this will be used in AWS tags: choose wisely
+    // for readability and any logging you add later
+    // Suggested format: "org_name-app_name-env_name"
+    "name" : "cabot-demo",
+
+    "service_description": "demo service for vagrant",
+
+    // NB: instance_type for vagrant configs should always be "vagrant"
+    "instance_type"   : "vagrant",
+
+    // path specifying the file which is the main entry point for puppet code
+    // this file will be used only after the dependencies mentioned in
+    // metadata.json have been installed.
+    "setup_list" : [
+    ],
+
+    // A list of service-specific puppet files to execute during
+    // provisioning of this service.  By the time provisioning happens,
+    // any puppet dependencies mentioned in puppet/metadata.json are
+    //  guaranteed to be installed as long as the `setup` operation
+    // has already run.  See also: `setup_list` field in this file
+    "provision_list" : [
+
+        // Clone cabot src onto the provisioning machine if it's not present
+        "local://[ ! -d cabot ] && git clone git@github.com:arachnys/cabot.git",
+
+        // Invoke cabot's fabfiles against the remote host, from the local provisioning host
+        "local://cd cabot && fab -H {username}@{host}:{port} -i {pem} provision",
+        "local://cd cabot && fab -H {username}@{host}:{port} -i {pem} deploy",
+    ],
+
+    // Health checks to execute against this service when the `check`
+    // operation is used.  Reflective-templating (with values in this config)
+    // is allowed and encouraged, because anything IP-based will be useless
+    // after executing terminate/create operations.
+    "health_checks": {
+        "web" :
+        ['http_200', 'http://{host}'],
+    },
+
+    // Data that will be passed on to the puppet FACTer
+    'service_defaults' : {
+    }
+}

@@ -1,0 +1,30 @@
+//
+// security_groups for this service
+//
+// to synchronize this file with AWS,
+// use `ymir sg ./security_group.json`
+//
+// schema for individual rules format is as follows:
+//   ["ip_protocol", "from_port", "to_port", "cidr_ip", ]
+//
+// icmp ping example:
+//    ['icmp', 8, -1, 'some_specific_ip/32'],
+//
+// example opens ssh web port for everyone from anywhere:
+//   ['tcp', 80, 80, '0.0.0.0/0'],     // web
+//   ['tcp', 22, 22, '0.0.0.0/0'],     // ssh
+
+[
+    { "name":'demo_security_group',
+      "description": 'demo security group',
+      "rules": [
+          // place rules here:
+          //
+          // ['tcp', 80, 80, '0.0.0.0/0'],       // web
+          // ['tcp', 22, 22, '0.0.0.0/0'],       // ssh
+          // ['udp', 60000, 61000, '0.0.0.0/0'], // mosh
+          //
+      ]
+
+    },
+]
