@@ -11,14 +11,12 @@ from ymir import util
 from ymir.base import report as base_report
 from ymir import schema as yschema
 
-NOOP = util.NOOP
-
 
 def str_reflect(obj, ctx, simple=True):
     try:
         return obj.format(**ctx)
     except KeyError as err:
-        lazy_keys = ['host']
+        lazy_keys = ['host', 'username', 'pem']
         if err.message in lazy_keys and simple:
             return obj
         else:
@@ -81,7 +79,7 @@ def load_service_from_json(filename=None, quiet=False):
         when filename is not given it will be guessed based on cwd.
     """
     from ymir.version import __version__
-    report = NOOP if quiet else base_report
+    report = util.NOOP if quiet else base_report
     report('aws profile', os.environ.get('AWS_PROFILE', 'default'))
     report('ymir', 'version {0}'.format(__version__))
     service_json_file = filename or util.get_or_guess_service_json_file()
@@ -99,7 +97,7 @@ _load_service_from_json = load_service_from_json
 
 
 def set_schema_defaults(service_json, chosen_schema):
-    """ """
+    """ set default values for Optional() entries which are not provided """
     service_json = service_json.copy()
     defaults = [[str(k), k.default] for k in chosen_schema.schema.keys()
                 if type(k) == Optional]
@@ -108,8 +106,6 @@ def set_schema_defaults(service_json, chosen_schema):
     for k, default in defaults.items():
         if k not in service_json:
             default = default() if callable(default) else default
-            # report ("ymir.api",
-            #       'using implied default: {0}'.format([k, '==', default]))
             service_json[k] = default
     return service_json
 
@@ -118,13 +114,13 @@ def _load_service_from_json_helper(service_json_file=None,
                                    service_json={}, quiet=False, simple=False):
     """ load service obj from service json """
     from ymir import validation
-    # from ymir.beanstalk import ElasticBeanstalkService
-    from ymir.service import AbstractService
     chosen_schema = yschema.choose_schema(service_json, quiet=True)
     validation.validate(service_json_file, chosen_schema, simple=True)
-    report = NOOP if quiet else base_report
+    report = util.NOOP if quiet else base_report
     # report("ymir", "ymir service.json version:")
     report('ymir.api', 'loading service object from description')
+    service_json = set_schema_defaults(service_json, chosen_schema)
+    service_json = _reflect(service_json)
     classname = str(service_json["name"]).lower()
     BaseService = chosen_schema.get_service_class(service_json)
     report('ymir.api', 'chose service class: {0}'.format(
@@ -132,10 +128,8 @@ def _load_service_from_json_helper(service_json_file=None,
     ServiceFromJSON = type(classname, (BaseService,), {})
     obj = ServiceFromJSON(service_root=os.path.dirname(service_json_file))
     obj._schema = chosen_schema
-
     service_json = set_schema_defaults(service_json, chosen_schema)
-    ServiceFromJSON.template_data = lambda himself, **kargs: service_json
-
-    service_json.update(service_json['service_defaults'])
-    #service_json.update(host=obj._host())
+    ServiceFromJSON._service_json = service_json
+    #ServiceFromJSON.template_data = lambda himself, **kargs: service_json
+    #service_json.update(service_json['service_defaults'])
     return obj

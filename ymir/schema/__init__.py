@@ -6,9 +6,6 @@
 # this is a dictionary like so:
 #     d[check_name] = [ check_type, url ]
 
-# TODO: enhance validation for the following fields, all lists of strings
-#     `logs`
-
 from ymir import util
 from ymir.base import report as base_report
 from .security_groups import sg_schema
@@ -18,9 +15,9 @@ NOOP = util.NOOP
 _report = lambda *args: base_report("ymir.schema", *args)
 SGFileSchema = Schema(sg_schema)
 
-default_schema = Schema(EC2Schema, name='ec2_schema')
-eb_schema = Schema(BeanstalkSchema, name='beanstalk_schema',)
-vagrant_schema = Schema(VagrantSchema, name='vagrant_schema')
+default_schema = Schema(EC2Schema, name='EC2-Schema')
+eb_schema = Schema(BeanstalkSchema, name='BeanstalkSchema',)
+vagrant_schema = Schema(VagrantSchema, name='VagrantSchema')
 
 
 def choose_schema(json, quiet=False):

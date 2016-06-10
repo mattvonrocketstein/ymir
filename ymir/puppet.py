@@ -8,6 +8,7 @@ import os
 import glob
 import shutil
 import tempfile
+import functools
 
 from fabric import api
 from fabric.contrib.files import exists
@@ -27,13 +28,24 @@ HIERA_TARBALL_FILE = HIERA_TARBALL_URL.split('/')[-1]
 HIERA_TARBALL_UNCOMPRESS_DIR = HIERA_TARBALL_FILE.replace('.tar.gz', '')
 
 
+def noop_if_no_puppet_support(fxn):
+    """ """
+    @functools.wraps(fxn)
+    def newf(self, *args, **kargs):
+        if not self._supports_puppet:
+            return
+        return fxn(self, *args, **kargs)
+    return newf
+
+
 class PuppetMixin(object):
 
     """ """
 
     @property
     def _supports_puppet(self):
-        return self._service_data['ymir_build_puppet']
+        """ use _service_json here, it's a simple bool and not templated  """
+        return self._service_json['ymir_build_puppet']
 
     @property
     def _puppet_metadata(self):
@@ -66,8 +78,11 @@ class PuppetMixin(object):
                 out[f] = [x for x in re.findall('<%= @(.*?) %>', content)]
         return out
 
+    @noop_if_no_puppet_support
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
+        if not self._supports_puppet:
+            return
         lcd = lcd or self._ymir_service_root
         remote_user_home = '/home/' + self._username
         with self.ssh_ctx():
@@ -77,20 +92,11 @@ class PuppetMixin(object):
                 local_dir=os.path.join(lcd, puppet_dir, '*'),
                 ssh_opts="-o StrictHostKeyChecking=no",
                 delete=clean,
-                exclude=['*.pyc'])
+                exclude=[
+                    '.git', 'backups', 'venv',
+                    '.vagrant', '*.pyc', ],)
 
-            # try:
-            #    api.put(pfile, remote_user_home)
-            #    with api.cd(remote_user_home):
-            #        if clean:
-            # this undoes much of the `ymir setup` phase, like
-            # the installation of puppet deps in metadata.json
-            #            api.run('rm -rf "{0}"'.format(puppet_dir))
-            #        api.run('tar -zxf {0} && rm "{0}"'.format(
-            #            os.path.basename(pfile)))
-            # finally:
-            #    api.local('rm "{0}"'.format(pfile))
-
+    @noop_if_no_puppet_support
     def _clean_puppet_tmp_dir(self):
         """ necessary because puppet librarian is messy,
             and these temporary files can interfere with
@@ -125,10 +131,13 @@ class PuppetMixin(object):
             puppet_dir=puppet_dir,
         )
 
+    @noop_if_no_puppet_support
     def _bootstrap_puppet(self, force=False):
         """ puppet itself is already installed at this point,
             this sets up the provisioning dependencies
         """
+        self.report('installing puppet & puppet deps', section=True)
+
         def _init_puppet(_dir):
             if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
                 self.report("  puppet-librarian has already processed modules")

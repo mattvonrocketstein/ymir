@@ -1,23 +1,79 @@
 # -*- coding: utf-8 -*-
 """ ymir.service._vagrant
 
-    this module is prefixed with an underscore to avoid confusion with
-    the module from python-vagrant.
+    NB: this module is prefixed with an underscore to avoid
+        confusion with the module from python-vagrant.
 """
 import copy
 import vagrant as _vagrant
-from ymir import util
 from .base import AbstractService
+from functools import wraps
+import subprocess
+
+
+def catch_vagrant_error(fxn):
+    """ """
+    @wraps(fxn)
+    def newf(self, *args, **kargs):
+        try:
+            return fxn(self, *args, **kargs)
+        except (subprocess.CalledProcessError,) as exc:
+            self.report(
+                "ERROR: vagrant did not respond as expected.. "
+                "is the box started yet?")
+            self.report("Original exception follows:")
+            print str(exc)
+            raise SystemExit()
+    return newf
 
 
 class VagrantService(AbstractService):
 
     _vagrant = None
-    FABRIC_COMMANDS = copy.copy(AbstractService.FABRIC_COMMANDS) + \
-        ['up']
+
+    FABRIC_COMMANDS = copy.copy(AbstractService.FABRIC_COMMANDS)
+    FABRIC_COMMANDS += ['up']
+
+    @property
+    @catch_vagrant_error
+    def _username(self):
+        """ username data is accessible only as a property because
+            it must overridden for i.e. vagrant-based services
+        """
+        return self.vagrant.user()
+
+    @property
+    @catch_vagrant_error
+    def _pem(self):
+        """ value available JIT """
+        return self.vagrant.keyfile()
+
+    @property
+    @catch_vagrant_error
+    def _host(self):
+        """ value available JIT: """
+        return self.vagrant.hostname()
+
+    @property
+    @catch_vagrant_error
+    def _port(self):
+        """ value available JIT: """
+        return self.vagrant.port()
+
+    @property
+    def vagrant(self):
+        """ """
+        if not self._vagrant:
+            self.report("acquiring vagrant handle..")
+            self._vagrant = _vagrant.Vagrant(
+                quiet_stdout=self._debug_mode,
+                quiet_stderr=self._debug_mode,)
+
+        return self._vagrant
 
     def up(self):
-        """ shortcut for vagrant up """
+        """ shortcut for `vagrant up` """
+        self.report("invoking `vagrant up`")
         self.vagrant.up()
 
     def _status(self):
@@ -27,6 +83,8 @@ class VagrantService(AbstractService):
         """
         if not self._status_computed:
             self.report("handshaking with Vagrant..")
+        else:
+            return self._status_computed
         ip = None
         result = dict(
             instance=None, ip=ip,
@@ -40,6 +98,7 @@ class VagrantService(AbstractService):
             # depending on if the Vagrantfile supports multi-vm
             status = status.pop()
             if status.state not in ['poweroff', 'not_created']:
+                # DONT use self._host here, that's cyclic
                 ip = self.vagrant.hostname()
             result.update(
                 dict(
@@ -53,7 +112,7 @@ class VagrantService(AbstractService):
         return result
 
     def create(self, force=False):
-        """ create new instance of this service ('force' defaults to False)"""
+        """ create new instance of this service ('force' defaults to False) """
         self.report('creating vagrant instance', section=True)
         state = self._status()['status']
         assert not force, 'force=True not supported for vagrant yet'
@@ -62,49 +121,11 @@ class VagrantService(AbstractService):
         else:
             self.report("already created!  status={0}".format(state))
 
-    @property
-    def vagrant(self):
-        if not self._vagrant:
-            self.report("caching vagrant handle..")
-            self._vagrant = _vagrant.Vagrant(
-                quiet_stdout=False,
-                quiet_stderr=False,)
-
-        return self._vagrant
-
     def _get_instance(self, strict=False):
+        """ """
         result = self.vagrant
         if strict and self._status()['status'] != 'running':
-            err = "Could not acquire instance! Is the box started?"
+            err = "ERROR: could not acquire vagrant instance! Is the box started?"
             self.report(err)
             raise SystemExit(1)
         return result
-
-    @property
-    def _hostname_port(self):
-        return self.vagrant.user_hostname_port().split('@')[-1]
-
-    def ssh_ctx(self):
-        """ """
-        return util.ssh_ctx(
-            self._hostname_port,
-            user=self._username,
-            pem=self._pem,)
-
-    @property
-    def _username(self):
-        """ username data is accessible only as a property because
-            it must overridden for i.e. vagrant-based services
-        """
-        return self.vagrant.user()
-
-    @property
-    def _pem(self):
-        return self.vagrant.keyfile()
-
-    def ssh(self):
-        """ connect to this service with ssh """
-        self.report('connecting with ssh')
-        util.ssh(self._hostname_port,
-                 username=self._username,
-                 pem=self._pem)

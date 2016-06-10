@@ -11,10 +11,9 @@ import logging
 
 import fabric
 from fabric import api
-from fabric.colors import blue
+from fabric.colors import blue, yellow
 
 from ymir import util
-from ymir import checks
 from ymir.base import Reporter
 from ymir.util import puppet
 from ymir.puppet import PuppetMixin
@@ -81,21 +80,14 @@ class FabricMixin(object):
         with self.ssh_ctx():
             return api.get(fname, local_path=local_path, use_sudo=True)
 
-    @property
-    def _username(self):
-        """ username data is accessible only as a property because
-            it must overridden for i.e. vagrant-based services
-        """
-        return self.template_data()['username']
-
-    @util.require_running_instance
     def ssh(self):
         """ connect to this service with ssh """
         self.report('connecting with ssh')
-        service_data = self.template_data()
-        util.ssh(self._status()['ip'],
-                 username=self._username,
-                 pem=service_data['pem'],)
+        util.ssh(
+            self._host,
+            username=self._username,
+            pem=self._pem,
+            port=self._port,)
 
     @util.require_running_instance
     def show(self):
@@ -114,9 +106,9 @@ class FabricMixin(object):
         # for x in 'status eb_health eb_status'.split():
         #    if x in data:
         #        out['aws://'+x] = ['read', data[x]]
-        names = [name] if name is not None else self._service_data[
-            'health_checks'].keys()
-        service_health_checks = self._service_data['health_checks']
+        checks = self.template_data()['health_checks']
+        names = [name] if name is not None else checks.keys()
+        service_health_checks = checks
         for check_name, (_type, url_t) in service_health_checks.items():
             if check_name in names:
                 check_obj = checks.Check(
@@ -132,26 +124,6 @@ class FabricMixin(object):
         else:
             self.report('no instance is running for this'
                         ' service, start (or create) it first')
-
-    def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
-        """ copy puppet code to remote host (refreshes any dependencies) """
-        lcd = lcd or self._ymir_service_root
-        with self.ssh_ctx():
-            remote_user_home = '/home/' + self._username
-            pfile = self._compress_local_puppet_code(puppet_dir, lcd=lcd)
-            msg = '  flushing remote puppet codes and refreshing'
-            self.report(msg)
-            try:
-                api.put(pfile, remote_user_home)
-                with api.cd(remote_user_home):
-                    if clean:
-                        # this undoes `ymir setup` phase, ie the installation
-                        # of puppet deps mentioned in metadata.json.
-                        api.run('rm -rf "{0}"'.format(puppet_dir))
-                    api.run(
-                        'tar -zxf {0} && rm "{0}"'.format(os.path.basename(pfile)))
-            finally:
-                api.local('rm "{0}"'.format(pfile))
 
     @util.require_running_instance
     def reboot(self):
@@ -221,10 +193,6 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
 
     __repr__ = __str__
 
-    @property
-    def _service_data(self):
-        return self.template_data()
-
     def service(self, command):
         """ run `sudo service <cmd>` on the remote host"""
         with self.ssh_ctx():
@@ -244,7 +212,7 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
     def list_log_files(self):
         """ """
         with self.ssh_ctx():
-            for file_or_dir in self._service_data['logs']:
+            for file_or_dir in self.template_data()['logs']:
                 if util.remote_path_exists(file_or_dir):
                     result = api.sudo(
                         'ls -l {0}'.format(file_or_dir), capture=True).strip()
@@ -301,7 +269,7 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
             use this instead of self.status() if you want to quietly
             retrieve information for use without actually displaying it
         """
-        tdata = self._service_data
+        tdata = self._service_json  # NOT template_data(), that's cyclic
         if not self._status_computed and self._debug_mode:
             self.report("handshaking with AWS..")
         name = tdata['name']
@@ -368,11 +336,11 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         return i
 
     def ssh_ctx(self):
-        service_data = self.template_data()
+        """ """
         return util.ssh_ctx(
-            self._status()['ip'],
+            ':'.join([self._host, self._port]),
             user=self._username,
-            pem=service_data['pem'])
+            pem=self._pem,)
 
     def _restart_supervisor(self):
         self.report('  restarting everything')
@@ -443,11 +411,12 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
 
         util._block_while_pending(instance)
         status = instance.update()
+        name = self.template_data()['name']
         if status == 'running':
             self.report('  instance is running.')
             self.report('  setting tag for "Name": {0}'.format(
-                self._service_data['name']))
-            instance.add_tag("Name", self._service_data['name'])
+                name))
+            instance.add_tag("Name", name)
         else:
             self.report('Weird instance status: ', status)
             return None
@@ -457,7 +426,8 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
 
     def provision(self, fname=None, **kargs):
         """ provision this service """
-        self.report('provisioning {0}'.format(fname or ''))
+        self.report('preparing to provision: {0}'.format(
+            yellow(fname or '(everything)')))
         if fname != 'None':
             data = self._status()
             if data['status'] == 'running':
@@ -471,8 +441,6 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
     def _provision_ip(self, ip, fname=None, force=False, **kargs):
         """ `force` must be True to provision with arguments not
             mentioned in service's provision_list """
-
-        self.report('provisioning', section=True)
         self._clean_puppet_tmp_dir()
         if fname is not None:
             if not force and fname not in self.PROVISION_LIST:
@@ -485,31 +453,47 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
             provision_list = self.template_data()['provision_list']
         with self.ssh_ctx():
             with api.lcd(self._ymir_service_root):
-                self.report("Provision list for this service:")
-                pprint.pprint(provision_list, indent=2)
+                msg = ('\n  ' + pprint.pformat(provision_list, indent=2)) if \
+                    provision_list else "(empty)"
+                self.report("Provision list for this service: " + msg)
                 # if clean==True, in the call below, the puppet deps
                 # which were installed in the `setup` phase would be
                 # destroyed.  not what is wanted for provisioning!
                 self.copy_puppet(clean=False)
                 for provision_item in provision_list:
-                    if '://' in provision_item:
-                        err = 'provision-protocol names may not include _.'
-                        assert '_' not in provision_item.split('://')[0], err
-                    provisioner = urlparse.urlparse(provision_item).scheme
-                    if provisioner == '':
-                        # for backwards compatability, puppet is the default
-                        provisioner = 'puppet'
-                        provision_instruction = provision_item
-                    else:
-                        provision_instruction = provision_item[
-                            len(provisioner) + len('://'):]
+                    protocol, instruction = self._split_instruction(
+                        provision_item)
+                    # if '://' in provision_item:
+                    #    err = 'provision-protocol names may not include _.'
+                    #    assert '_' not in provision_item.split('://')[0], err
+                    # provisioner = urlparse.urlparse(provision_item).scheme
+                    # if provisioner == '':
+                    #    # for backwards compatability, puppet is the default
+                    #    provisioner = 'puppet'
+                    #    provision_instruction = provision_item
+                    # else:
+                    #    provision_instruction = provision_item[
+                    #        len(provisioner) + len('://'):]
                     self.report('provision_list[{0}]:'.format(
                         provision_list.index(provision_item)))
                     self._run_provisioner(
-                        provisioner, provision_instruction, **kargs)
+                        protocol, instruction, **kargs)
         self.report("Finished with provision.")
         self.report("You might want to restart services "
                     " using `fab service` or `fab supervisor`")
+
+    def _split_instruction(self, instruction):
+        """ here, `instruction` is an item from either setup_list or provision_list
+        """
+        protocol = urlparse.urlparse(instruction).scheme
+        if protocol == '':
+            # for backwards compatability, puppet is the default
+            protocol = 'puppet'
+            raw_instruction = instruction
+        else:
+            raw_instruction = instruction[
+                len(protocol) + len('://'):]
+        return protocol, raw_instruction
 
     def _run_provisioner(self, provisioner_name, provision_instruction, **kargs):
         self.report(' {0}'.format(
@@ -532,17 +516,18 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
 
     @property
     def _debug_mode(self):
-        return self.template_data()['ymir_debug']
+        """ use _service_json here, it's a simple bool and not templated  """
+        return self._service_json['ymir_debug']
 
     def setup_ip(self, ip):
         """ """
-        self.report('installing puppet & puppet deps', section=True)
         self._clean_puppet_tmp_dir()
         with self.ssh_ctx():
             with api.lcd(self._ymir_service_root):
                 self._update_sys_packages()
                 self._bootstrap_dev()
-                self.copy_puppet(clean=True)
+                self.copy_puppet(clean=True)  # NOOP if puppet isn't supported
+                # NOOP if puppet isn't supported
                 self._bootstrap_puppet(force=True)
                 setup_list = self.template_data()['setup_list']
                 for setup_item in setup_list:
@@ -555,7 +540,6 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
                         puppet_dir='puppet',
                         facts=self.facts,
                         debug=self._debug_mode,)
-
         self.report("Setup complete.  Now run `fab provision`")
 
     @property
@@ -563,10 +547,6 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         """ """
         json = self.template_data(simple=True)
         service_defaults = json['service_defaults']
-        # service_defaults.update(
-        #    dict(supervisor_user=json['supervisor_user'],
-        #         supervisor_pass=json['supervisor_pass'],
-        #         supervisor_port=json['supervisor_port']))
         for fact in service_defaults:
             tmp = service_defaults[fact]
             if isinstance(tmp, basestring) and ('{' in tmp or '}' in tmp):
@@ -583,28 +563,37 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         with self.ssh_ctx():
             api.run(command)
 
-    def _host(self, data=None):
+    @property
+    def _port(self):
         """ """
-        data = data or self._status()
-        return data.get('ip')
+        return self._service_json['port']
+
+    @property
+    def _host(self):
+        """ """
+        return self._status().get('ip')
 
     def _show_url(self, url):
         url = url.format(**self.template_data(simple=False))
         self.report("showing: {0}".format(url))
         webbrowser.open(url)
 
-    # TODO: cache for when simple is false
-    def template_data(self, simple=False):
-        """ reflects the template information back into itself """
-
-        template_data = self.to_json(simple=simple)
-        template_data.update(**self.SERVICE_DEFAULTS)
-        for k, v in template_data['service_defaults'].items():
-            if isinstance(v, basestring):
-                template_data['service_defaults'][
-                    k] = v.format(**template_data)
-        return template_data
-    _template_data = template_data
+    def template_data(self):
+        """ a last phase of reflection, for data that's potentially
+            only available just-in-time.
+        """
+        tmp = self._service_json.copy()
+        tmp.update(
+            username=self._username,
+            pem=self._pem,
+            host=self._host,
+            port=self._port,
+        )
+        plist = [cmd.format(**tmp) for cmd in tmp['provision_list']]
+        slist = [cmd.format(**tmp) for cmd in tmp['setup_list']]
+        tmp['provision_list'] = plist
+        tmp['setup_list'] = slist
+        return tmp
 
     def shell(self):
         """ """

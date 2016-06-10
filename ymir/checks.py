@@ -42,7 +42,7 @@ class Check(object):
 
     def run(self, service, quiet=False):
         import ymir.checks as modyool
-        data = service._service_data
+        data = service.template_data()
         self.url = self.url_t.format(**data)
         try:
             checker = getattr(modyool, self.check_type)

@@ -85,7 +85,7 @@ def mosh(ip, username='ubuntu', pem=None):
 
 
 def ssh(ip, username='ubuntu', port='22', pem=None):
-    """ connect to remote host using mosh """
+    """ connect to remote host using ssh """
     assert ip is not None
     if ':' in ip:
         ip, port = ip.split(':')

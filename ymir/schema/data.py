@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ ymir.schema.data
 """
 from voluptuous import Required, Optional
@@ -16,13 +17,16 @@ AWS_DATA = {
     Required("security_groups", default=[]): validators._validate_sg_field,
     Required("key_name"): unicode,
 }
+
 PROVISION_DATA = {
     Required("setup_list", default=[]): validators._validate_sl_field,
     Required("provision_list", default=[]): validators._validate_pl_field,
     Optional("puppet_parser", default="future"): validators._validate_puppet_parser,
 }
+
 BASE_DATA = {
     Required("name"): unicode,
+    Optional("port", default='22'): unicode,
     Required("service_name"): unicode,
     Required("service_description"): unicode,
     Required("instance_type"): unicode,

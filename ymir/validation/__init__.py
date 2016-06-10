@@ -7,10 +7,8 @@ import logging
 import voluptuous
 
 from fabric import api
-from fabric.colors import red, green
+from fabric.colors import red, green, yellow
 from peak.util.imports import lazyModule
-
-from fabric.colors import red, blue, yellow
 
 from ymir import util
 from ymir import schema as yschema
@@ -66,7 +64,7 @@ def validate_puppet_templates(service):
     errors, messages = [], []
     default_facts = puppet.DEFAULT_FACTS
     # local_puppet_template_files = service._get_puppet_templates()
-    service_vars = service._service_data.keys()
+    service_vars = service._service_json.keys()
     service_vars += default_facts
     for f, template_vars in service._get_puppet_template_vars().items():
         for template_var in template_vars:
@@ -84,15 +82,16 @@ def validate_keypairs(service):
         current account
     """
     errors, messages = [], []
-    service_data = service._service_data
-    pem_file = os.path.expanduser(service_data['pem'])
+    service_data = service._service_json
+    pem_file = service_data.get('pem')
+    pem_file = os.path.expanduser(pem_file)
     if not os.path.exists(pem_file):
-        errors.append('  ERROR: pem file is not present: ' + pem_file)
+        errors.append('pem file is not present: ' + pem_file)
     keys = util.get_keypair_names()
-    key_name = service._service_data['key_name']
+    key_name = service._service_json['key_name']
     if key_name not in keys:
         errors.append(
-            '  ERROR: aws keypair {0} not found in {1}'.format(key_name, keys))
+            'aws keypair {0} not found in {1}'.format(key_name, keys))
     return errors, messages
 
 
@@ -104,7 +103,7 @@ def validate_security_groups(service):
     """ validation for security groups.
     NB: this requires AWS credentials
     """
-    groups = service._service_data['security_groups']
+    groups = service._service_json['security_groups']
     errors, messages = [], []
     # filter for only named groups, in case the security_groups field
     # eventually supports more complete data (like security_groups.json)
@@ -122,7 +121,7 @@ def validate_health_checks(service):
     """
     # here we fake the host value just for validation because we
     # don't know whether this service has been bootstrapped or not
-    service_json = service.template_data(simple=True)
+    service_json = service.template_data()
     service_json.update(host='host_name')
     errors, messages = [], []
     for check_name in service_json['health_checks']:
@@ -161,7 +160,8 @@ def print_errs(msg, (errors, messages), quiet=False, die=False, report=_report):
     if msg:
         report(msg)
     for e in errors:
-        report(red('  error[{0}]: '.format(errors.index(e))) + str(e))
+        report(red('  error[{0}]: '.format(errors.index(e))))
+        report('\t' + str(e))
     for m in messages:
         report(green('   {0}'.format(m)))
     if errors and die:
@@ -215,7 +215,8 @@ def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
     errors, messages = [], []
     report = report if not quiet else util.NOOP
     if schema:
-        report('validating file using explicit schema: {0}'.format(yellow(schema.schema_name)))
+        report('validating file using explicit schema: {0}'.format(
+            yellow(schema.schema_name)))
     err = 'got {0} instead of string for fname'.format(fname)
     assert isinstance(fname, basestring), err
     tmp = yapi.load_json(fname)

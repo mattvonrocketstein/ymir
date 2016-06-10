@@ -13,8 +13,7 @@ from ymir.util import NOOP
 class AmazonService(AbstractService):
     """ """
     FABRIC_COMMANDS = copy.copy(AbstractService.FABRIC_COMMANDS) + \
-        ['mosh',
-         's3', 'terminate',
+        ['mosh', 's3', 'terminate',
          'sync_buckets', 'sync_eips', 'sync_tags', ]
 
     def __init__(self, conn=None, **kargs):
@@ -46,9 +45,23 @@ class AmazonService(AbstractService):
     def _s3_conn(self):
         return boto.connect_s3()
 
+    @property
+    def _username(self):
+        """ username data is accessible only as a property because
+            it must overridden for i.e. vagrant-based services
+        """
+        return self._service_json['username']
+
+    @property
+    def _pem(self):
+        """ pem-file is accessible only as a property because
+            it must overridden for i.e. vagrant-based services
+        """
+        return self._service_json['pem']
+
     def sync_buckets(self, quiet=False):
         report = self.report if not quiet else NOOP
-        buckets = self._service_data['s3_buckets']
+        buckets = self.template_data()['s3_buckets']
         report("synchronizing s3 buckets")
         if buckets:
             report('  buckets to create: {0}'.format(buckets))
@@ -116,9 +129,9 @@ class AmazonService(AbstractService):
             msg = ("This will terminate the instance {0} ({1}) and can "
                    "involve data loss.  Are you sure? [y/n] ")
             answer = None
+            name = self.template_data()['name']
             while answer not in ['y', 'n']:
-                answer = raw_input(msg.format(
-                    instance, self._service_data['name']))
+                answer = raw_input(msg.format(instance, name))
             if answer == 'y':
                 self.terminate(force=True)
 
@@ -130,3 +143,5 @@ class AmazonService(AbstractService):
         util.mosh(self.status()['ip'],
                   username=self._username,
                   pem=service_data['pem'])
+
+    ssh = util.require_running_instance(AbstractService.ssh)

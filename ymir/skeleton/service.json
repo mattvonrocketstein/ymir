@@ -1,14 +1,30 @@
 //
-// service.json for `my service`
+// service.json for `demo service`
+//
+//   See also: mattvonrocketstein.github.io/ymir/
 //
 {
-    // sets namespace  for this service.
-    // used in tagging, etc.
+
+    // Display extra debugging information
+    "ymir_debug": true,
+
+    // Whether ymir should build puppet on the remote side.
+    // Puppet-builds only occur during the `setup` operation, and
+    // are skipped if a good version of puppet is found to already exist
+    // on the remote side.  When this key is not found in this configuration,
+    // it defaults to true.
+    "ymir_build_puppet": false,
+
+    // Sets namespace for this service.
+    // This is used in tagging for AWS-based services,
+    // and these variables are often useful for templating.
     "org_name": "OrgName",
     "app_name": "AppName",
     "env_name": "EnvName",
     "service_name": "ServiceName",
-    "ymir_debug": true,
+
+    // Declare s3 buckets here.  during the `setup` operation,
+    // these buckets will be created if they do not already exist.
     "s3_buckets": [],
 
     // Sets the name for this service.
@@ -21,46 +37,43 @@
     "service_description": "Service description goes here",
 
     // AWS tags which are set to "true".
-    // this will be useful for sorting/filtering instances later
+    // This will be useful for sorting/filtering instances later.
     "tags": [],
 
-    // s3 buckets
-    "s3_buckets": [],
+    // Declare logfile locations on this service
+    // This can be used later to tail/retrieve logs.
+    "logs": [
+        "/var/logs/syslog"
+    ],
 
-    // logs
-    "logs": ["/var/logs/syslog"],
-
-    // elastic (static) IP addresses
+    // Declare elastic (static) IP addresses for AWS here.
+    // During the `setup` operation, these will be bound if unbound
+    // but they must already exist according to the AWS API.
     "elastic_ips": [],
 
-    // Sets the ami for this service.
+    // Sets the AMI for this service.  The default is ubuntu 14.04,
+    // amd64 ebs us-east-1.  Other potentially useful hints follow:
     //
-    // The default is ubuntu 14.04 amd64 ebs us-east-1
     // ami-3cf8b154: PV (only suitable for t1.micro)
     // ami-0021766a: 14.04 HVM:ebs (t2.*, etc)
     "ami" : "ami-0021766a",
 
-    // sets the username for this service.
-    // this is used for ssh, so make sure this
-    // matches the AMI you have chosen
-    "username" : "ubuntu",
-
-    // sets the AWS instance type for this service make sure
+    // Sets the AWS instance type for this service make sure
     // AMI above matches the instance type you are asking for
     "instance_type"   : "t2.micro",
 
-    // Sets the supervisor credentials for this service.
-    //
-    // "supervisor_user" : "admin",
-    // "supervisor_pass" : "testing",
-    // "supervisor_port" : "9001",
+    // Sets the username for this service.
+    // This is used for ssh, so make sure this matches the
+    // AMI you have chosen.  Ubuntu-based AMIs use `ubuntu`
+    // whereas CentOS (and elasticbeanstalk) will use `ec2-user`
+    "username" : "ubuntu",
 
-    // location of the pem file for this service.
-    // this will be used for ssh connections with the service,
-    // and if it is not correct then no remote can be executed.
+    // The location of the pem file for this service.
+    // This will be used for ssh connections with the service,
+    // and if it is not correct then no remote commands can be executed.
     "pem" : "~/.ssh/{app_name}.pem",
 
-    // allows sane iteration using rubyish `each` inside puppet files
+    // Allows sane iteration using rubyish `each` inside puppet files
     'puppet_parser': 'future',
 
     // Sets up the AWS key_name for this service.
@@ -70,35 +83,42 @@
     // **: https://console.aws.amazon.com/iam/home#encryptionKeys
     "key_name" : "{app_name}",
 
-    // path specifying the file which is the main entry point for puppet code
-    // this file will be used only after the dependencies mentioned in
-    // metadata.json have been installed.
+    // A list of instructions that will be executed during the `setup` operation.
+    // See also: mattvonrocketstein.github.io/ymir/
     "setup_list" : [
-        // install suite of devops packages suggested by ymir
-        // this just includes nmap, tree, ruby and python core, etc
+        // By default this just installs a suite of devops packages
+        // suggested by ymir, including nmap, tree, ruby/python dev, etc.
         "puppet/modules/ymir/packages.pp",
         ],
 
-    // a list of names for the AWS security groups this service will belong
-    // to. the existence of these security groups will be confirmed when
+    // A list of names for the AWS security groups this service will belong
+    // to. The existence of these security groups will be confirmed when
     // `ymir validate` is run from the command line.
     "security_groups" : ['your_sg_name'],
 
-    // a list of extra, service-specific puppet files to execute during
-    // provisioning.  by the time provisioning happens, any puppet
-    // dependencies mentioned in puppet/metadata.json are guaranteed
-    // to be installed, and setup_list is guaranteed to have run
-    // at least once.
-    "provision_list" : ["puppet/demo_service.pp"],
+    // A list of service-specific puppet files to execute during
+    // provisioning of this service.  By the time provisioning happens,
+    // any puppet dependencies mentioned in puppet/metadata.json are
+    //  guaranteed to be installed as long as the `setup` operation
+    // has already run.  See also: `setup_list` field in this file
+    "provision_list" : [
+        "puppet/demo_service.pp",
+    ],
 
-    // health checks to execute against this service
+    // Health checks to execute against this service when the `check`
+    // operation is used.  Reflective-templating (with values in this config)
+    // is allowed and encouraged, because anything IP-based will be useless
+    // after executing terminate/create operations.
     "health_checks": {
         "homepage" :
         ['http_200',
          'http://{host}'],
     },
 
-    // data that will be passed on to the puppet FACTer
+    // Schema-free section for misc. site configuration.
+    // Useful for template-variables that can be passed on to the
+    // puppet FACTer, or used to configure application particulars.
+    // puppet FACTer, or used to configure application particulars.
     'service_defaults' : {
     }
 }
