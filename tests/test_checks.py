@@ -10,7 +10,8 @@ from ymir import checks
 
 def _mock_service():
     service = mock.Mock()
-    service._service_data = {}
+    service._service_json = {}
+    service.template_data = lambda *args: service._service_json
     service._status = mock.Mock(return_value=dict(ip=''))
     return service
 
