@@ -504,14 +504,20 @@ class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
         except AttributeError:
             self.report(
                 "Fatal: no sucher provisioner `{0}`".format(provisioner_name))
-        return provision_fxn(provision_instruction, **kargs)
+            raise SystemExit()
+        else:
+            cmd = provision_instruction.format(**self.template_data())
+            if cmd != provision_instruction:
+                self.report("  translated to: {0}".format(cmd))
+            return provision_fxn(cmd, **kargs)
 
-    def _provision_local(self, provision_instruction):
+    def _provision_remote(self, cmd):
+        return self.run(cmd)
+
+    def _provision_local(self, cmd):
         """ runs a shell command on the local host,
             for the purposes of provisioning the remote host.
         """
-        cmd = provision_instruction.format(**self.template_data())
-        self.report("  translated to: {0}".format(cmd))
         return api.local(cmd)
 
     @property

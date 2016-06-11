@@ -40,6 +40,14 @@
     // this file will be used only after the dependencies mentioned in
     // metadata.json have been installed.
     "setup_list" : [
+        // Clone cabot src onto the provisioning machine if it's not present
+        "local://[ ! -d cabot ] && git clone git@github.com:arachnys/cabot.git || true",
+        "local://cd cabot && git checkout -f caa4bb5c3",
+
+        // Invoke cabot's fabfiles against the remote host, from the local provisioning host
+        //
+        // Their `provision` command creates an `ubuntu` user and adds an ssh key
+        "local://cd cabot && fab -H {username}@{host}:{port} -i {pem} provision",
     ],
 
     // A list of service-specific puppet files to execute during
@@ -48,13 +56,13 @@
     //  guaranteed to be installed as long as the `setup` operation
     // has already run.  See also: `setup_list` field in this file
     "provision_list" : [
-
-        // Clone cabot src onto the provisioning machine if it's not present
-        "local://[ ! -d cabot ] && git clone git@github.com:arachnys/cabot.git",
-
         // Invoke cabot's fabfiles against the remote host, from the local provisioning host
-        "local://cd cabot && fab -H {username}@{host}:{port} -i {pem} provision",
-        "local://cd cabot && fab -H {username}@{host}:{port} -i {pem} deploy",
+        // Copy our cabot-configs into place
+        //"local://cd cabot && cp conf/production.env.example conf/production.env",
+        //
+        // After `provision`, `deploy` must use the `ubuntu` user w/ the local user's key
+        //"local://cd cabot && fab -H ubuntu@{host}:{port} -i ~/.ssh/id_rsa deploy",
+        "local://cd cabot && fab -H ubuntu@{host}:{port} -i ~/.ssh/id_rsa create_user:\"username=admin,password=admin,email=admin@admin.com\"",
     ],
 
     // Health checks to execute against this service when the `check`
