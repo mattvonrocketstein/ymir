@@ -140,7 +140,7 @@ def get_conn(key_name=None, region='us-east-1'):
         err = ("ERROR: found AWS_PROFILE {0}, but boto raises "
                "ProfileNotFound.  Set AWS_PROFILE environment "
                "variable, or use ~/.boto, then try again.  Original"
-               " Exception follows: {1}").format(exc)
+               " Exception follows: {0}").format(exc)
         raise SystemExit(err)
     if key_name is not None:
         keypair = conn.get_key_pair(key_name)
