@@ -3,6 +3,7 @@
 #
 pycrypto
 Fabric==1.10.1
+pycrypto==2.6.1
 boto==2.36.0
 requests==2.5.1
 awsebcli==3.1.2
