@@ -6,14 +6,7 @@ import pytest
 import requests
 
 from ymir import checks
-
-
-def _mock_service():
-    service = mock.Mock()
-    service._service_json = {}
-    service.template_data = lambda *args: service._service_json
-    service._status = mock.Mock(return_value=dict(ip=''))
-    return service
+from .common import mock_service
 
 
 def test_invalid_check_type():
@@ -23,7 +16,7 @@ def test_invalid_check_type():
         url_t='',
     )
     with pytest.raises(checks.InvalidCheckType):
-        check.run(_mock_service())
+        check.run(mock_service())
 
 
 @mock.patch('ymir.checks._get_request')
@@ -33,9 +26,9 @@ def test_timeouts(request_mock):
         name='test-json',
         check_type='json_200',
         url_t='',)
-    assert check.run(_mock_service()).failed
+    assert check.run(mock_service()).failed
     request_mock.side_effect = requests.exceptions.ReadTimeout("zooom")
-    assert check.run(_mock_service()).failed
+    assert check.run(mock_service()).failed
 
 
 @mock.patch('ymir.util.is_port_open')
@@ -45,7 +38,7 @@ def test_port_open(fake_is_port_open):
         name='test-port-open',
         check_type='port_open',
         url_t='',)
-    assert check.run(_mock_service()).failed
+    assert check.run(mock_service()).failed
 
 
 @mock.patch('ymir.checks._get_request')
@@ -57,14 +50,14 @@ def test_json(request_mock):
         name='test-json',
         check_type='json_200',
         url_t='',)
-    result = check.run(_mock_service())
+    result = check.run(mock_service())
     assert result.success
     assert response.json.called
     response.status_code = 300
-    assert check.run(_mock_service()).failed
+    assert check.run(mock_service()).failed
     response.status_code = 200
     response.json = mock.Mock(side_effect=Exception)
-    assert check.run(_mock_service()).failed
+    assert check.run(mock_service()).failed
 
 
 def _test_factory(status_code):
@@ -77,10 +70,10 @@ def _test_factory(status_code):
             name='test-{0}'.format(status_code),
             check_type='http_{0}'.format(status_code),
             url_t='',)
-        result = check.run(_mock_service())
+        result = check.run(mock_service())
         assert not result.success
         response.status_code = status_code
-        result = check.run(_mock_service())
+        result = check.run(mock_service())
         assert result.success
     return test_xxx
 
