@@ -121,7 +121,7 @@ def _load_service_from_json_helper(service_json_file=None,
     report('ymir.api', 'loading service object from description')
     service_json = set_schema_defaults(service_json, chosen_schema)
     service_json = _reflect(service_json)
-    classname = str(service_json["name"]).lower()
+    classname = str(service_json["name"])
     BaseService = chosen_schema.get_service_class(service_json)
     report('ymir.api', 'chose service class: {0}'.format(
         yellow(BaseService.__name__)))

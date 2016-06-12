@@ -81,8 +81,6 @@ class PuppetMixin(object):
     @noop_if_no_puppet_support
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
-        if not self._supports_puppet:
-            return
         lcd = lcd or self._ymir_service_root
         remote_user_home = '/home/' + self._username
         with self.ssh_ctx():
