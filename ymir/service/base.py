@@ -17,6 +17,7 @@ from ymir import util
 from ymir.base import Reporter
 from ymir.util import puppet
 from ymir.puppet import PuppetMixin
+from ymir._ansible import AnsibleMixin
 from ymir.caching import cached
 from ymir import data as ydata
 
@@ -32,6 +33,7 @@ api.env.disable_known_hosts = True
 
 class FabricMixin(object):
     FABRIC_COMMANDS = [
+        'ansible_inventory',
         'check', 'create', 'get',
         'integration_test', 'logs',
         'provision', 'put',
@@ -179,7 +181,7 @@ class PackageMixin(object):
         return api.sudo('pacapt -R {0} {1}'.format(pkg_name, quiet)).succeeded
 
 
-class AbstractService(Reporter, PuppetMixin, PackageMixin, FabricMixin):
+class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricMixin):
     _schema = None
     _ymir_service_root = None
     _status_computed = False

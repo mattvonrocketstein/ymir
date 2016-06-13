@@ -10,11 +10,14 @@ from voluptuous import Optional, Undefined
 from ymir import util
 from ymir.base import report as base_report
 from ymir import schema as yschema
+import jinja2
+env = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
 
 def str_reflect(obj, ctx, simple=True):
     try:
-        return obj.format(**ctx)
+        # return obj.format(**ctx)
+        return env.from_string(obj).render(**ctx)
     except KeyError as err:
         lazy_keys = ['host', 'username', 'pem']
         if err.message in lazy_keys and simple:

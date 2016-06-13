@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """ ymir.puppet
 
-    Defines a puppet mixin for the primary ymir service service class
+    Defines a puppet mixin for the base ymir service service class
 """
 import re
 import os
