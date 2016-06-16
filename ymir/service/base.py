@@ -21,6 +21,7 @@ from ymir._ansible import AnsibleMixin
 from ymir.caching import cached
 from ymir import data as ydata
 from ymir import checks as ychecks
+
 yapi = lazyModule('ymir.api')
 
 
@@ -44,7 +45,7 @@ class FabricMixin(object):
         'shell', 'show', 'show_facts',
         'ssh', 'status',
         'supervisor', 'supervisorctl',
-        'tail',
+        'tail', 'terminate',
     ]
 
     def status(self):

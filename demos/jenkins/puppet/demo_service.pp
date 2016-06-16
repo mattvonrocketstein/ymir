@@ -1,35 +1,21 @@
+#
 # puppet/demo_service.pp
-#
-#
 #
 
 # standard exec path
 Exec { path => [ '/bin/', '/sbin/' , '/usr/bin/', '/usr/sbin/' ] }
 
-package {['ruby-dev', 'gem']: ensure => present }
+# demonstrates installing a system package
+package {['tree',]: ensure => present }
 
-file { '/etc/motd':
+# demonstrates copy/render for a puppet template, filled in with ymir variables
+file { '/tmp/tmp_file_puppet':
   ensure  => file,
-  content => template('ymir/motd.erb'),
+  content => template('ymir/tmp_file'),
 }
 
-package {'supervisor': ensure => present }
-service { 'supervisor':
-  ensure => 'running',
-  enable => true, }
-
-file{'/etc/supervisor/supervisord.conf':
-  ensure  => present,
-  notify  => Service['supervisor'],
-  owner   => 'root',
-  require => Package['supervisor'],
-  content => template('ymir/supervisord.conf')}->
-file {'/etc/supervisor/conf.d':
-  ensure  => 'directory',
-  recurse => true,
-  purge   => true,
-}->
-file{'/etc/supervisor/conf.d/example.conf':
-  ensure  => present,
-  owner   => 'root',
-  content => template('ymir/example.conf')}
+# demonstrates using ymir variables together with an exec{}
+exec { 'tag-motd-with-puppet':
+  command => "printf '\npuppet-variable passed via ymir:\n  puppet_variable=${puppet_variable}\n\n' >> /etc/motd",
+  unless => "cat motd|grep ${puppet_variable}"
+}

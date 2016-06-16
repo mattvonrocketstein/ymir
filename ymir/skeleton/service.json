@@ -85,26 +85,40 @@
     // **: https://console.aws.amazon.com/iam/home#encryptionKeys
     "key_name" : "{{app_name}}",
 
-    // A list of instructions that will be executed during the `setup` operation.
-    // See also: mattvonrocketstein.github.io/ymir/
+    // The `security_groups` field provides a list of names for the
+    // AWS security groups this service will belong to. The existence
+    // of these security groups will be confirmed when `ymir validate`
+    // is run on this service from the command line.
+    "security_groups" : ['your_sg_name'],
+
+    // The `setup_list` field provides a list of instructions to
+    // execute during the setup operation for this service.  Even
+    // when this list is empty, the setup operation potentially has
+    // much time-consuming work to do (such as refreshing ansible/puppet
+    // dependencies or refreshing the system package list with apt/yum).
+    // Use `setup_list` for heavy-lifting that doesn't need to happen
+    // often and work that is uncacheable or not-quite idempotent.
+    // Use `provision_list` for things that are more comfortable to
+    // run repeatedly.
     "setup_list" : [
-        // By default this just installs a suite of devops packages
+        // By default this just installs a suite of random useful packages
         // suggested by ymir, including nmap, tree, ruby/python dev, etc.
         "puppet/modules/ymir/packages.pp",
         ],
 
-    // A list of names for the AWS security groups this service will belong
-    // to. The existence of these security groups will be confirmed when
-    // `ymir validate` is run from the command line.
-    "security_groups" : ['your_sg_name'],
-
-    // A list of service-specific puppet files to execute during
-    // provisioning of this service.  By the time provisioning happens,
-    // any puppet dependencies mentioned in puppet/metadata.json are
-    //  guaranteed to be installed as long as the `setup` operation
-    // has already run.  See also: `setup_list` field in this file
+    // The `provision_list` field provides a list of  instructions to
+    // execute during the provisioning of this service.  By the time
+    // provisioning happens, any puppet or ansible dependencies (mentioned
+    // in puppet/metadata.json and ansible/requirements.yml, respectively)
+    // are guaranteed to be installed as long as the `setup` operation has
+    // already run.
+    //
+    // Note that instructions in the following list may use {{variables}}
+    // mentioned elsewhere in this file, subject to the standard
+    // template-scoping rules.  File locations are relative to the
+    // service-root, i.e. the directory this file is in.
     "provision_list" : [
-        "puppet/demo_service.pp",
+        "puppet://puppet/demo_service.pp",
     ],
 
     // Health checks to execute against this service when the `check`

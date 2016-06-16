@@ -9,7 +9,6 @@ import json
 from fabric import api
 from fabric.colors import yellow
 from ymir import util
-from ymir.caching import cached
 ANSIBLE_CMD = (
     'ansible all {debug} -u {user} '
     '--private-key "{pem}" '
@@ -48,19 +47,15 @@ class AnsibleMixin(object):
         })
 
     @property
-    @cached
     def _ansible_dir(self):
         """ """
         return os.path.join(
             self._ymir_service_root, 'ansible')
 
     @property
-    @cached
     def _ansible_roles_dir(self):
         """ """
         role_dir = os.path.join(self._ansible_dir, 'roles')
-        if not os.path.exists(role_dir) and os.path.exists(self._ansible_dir):
-            os.mkdir(role_dir)
         return role_dir
 
     def _setup_ansible_requirements(self):
@@ -81,7 +76,6 @@ class AnsibleMixin(object):
                 role_dir=self._ansible_roles_dir))
 
     @property
-    @cached
     def _ansible_requirements_file(self):
         """ """
         simple_reqs = os.path.join(
@@ -109,6 +103,7 @@ class AnsibleMixin(object):
         return os.path.join(
             self._ansible_dir, 'ymir_inventory.py')
 
+    @property
     def _ansible_env(self):
         """ common vars used for ansible, ansible-galaxy, and
             ansible-playbook invocation

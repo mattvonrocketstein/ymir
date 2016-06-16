@@ -131,3 +131,19 @@ class VagrantService(AbstractService):
             self.report(err)
             raise SystemExit(1)
         return result
+
+    def terminate(self, force=False):
+        """ terminate this service (delete from virtualbox) """
+        instance = self._instance
+        self.report("{0} slated for termination.".format(instance))
+        if force:
+            return self.vagrant.destroy()
+        else:
+            msg = ("This will terminate the instance {0} ({1}) and can "
+                   "involve data loss.  Are you sure? [y/n] ")
+            answer = None
+            name = self.template_data()['name']
+            while answer not in ['y', 'n']:
+                answer = raw_input(msg.format(instance, name))
+            if answer == 'y':
+                self.terminate(force=True)

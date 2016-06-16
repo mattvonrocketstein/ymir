@@ -1,2 +1,14 @@
+     #
+  mmm#   mmm   mmmmm   mmm
+ #" "#  #"  #  # # #  #" "#
+ #   #  #""""  # # #  #   #
+ "#m##  "#mm"  # # #  "#m#"
 
-test motd {{java_version}}
+  mmm    mmm    m mm  m   m  mmm     mmm    mmm
+ #   "  #"  #   #"  " "m m"    #    #"  "  #"  #
+  """m  #""""   #      #m#     #    #      #""""
+ "mmm"  "#mm"   #       #    mm#mm  "#mm"  "#mm"
+
+
+ansible-variable passed via ymir:
+  ansible_variable={{ansible_variable}}

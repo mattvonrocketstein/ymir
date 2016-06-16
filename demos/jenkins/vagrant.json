@@ -15,7 +15,7 @@
     // are skipped if a good version of puppet is found to already exist
     // on the remote side.  When this key is not found in this configuration,
     // it defaults to true.
-    "ymir_build_puppet": false,
+    "ymir_build_puppet": true,
 
     // Sets the namespace for this service.
     // This is currently unused for vagrant-based configs,
@@ -41,19 +41,32 @@
     // NB: instance_type for vagrant configs should always be "vagrant"
     "instance_type"   : "vagrant",
 
-    // path specifying the file which is the main entry point for puppet code
-    // this file will be used only after the dependencies mentioned in
-    // metadata.json have been installed.
+    // The `setup_list` field provides a list of instructions to
+    // execute during the setup operation for this service.  Even
+    // when this list is empty, the setup operation potentially has
+    // much time-consuming work to do (such as refreshing ansible/puppet
+    // dependencies or refreshing the system package list with apt/yum).
+    // Use `setup_list` for heavy-lifting that doesn't need to happen
+    // often and work that is uncacheable or not-quite idempotent.
+    // Use `provision_list` for things that are more comfortable to
+    // run repeatedly.
     "setup_list" : [
     ],
 
-    // A list of service-specific puppet files to execute during
-    // provisioning of this service.  By the time provisioning happens,
-    // any puppet dependencies mentioned in puppet/metadata.json are
-    //  guaranteed to be installed as long as the `setup` operation
-    // has already run.  See also: `setup_list` field in this file
+    // The `provision_list` field provides a list of  instructions to
+    // execute during the provisioning of this service.  By the time
+    // provisioning happens, any puppet or ansible dependencies (mentioned
+    // in puppet/metadata.json and ansible/requirements.yml, respectively)
+    // are guaranteed to be installed as long as the `setup` operation has
+    // already run.
+    //
+    // Note that instructions in the following list may use {{variables}}
+    // mentioned elsewhere in this file, subject to the standard
+    // template-scoping rules.  File locations are relative to the
+    // service-root, i.e. the directory this file is in.
     "provision_list" : [
         "ansible_playbook://ansible/play.yml",
+        "puppet://puppet/demo_service.pp",
     ],
 
     // Health checks to execute against this service when the `check`

@@ -1,0 +1,21 @@
+{
+  "name": "ymir demo service",
+  "version": "0.0.1",
+  "author": "Author",
+  "license": "Apache-2.0",
+  "summary": "A module for configuring my service",
+  "source": "",
+  "project_page": "",
+  "issues_url": "",
+  "tags": [],
+  "operatingsystem_support": [
+    {
+    "operatingsystem":"Ubuntu",
+    "operatingsystemrelease": ["14.04"]
+    }
+   ],
+  "dependencies": [
+    {"name": "puppetlabs/stdlib"},
+    {"name": "proletaryo/supervisor"}
+  ]
+}
