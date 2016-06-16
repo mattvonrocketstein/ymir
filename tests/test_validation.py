@@ -54,6 +54,7 @@ def test_validate_outermost(*mocks):
 @test_common.mock_aws
 def test_validate_puppet_with_no_files():
     with test_common.demo_service() as ctx:
+        ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
         api.local('find {0} -name "*.pp"|xargs rm'.format(ctx.service_dir))
         errors, messages = validation.validate_puppet(service)
@@ -73,6 +74,7 @@ def test_validate_puppet_with_skeleton_files():
         NB: this test fails with tox but works otherwise.  what gives?
     """
     with test_common.demo_service() as ctx:
+        ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
         errors, messages = validation.validate_puppet(service)
         err = 'skeleton-included puppet files should all validate'
@@ -82,6 +84,7 @@ def test_validate_puppet_with_skeleton_files():
 @test_common.mock_aws
 def test_validate_puppet_with_bad_files():
     with test_common.demo_service() as ctx:
+        ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
         bad_puppet_code = ">random string! is; =bad puppet code'"
         bad_puppet_file = os.path.join(service._puppet_dir, 'bad_puppet.pp')
@@ -99,6 +102,7 @@ def test_validate_puppet_with_bad_files():
 @test_common.mock_aws
 def test_validate_puppet_templates_with_skeleton():
     with test_common.demo_service() as ctx:
+        ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
         errors, messages = validation.validate_puppet_templates(service)
         err = 'service with skeleton puppet files should validate'
@@ -108,6 +112,7 @@ def test_validate_puppet_templates_with_skeleton():
 @test_common.mock_aws
 def test_validate_puppet_templates_with_bad_puppet_vars():
     with test_common.demo_service() as ctx:
+        ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
         bad_puppet_template = "<%= @undefined_puppet_template_variable %>"
         bad_puppet_file = os.path.join(
