@@ -159,6 +159,8 @@ class PuppetMixin(object):
         if not self._supports_puppet:
             return
         self.report("installing puppet")
+        self._update_sys_packages()
+        self._bootstrap_dev()
 
         def decompress(x):
             """ helper to unwrap tarball, removing the

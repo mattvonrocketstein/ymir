@@ -1,0 +1,7 @@
+#
+# requirements.yml
+# ansible-galaxy requirements list.
+#
+# this list of items will be fetched by ymir during ymir setup
+
+- src: Mayeu.sensu

@@ -5,10 +5,13 @@
         confusion with the module from python-vagrant.
 """
 import copy
-import vagrant as _vagrant
-from .base import AbstractService
 from functools import wraps
 import subprocess
+
+import vagrant as _vagrant
+
+from ymir import util
+from .base import AbstractService
 
 
 def catch_vagrant_error(fxn):
@@ -46,7 +49,7 @@ class VagrantService(AbstractService):
     @catch_vagrant_error
     def _pem(self):
         """ value available JIT """
-        return self.vagrant.keyfile()
+        return util.unexpand(self.vagrant.keyfile())
 
     @property
     @catch_vagrant_error
@@ -64,7 +67,6 @@ class VagrantService(AbstractService):
     def vagrant(self):
         """ """
         if not self._vagrant:
-            self.report("acquiring vagrant handle..")
             self._vagrant = _vagrant.Vagrant(
                 quiet_stdout=self._debug_mode,
                 quiet_stderr=self._debug_mode,)

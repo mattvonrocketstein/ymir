@@ -3,23 +3,25 @@
 """
 import os
 import time
-import socket
 import pprint
-import urlparse
 import webbrowser
 import logging
 
 import fabric
 from fabric import api
 from fabric.colors import blue, yellow
+from peak.util.imports import lazyModule
 
 from ymir import util
+
 from ymir.base import Reporter
 from ymir.util import puppet
 from ymir.puppet import PuppetMixin
 from ymir._ansible import AnsibleMixin
 from ymir.caching import cached
 from ymir import data as ydata
+from ymir import checks as ychecks
+yapi = lazyModule('ymir.api')
 
 
 # capture warnings because Fabric and
@@ -46,10 +48,9 @@ class FabricMixin(object):
     ]
 
     def status(self):
-        """ shows IP, ec2 status/tags, etc for this service """
+        """ shows IP, running status, tags, etc for this service """
         self.report('checking status', section=True)
         result = self._status()
-
         for k, v in result.items():
             self.report('  {0}: {1}'.format(k, v))
         return result
@@ -98,7 +99,7 @@ class FabricMixin(object):
         health_checks = self.template_data()['health_checks']
         for check_name in health_checks:
             check, url = health_checks[check_name]
-            self._show_url(url.format(**self.template_data()))
+            self._show_url(yapi.str_reflect(url, self.template_data()))
 
     @util.require_running_instance
     def check(self, name=None):
@@ -113,7 +114,7 @@ class FabricMixin(object):
         service_health_checks = checks
         for check_name, (_type, url_t) in service_health_checks.items():
             if check_name in names:
-                check_obj = checks.Check(
+                check_obj = ychecks.Check(
                     url_t=url_t, check_type=_type, name=check_name)
                 check_obj.run(self)
 
@@ -136,14 +137,20 @@ class FabricMixin(object):
 
 
 class PackageMixin(object):
-    """ """
+    """ To be linux-base agnostic, services should call apt or yum directly.
+
+        Actually.. services should not be installing packages directly because
+        one of the CAP languages is used, but, to build puppet on the remote
+        side we do need to add system packages first.
+
+        Pacapt is used as a universal front-end for the backend
+        package manager.  See: https://github.com/icy/pacapt
+    """
     _require_pacapt_already_run = False
 
     def _require_pacapt(self):
         """ installs pacapt (a universal front-end for apt/yum/dpkg)
             on the remote server if it does not already exist there
-
-            see: https://github.com/icy/pacapt
         """
         if self._require_pacapt_already_run:
             return  # optimization hack: let's only run once per process
@@ -266,32 +273,6 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
         label = self._report_name()
         return util.report(label, msg, *args, **kargs)
 
-    def _status(self):
-        """ retrieves service status information.
-            use this instead of self.status() if you want to quietly
-            retrieve information for use without actually displaying it
-        """
-        tdata = self._service_json  # NOT template_data(), that's cyclic
-        if not self._status_computed and self._debug_mode:
-            self.report("handshaking with AWS..")
-        name = tdata['name']
-        instance = util.get_instance_by_name(name, self.conn)
-        result = dict(
-            instance=None, ip=None,
-            private_ip=None, tags=[],
-            status='terminated?',)
-        if instance:
-            result.update(
-                dict(
-                    instance=instance,
-                    tags=instance.tags,
-                    status=instance.update(),
-                    ip=instance.ip_address,
-                    private_ip=instance.private_ip_address,
-                ))
-        self._status_computed = result
-        return result
-
     def setup(self):
         """ setup service (operation should be after
             'create', before 'provision') """
@@ -299,6 +280,7 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
 
     def _setup(self, failures=0):
         self.report('setting up')
+        self._setup_ansible_requirements()  # NOOP if not applicable
         cm_data = self._status()
         if cm_data['status'] == 'running':
             try:
@@ -359,73 +341,6 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
                 result = restart()
                 count += 1
 
-    def create(self, force=False):
-        """ create new instance of this service ('force' defaults to False)"""
-        self.report('creating ec2 instance', section=True)
-        conn = self.conn
-        i = self._get_instance()
-        if i is not None:
-            msg = '  instance already exists: {0} ({1})'
-            msg = msg.format(i, i.update())
-            self.report(msg)
-            if force:
-                self.report('  force is True, terminating it & rebuilding')
-                util._block_while_terminating(i, conn)
-                # might need to block and wait here
-                return self.create(force=False)
-            self.report('  force is False, refusing to rebuild it')
-            return
-
-        service_data = self.template_data()
-        # HACK: deal with unfortunate vpc vs. ec2-classic differences
-        reservation_extras = service_data.get('reservation_extras', {}).copy()
-
-        # set security group stuff in reservation extras
-        sg_names = service_data['security_groups']
-        if not sg_names:
-            err = ('without `security_groups` in service.json, '
-                   'cannot create instance reservation')
-            raise SystemExit(err)
-        self.report(
-            "service description uses {0} as a security groups".format(sg_names))
-        tmp = {}
-        sgs = dict([[sg.id, sg.name] for sg in conn.get_all_security_groups()])
-        for sg_name in sg_names:
-            if sg_name not in sgs.values():
-                err = "could not find {0} amongst security groups at {1}"
-                err = err.format(sg_names, sgs.values())
-                raise SystemExit(err)
-            else:
-                _id = [_id for _id in sgs if sgs[_id] == sg_name][0]
-                self.report("  sg '{0}' is id {1}".format(sgs[_id], _id))
-                tmp[_id] = sgs[_id]
-        reservation_extras['security_group_ids'] = tmp.keys()
-
-        reservation = conn.run_instances(
-            image_id=service_data['ami'],
-            key_name=service_data['key_name'],
-            instance_type=service_data['instance_type'],
-            **reservation_extras)
-
-        instance = reservation.instances[0]
-        self.report('  no instance found, creating it now.')
-        self.report('  reservation-id:', instance.id)
-
-        util._block_while_pending(instance)
-        status = instance.update()
-        name = self.template_data()['name']
-        if status == 'running':
-            self.report('  instance is running.')
-            self.report('  setting tag for "Name": {0}'.format(
-                name))
-            instance.add_tag("Name", name)
-        else:
-            self.report('Weird instance status: ', status)
-            return None
-
-        time.sleep(5)
-        self.report("Finished with creation.  Now run `fab setup`")
-
     def provision(self, fname=None, **kargs):
         """ provision this service """
         self.report('preparing to provision: {0}'.format(
@@ -463,19 +378,8 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
                 # destroyed.  not what is wanted for provisioning!
                 self.copy_puppet(clean=False)
                 for provision_item in provision_list:
-                    protocol, instruction = self._split_instruction(
+                    protocol, instruction = util.split_instruction(
                         provision_item)
-                    # if '://' in provision_item:
-                    #    err = 'provision-protocol names may not include _.'
-                    #    assert '_' not in provision_item.split('://')[0], err
-                    # provisioner = urlparse.urlparse(provision_item).scheme
-                    # if provisioner == '':
-                    #    # for backwards compatability, puppet is the default
-                    #    provisioner = 'puppet'
-                    #    provision_instruction = provision_item
-                    # else:
-                    #    provision_instruction = provision_item[
-                    #        len(provisioner) + len('://'):]
                     self.report('provision_list[{0}]:'.format(
                         provision_list.index(provision_item)))
                     self._run_provisioner(
@@ -483,19 +387,6 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
         self.report("Finished with provision.")
         self.report("You might want to restart services "
                     " using `fab service` or `fab supervisor`")
-
-    def _split_instruction(self, instruction):
-        """ here, `instruction` is an item from either setup_list or provision_list
-        """
-        protocol = urlparse.urlparse(instruction).scheme
-        if protocol == '':
-            # for backwards compatability, puppet is the default
-            protocol = 'puppet'
-            raw_instruction = instruction
-        else:
-            raw_instruction = instruction[
-                len(protocol) + len('://'):]
-        return protocol, raw_instruction
 
     def _run_provisioner(self, provisioner_name, provision_instruction, **kargs):
         self.report(' {0}'.format(
@@ -508,18 +399,18 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
                 "Fatal: no sucher provisioner `{0}`".format(provisioner_name))
             raise SystemExit()
         else:
-            cmd = provision_instruction.format(**self.template_data())
+            cmd = yapi.str_reflect(provision_instruction,
+                                   ctx=self.template_data())
             if cmd != provision_instruction:
                 self.report("  translated to: {0}".format(cmd))
             return provision_fxn(cmd, **kargs)
 
     def _provision_remote(self, cmd):
+        """ handler for provision-list entries prefixed with `remote://` """
         return self.run(cmd)
 
     def _provision_local(self, cmd):
-        """ runs a shell command on the local host,
-            for the purposes of provisioning the remote host.
-        """
+        """ handler for provision-list entries prefixed with `local://` """
         return api.local(cmd)
 
     @property
@@ -532,8 +423,6 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
         self._clean_puppet_tmp_dir()
         with self.ssh_ctx():
             with api.lcd(self._ymir_service_root):
-                self._update_sys_packages()
-                self._bootstrap_dev()
                 self.copy_puppet(clean=True)  # NOOP if puppet isn't supported
                 # NOOP if puppet isn't supported
                 self._bootstrap_puppet(force=True)
@@ -553,7 +442,7 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
     @property
     def facts(self):
         """ """
-        json = self.template_data(simple=True)
+        json = self.template_data()
         service_defaults = json['service_defaults']
         for fact in service_defaults:
             tmp = service_defaults[fact]
@@ -582,7 +471,7 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
         return self._status().get('ip')
 
     def _show_url(self, url):
-        url = url.format(**self.template_data(simple=False))
+        url = yapi.str_reflect(url, ctx=self.template_data(simple=False))
         self.report("showing: {0}".format(url))
         webbrowser.open(url)
 
@@ -597,8 +486,11 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
             host=self._host,
             port=self._port,
         )
-        plist = [cmd.format(**tmp) for cmd in tmp['provision_list']]
-        slist = [cmd.format(**tmp) for cmd in tmp['setup_list']]
+        # plist = [cmd.format(**tmp) for cmd in tmp['provision_list']]
+        plist = [yapi.str_reflect(cmd, ctx=tmp)
+                 for cmd in tmp['provision_list']]
+        # slist = [cmd.format(**tmp) for cmd in tmp['setup_list']]
+        slist = [yapi.str_reflect(cmd, ctx=tmp) for cmd in tmp['setup_list']]
         tmp['provision_list'] = plist
         tmp['setup_list'] = slist
         return tmp
@@ -610,14 +502,7 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
 
     def show_facts(self):
         """ show facts (puppet key-values available to templates)"""
-        self.report("facts (template variables) available to puppet code:")
+        self.report("facts available to puppet/ansible:")
         facts = sorted([[k, v] for k, v in self.facts.items()])
         for k, v in facts:
             print ' ', k, '=>', v
-
-    @staticmethod
-    def is_port_open(host, port):
-        """ TODO: refactor into ymir.utils. this is used by ymir.checks """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.connect_ex((host, int(port)))
-        return result == 0

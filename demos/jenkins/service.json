@@ -1,13 +1,12 @@
 //
-// service.json for `demo service`
+// service.json for the `demo` service
 //
 //  Complete documentation for the file schema is here:
 //   http://mattvonrocketstein.github.io/ymir/pages/service-description.html
 //
 {
 
-    // Whether ymir should display extra debugging information
-    // NB: This parameter also control puppet and ansible debug levels
+    // Display extra debugging information
     "ymir_debug": true,
 
     // Whether ymir should build puppet on the remote side.
@@ -119,8 +118,8 @@
 
     // Schema-free section for misc. site configuration.
     // Useful for template-variables that can be passed on to the
-    // puppet FACTer, or used to configure application particulars.
-    // puppet FACTer, or used to configure application particulars.
+    // puppet FACTer, the ansible environment, or used to configure
+    // application particulars.
     'service_defaults' : {
     }
 }

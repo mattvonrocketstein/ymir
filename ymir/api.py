@@ -2,6 +2,7 @@
 """ ymir.api
 """
 import os
+import re
 
 import demjson
 from fabric.colors import yellow
@@ -10,20 +11,32 @@ from voluptuous import Optional, Undefined
 from ymir import util
 from ymir.base import report as base_report
 from ymir import schema as yschema
+
 import jinja2
 env = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
 
 def str_reflect(obj, ctx, simple=True):
+    """ when `simple` is true, lazy JIT params like host/username/pem need
+        not be resolved and certain errors are allowed
+    """
+    pattern = r"'([A-Za-z0-9_\./\\-]*)'"
     try:
         # return obj.format(**ctx)
         return env.from_string(obj).render(**ctx)
-    except KeyError as err:
+    # except KeyError as err:
+    except jinja2.UndefinedError as err:
         lazy_keys = ['host', 'username', 'pem']
-        if err.message in lazy_keys and simple:
+        group = re.search(pattern, str(err)).group().replace("'", '')
+        if group in lazy_keys and simple:
             return obj
         else:
-            raise Exception(str([err, lazy_keys, simple, ]))
+            raise Exception(
+                str(dict(
+                    original_err=err,
+                    group=group,
+                    lazy_keys=lazy_keys,
+                    simple=simple,)))
 
 
 def list_reflect(lst, ctx, simple=True):
@@ -128,7 +141,8 @@ def _load_service_from_json_helper(service_json_file=None,
     BaseService = chosen_schema.get_service_class(service_json)
     report('ymir.api', 'chose service class: {0}'.format(
         yellow(BaseService.__name__)))
-    ServiceFromJSON = type(classname, (BaseService,), {})
+    ServiceFromJSON = type(classname, (BaseService,),
+                           dict(service_json_file=service_json_file))
     obj = ServiceFromJSON(service_root=os.path.dirname(service_json_file))
     obj._schema = chosen_schema
     service_json = set_schema_defaults(service_json, chosen_schema)

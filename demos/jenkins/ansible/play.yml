@@ -1,0 +1,15 @@
+#
+# Example playbook for ansible
+#
+- hosts: all
+  become_user: root
+  tasks:
+    - name: Push a template to the demo service
+      template: src=templates/motd dest=/etc/motd mode="u=rw,g=r,o=r"
+      become: true
+    - name: Install a system package
+      apt: pkg=tree state=installed
+      register: apt_output
+    - debug: var=apt_output # show the content of apt_output var
+    - name: Push a file to the demo service
+      copy: src=files/tmp_file dest=/tmp/tmp_file mode=0644

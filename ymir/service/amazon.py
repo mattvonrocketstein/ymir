@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """ ymir.service.amazon
 """
-
+import time
 import copy
 import boto
 
 from ymir import util
 from ymir.service.base import AbstractService
-from ymir.util import NOOP
 
 
 class AmazonService(AbstractService):
@@ -57,10 +56,10 @@ class AmazonService(AbstractService):
         """ pem-file is accessible only as a property because
             it must overridden for i.e. vagrant-based services
         """
-        return self._service_json['pem']
+        return util.unexpand(self._service_json['pem'])
 
     def sync_buckets(self, quiet=False):
-        report = self.report if not quiet else NOOP
+        report = self.report if not quiet else util.NOOP
         buckets = self.template_data()['s3_buckets']
         report("synchronizing s3 buckets")
         if buckets:
@@ -145,3 +144,96 @@ class AmazonService(AbstractService):
                   pem=service_data['pem'])
 
     ssh = util.require_running_instance(AbstractService.ssh)
+
+    def _status(self):
+        """ retrieves service status information.
+            use this instead of self.status() if you want to quietly
+            retrieve information for use without actually displaying it
+        """
+        tdata = self._service_json  # NOT template_data(), that's cyclic
+        if not self._status_computed and self._debug_mode:
+            self.report("handshaking with AWS..")
+        name = tdata['name']
+        instance = util.get_instance_by_name(name, self.conn)
+        result = dict(
+            instance=None, ip=None,
+            private_ip=None, tags=[],
+            status='terminated?',)
+        if instance:
+            result.update(
+                dict(
+                    instance=instance,
+                    tags=instance.tags,
+                    status=instance.update(),
+                    ip=instance.ip_address,
+                    private_ip=instance.private_ip_address,
+                ))
+        self._status_computed = result
+        return result
+
+    def create(self, force=False):
+        """ create new instance of this service ('force' defaults to False)"""
+        self.report('creating ec2 instance', section=True)
+        conn = self.conn
+        i = self._get_instance()
+        if i is not None:
+            msg = '  instance already exists: {0} ({1})'
+            msg = msg.format(i, i.update())
+            self.report(msg)
+            if force:
+                self.report('  force is True, terminating it & rebuilding')
+                util._block_while_terminating(i, conn)
+                # might need to block and wait here
+                return self.create(force=False)
+            self.report('  force is False, refusing to rebuild it')
+            return
+
+        service_data = self.template_data()
+        # HACK: deal with unfortunate vpc vs. ec2-classic differences
+        reservation_extras = service_data.get('reservation_extras', {}).copy()
+
+        # set security group stuff in reservation extras
+        sg_names = service_data['security_groups']
+        if not sg_names:
+            err = ('without `security_groups` in service.json, '
+                   'cannot create instance reservation')
+            raise SystemExit(err)
+        self.report(
+            "service description uses {0} as a security groups".format(sg_names))
+        tmp = {}
+        sgs = dict([[sg.id, sg.name] for sg in conn.get_all_security_groups()])
+        for sg_name in sg_names:
+            if sg_name not in sgs.values():
+                err = "could not find {0} amongst security groups at {1}"
+                err = err.format(sg_names, sgs.values())
+                raise SystemExit(err)
+            else:
+                _id = [_id for _id in sgs if sgs[_id] == sg_name][0]
+                self.report("  sg '{0}' is id {1}".format(sgs[_id], _id))
+                tmp[_id] = sgs[_id]
+        reservation_extras['security_group_ids'] = tmp.keys()
+
+        reservation = conn.run_instances(
+            image_id=service_data['ami'],
+            key_name=service_data['key_name'],
+            instance_type=service_data['instance_type'],
+            **reservation_extras)
+
+        instance = reservation.instances[0]
+        self.report('  no instance found, creating it now.')
+        self.report('  reservation-id:', instance.id)
+
+        util._block_while_pending(instance)
+        status = instance.update()
+        name = self.template_data()['name']
+        if status == 'running':
+            self.report('  instance is running.')
+            self.report('  setting tag for "Name": {0}'.format(
+                name))
+            instance.add_tag("Name", name)
+        else:
+            self.report('Weird instance status: ', status)
+            return None
+
+        time.sleep(5)
+        self.report("Finished with creation.  Now run `fab setup`")

@@ -30,11 +30,14 @@ def validate_puppet(service):
     """
     errors, messages = [], []
     pdir = service._puppet_dir
-    if not os.path.exists(pdir):
+    if service._supports_puppet and not os.path.exists(pdir):
         msg = 'puppet directory does not exist @ {0}'
         msg = msg.format(pdir)
         errors.append(msg)
-    else:
+    elif not service._supports_puppet and os.path.exists(pdir):
+        msg = "puppet directory is present, but `ymir_build_puppet` is false"
+        errors.append(msg)
+    elif service._supports_puppet:
         parser = service.template_data().get('puppet_parser', '')
         validation_cmd = 'puppet parser {0} validate '.format(
             '--parser {0}'.format(parser) if parser else '')
@@ -61,9 +64,11 @@ def validate_puppet_templates(service):
     """ validates that variables mentioned in puppet
         templates are defined in service.json
     """
+    if not service._supports_puppet:
+        return [], ["`ymir_build_puppet` is false supported for this service, skipping"]
     errors, messages = [], []
     default_facts = puppet.DEFAULT_FACTS
-    # local_puppet_template_files = service._get_puppet_templates()
+
     service_vars = service._service_json.keys()
     service_vars += default_facts
     for f, template_vars in service._get_puppet_template_vars().items():

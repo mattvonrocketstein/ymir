@@ -6,9 +6,9 @@
 //   See also: mattvonrocketstein.github.io/ymir/vagrant
 //
 {
-    // Whether ymir should display extra debugging information
+    // Whether ymir should display extra debugging information.
     // NB: This parameter also control puppet and ansible debug levels
-    "ymir_debug": true,
+    //"ymir_debug": true,
 
     // Whether ymir should build puppet on the remote side.
     // Puppet-builds only occur during the `setup` operation, and
@@ -23,7 +23,7 @@
     "org_name": "orgName",
     "app_name": "appName",
     "env_name": "envName",
-    "service_name": "vagrant-demo",
+    "service_name": "jenkins-demo",
 
     "logs": [
         // declare logfile locations on this service
@@ -53,6 +53,7 @@
     //  guaranteed to be installed as long as the `setup` operation
     // has already run.  See also: `setup_list` field in this file
     "provision_list" : [
+        "ansible_playbook://ansible/play.yml",
     ],
 
     // Health checks to execute against this service when the `check`
@@ -64,7 +65,12 @@
         ['http_200', 'http://{host}'],
     },
 
-    // Data that will be passed on to the puppet FACTer
+    // Schema-free section for misc. site configuration.
+    // Useful for template-variables that can be passed on to the
+    // puppet FACTer, the ansible environment, or used to configure
+    // application particulars.
     'service_defaults' : {
+        "ansible_variable": "ANSIBLE_VARIABLE_VALUE",
+        "puppet_variable": "PUPPET_VARIABLE_VALUE",
     }
 }

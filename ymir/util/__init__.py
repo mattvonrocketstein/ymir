@@ -3,18 +3,21 @@
 
     Mostly AWS utility functions
 """
+from __future__ import print_function
 
 import os
+import sys
 import time
 import shutil
 import socket
 from functools import wraps
 
-from fabric import colors
+import yurl
 import boto.ec2
-from boto.provider import ProfileNotFoundError
-from boto.exception import EC2ResponseError
 from fabric import api
+from fabric import colors
+from boto.exception import EC2ResponseError
+from boto.provider import ProfileNotFoundError
 from fabric.contrib.files import exists as remote_exists
 
 from ymir import data as ydata
@@ -26,16 +29,38 @@ remote_path_exists = remote_exists
 __all__ = [x.__name__ for x in [TemporaryDirectory, NOOP]]
 
 
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def split_instruction(instruction):
+    """ here, `instruction` is an item from either
+        setup_list or provision_list
+    """
+    protocol = yurl.URL(instruction).scheme
+    # protocol is used to determine instance-method for
+    # dispatch, so there are no dashes allowed
+    protocol = protocol.replace('-', '_')
+    if protocol == '':
+        # for backwards compatability, puppet is the default
+        protocol = 'puppet'
+        raw_instruction = instruction
+    else:
+        raw_instruction = instruction[
+            len(protocol) + len('://'):]
+    return protocol, raw_instruction
+
+
 def report(label, msg, *args, **kargs):
     """ 'print' shortcut that includes some color and formatting """
     if 'section' in kargs:
-        print '-' * 80
+        eprint('-' * 80)
     template = '\x1b[31;01m{0}:\x1b[39;49;00m {1} {2}'
     # if Service subclasses are embedded directly into fabfiles, there
     # is a need for a lot of private variables to control the namespace
     # fabric publishes as commands.
     label = label.replace('_', '')
-    print template.format(label, msg, args or '')
+    eprint(template.format(label, msg, args or ''))
 
 
 def require_running_instance(fxn):
@@ -69,8 +94,8 @@ def shell(conn=None, **namespace):
         from smashlib import embed
         embed(user_ns=namespace)
     except ImportError as e:
-        print 'you need smashlib or ipython installed to run the shell!'
-        print "original error: " + str(e)
+        eprint('you need smashlib or ipython installed to run the shell!')
+        eprint("original error: " + str(e))
         raise
 
 
@@ -147,16 +172,16 @@ def get_conn(key_name=None, region='us-east-1'):
         if keypair is None:
             msg = "WARNING: could not retrieve default keypair '{0}'!!"
             msg = msg.format(key_name)
-            print msg
+            eprint(msg)
     return conn
 
 
 def show_instances(conn):
     """ """
     for i, tags in get_tags(None, conn).items():
-        print i
+        eprint(i)
         for k in tags:
-            print '  ', k, tags[k]
+            eprint('  ', k, tags[k])
 
 
 def get_instance_by_name(name, conn):
@@ -186,21 +211,21 @@ def _block_while_pending(instance):
     # Check up on its status every so often
     status = instance.update()
     while status == 'pending':
-        print '  polling reservation [status is "pending"]'
+        eprint('  polling reservation [status is "pending"]')
         time.sleep(4)
         status = instance.update()
 
 
 def _block_while_terminating(instance, conn):
     """ """
-    print '  terminating instance:', instance
+    eprint('  terminating instance:', instance)
     assert get_instance_by_id(instance.id, conn) is not None
     conn.terminate_instances([instance.id])
     time.sleep(2)
     while get_instance_by_id(instance.id, conn):
-        print '  polling for terminate completion'
+        eprint('  polling for terminate completion')
         time.sleep(3)
-    print '  terminated successfully'
+    eprint('  terminated successfully')
 
 
 def catch_ec2_error(fxn):
@@ -208,9 +233,9 @@ def catch_ec2_error(fxn):
     try:
         fxn()
     except EC2ResponseError as e:
-        print colors.red('failed:') + str([e, fxn])
+        eprint(colors.red('failed:') + str([e, fxn]))
     else:
-        print ydata.OK
+        eprint(ydata.OK)
 
 
 def get_keypair_names(conn=None):
