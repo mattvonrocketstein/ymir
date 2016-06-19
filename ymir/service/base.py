@@ -68,14 +68,17 @@ class FabricMixin(object):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
         """
-        owner = kargs.pop('owner', None)
-        if owner:
-            kargs['use_sudo'] = True
         with self.ssh_ctx():
-            result = api.put(src, dest, *args, **kargs)
-        if owner:
-            api.sudo('chown {0}:{0} "{1}"'.format(owner, dest))
-        return result
+            owner = kargs.pop('owner', None)
+            if owner:
+                kargs['use_sudo'] = True
+            with self.ssh_ctx():
+                result = api.put(src, dest, *args, **kargs)
+            if result.succeeded and owner:
+                for remote_fname in result:
+                    api.sudo('chown {0}:{0} "{1}"'.format(
+                        owner, remote_fname))
+            return result.succeeded
 
     @util.require_running_instance
     def get(self, fname, local_path='.'):
@@ -97,15 +100,14 @@ class FabricMixin(object):
     @util.require_running_instance
     def show(self):
         """ open health-check webpages for this service in a browser """
-
-        def _show_url(self, url):
+        def _show_url(url):
             self.report("showing: {0}".format(url))
             webbrowser.open(url)
         self.report('showing webpages')
         health_checks = self.template_data()['health_checks']
         for check_name in health_checks:
             check, url = health_checks[check_name]
-            self._show_url(yapi.str_reflect(url, self.template_data()))
+            _show_url(yapi.str_reflect(url, self.template_data()))
 
     @util.require_running_instance
     def check(self, name=None):

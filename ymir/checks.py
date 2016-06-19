@@ -20,7 +20,11 @@
 
 import requests
 from ymir import util
+
 from fabric.colors import blue, yellow, red, cyan
+from peak.util.imports import lazyModule
+
+yapi = lazyModule('ymir.api')
 
 
 class InvalidCheckType(RuntimeError):
@@ -43,7 +47,7 @@ class Check(object):
     def run(self, service, quiet=False):
         import ymir.checks as modyool
         data = service.template_data()
-        self.url = self.url_t.format(**data)
+        self.url = yapi.str_reflect(self.url_t, ctx=data)
         try:
             checker = getattr(modyool, self.check_type)
         except AttributeError:

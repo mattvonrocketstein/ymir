@@ -226,7 +226,7 @@ def validate(service_json, schema=None, simple=True, quiet=False):
     if simple:
         return True
 
-    # simple validation has succeded, begin second phase.
+    # simple validation has succeeded, begin second phase.
     # the schema can be loaded, so build a service object.
     # the service object can then begin to validate itself
     report('Instantiating service to scrutinize it..')
