@@ -97,6 +97,10 @@ class FabricMixin(object):
     @util.require_running_instance
     def show(self):
         """ open health-check webpages for this service in a browser """
+
+        def _show_url(self, url):
+            self.report("showing: {0}".format(url))
+            webbrowser.open(url)
         self.report('showing webpages')
         health_checks = self.template_data()['health_checks']
         for check_name in health_checks:
@@ -114,11 +118,14 @@ class FabricMixin(object):
         checks = self.template_data()['health_checks']
         names = [name] if name is not None else checks.keys()
         service_health_checks = checks
+        success = True
         for check_name, (_type, url_t) in service_health_checks.items():
             if check_name in names:
                 check_obj = ychecks.Check(
                     url_t=url_t, check_type=_type, name=check_name)
-                check_obj.run(self)
+                success = success and check_obj.run(self).success
+        if not success:
+            raise SystemExit(1)
 
     def integration_test(self):
         """ runs integration tests for this service """
@@ -264,7 +271,7 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
             only be called from inside fabfiles
         """
         import fabfile
-        for x in self.FABRIC_COMMANDS:
+        for x in set(self.FABRIC_COMMANDS):
             try:
                 tmp = getattr(fabfile, x)
             except AttributeError:
@@ -497,11 +504,6 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
     def _host(self):
         """ """
         return self._status().get('ip')
-
-    def _show_url(self, url):
-        url = yapi.str_reflect(url, ctx=self.template_data(simple=False))
-        self.report("showing: {0}".format(url))
-        webbrowser.open(url)
 
     def template_data(self):
         """ a last phase of reflection, for data that's potentially
