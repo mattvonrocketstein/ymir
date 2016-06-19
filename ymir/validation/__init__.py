@@ -38,7 +38,7 @@ def validate_puppet(service):
         msg = "puppet directory is present, but `ymir_build_puppet` is false"
         errors.append(msg)
     elif service._supports_puppet:
-        parser = service.template_data().get('puppet_parser', '')
+        parser = service.template_data()['puppet_parser']
         validation_cmd = 'puppet parser {0} validate '.format(
             '--parser {0}'.format(parser) if parser else '')
         with api.quiet():
@@ -100,13 +100,48 @@ def validate_keypairs(service):
     return errors, messages
 
 
+def validate_vagrant(service):
+    """ """
+    errors, messages = [], []
+    return errors, messages
+
+
+def validate_security_groups_json(service):
+    """ validates that if security_groups.json is present,
+        it the values there jive with what's found in
+        service_json['security_groups']
+    """
+    groups = service._service_json['security_groups']
+    errors, messages = [], []
+    sg_json = service._sg_json
+    if not service._sg_file:
+        msg = "this service doesn't have a security_groups.json file."
+        messages.append(msg)
+    elif service._sg_file and sg_json is None:
+        err = "security_groups.json is present but does not decode as JSON"
+        errors.append(err)
+    elif service._sg_file and sg_json:
+        try:
+            yschema.SGFileSchema(sg_json)
+        except (voluptuous.MultipleInvalid,) as exc:
+            err = "{0} does not match SGFileSchema".format(service._sg_file)
+            errors.append(err)
+            errors.append(str(exc))
+        else:
+            set1 = set([group['name'] for group in sg_json])
+            set2 = set(groups)
+            if set1 != set2:
+                messages.append(
+                    "mismatch between names in {0} and service.json".format(
+                        service._sg_file))
+                messages.append("{0} vs {1}".format(set1, set2))
+    return errors, messages
+
+
 def validate_security_groups(service):
     """ validates that named security groups mentioned
         in service.json are defined according to AWS
         with the current account
-    """
-    """ validation for security groups.
-    NB: this requires AWS credentials
     """
     groups = service._service_json['security_groups']
     errors, messages = [], []
@@ -164,11 +199,13 @@ def print_errs(msg, (errors, messages), quiet=False, die=False, report=_report):
     assert isinstance(messages, list), err
     if msg:
         report(msg)
-    for e in errors:
-        report(red('  error[{0}]: '.format(errors.index(e))))
-        report('\t' + str(e))
+    space2 = '    '
+    for m in errors:
+        report(red('  error[{0}]: '.format(errors.index(m))))
+        report(space2 + str(m))
     for m in messages:
-        report(green('   {0}'.format(m)))
+        report(yellow('  message[{0}]: '.format(messages.index(m))))
+        report(green(space2 + str(m)))
     if errors and die:
         raise SystemExit(str(errors))
 
@@ -201,14 +238,17 @@ def validate(service_json, schema=None, simple=True, quiet=False):
         validate_health_checks(service),
         report=report,)
     if not isinstance(service, beanstalk.ElasticBeanstalkService):
+        print_errs(
+            'checking AWS security groups in field `security_groups` exist..',
+            validate_security_groups(service), report=report,)
+        print_errs(
+            'checking for agreement between `security_groups` field and security_groups.json file..',
+            validate_security_groups_json(service), report=report,)
         print_errs('checking AWS keypair at field `key_name`..',
                    validate_keypairs(service), report=report,)
         print_errs('checking puppet-librarian\'s metadata.json',
                    puppet.validate_metadata_file(service._puppet_metadata),
                    report=report)
-        print_errs(
-            'checking AWS security groups in field `security_groups` exist..',
-            validate_security_groups(service), report=report,)
         print_errs('checking puppet code validates with puppet parser..',
                    validate_puppet(service), report=report,)
         print_errs('checking puppet templates for undefined variables..',
