@@ -36,20 +36,27 @@
     // For readability and logging you might add later,
     // the suggested format is: "org_name-app_name-env_name"
     "name" : "{{org_name}}-{{app_name}}-{{env_name}}",
+
+    // Human-friendly description of what this service does.
+    // Will also be used as an instance tag for AWS.
     "service_description": "Service description goes here",
 
-    // AWS tags which are set to "true".
-    // This will be useful for sorting/filtering instances later.
+    // AWS tags which are set to "true".  This will be useful for
+    // sorting/filtering instances later.  Suggested usage: mention
+    // the programming-language so you can filter by instances later by
+    // stuff like "python", or "node".  Tags like "web" or "worker" are
+    // also a good idea.
     "tags": [],
 
-    // Declare logfile locations on this service
-    // This can be used later to tail/retrieve logs.
+    // Declare logfile locations on this service.  This will
+    // be used later for operations that tail or retrieve logs.
     "logs": [
         "/var/logs/syslog"
     ],
 
     // Declare elastic (static) IP addresses for AWS here.
-    // During the `setup` operation, these will be bound if unbound
+    // During the `setup` operation, these will be bound if
+    // to the instance if they are found to be currently unbound,
     // but they must already exist according to the AWS API.
     "elastic_ips": [],
 
@@ -71,11 +78,13 @@
     "username" : "ubuntu",
 
     // The location of the pem file for this service.
-    // This will be used for ssh connections with the service,
-    // and if it is not correct then no remote commands can be executed.
+    // This will be used for ssh connections with the service, and if
+    // it is not correct then no remote commands can be executed.
+    // Tilde expansion can be relied upon.
     "pem" : "~/.ssh/{{app_name}}.pem",
 
-    // Allows sane iteration using rubyish `each` inside puppet files
+    // Allows sane iteration using rubyish `each` inside puppet files.
+    // The only acceptable value currently is the default: `future`
     'puppet_parser': 'future',
 
     // Sets up the AWS key_name for this service.
@@ -132,9 +141,14 @@
     },
 
     // Schema-free section for misc. site configuration.
-    // Useful for template-variables that can be passed on to the
-    // puppet FACTer, or used to configure application particulars.
-    // puppet FACTer, or used to configure application particulars.
+    //
+    // Variables mentioned here may be used for templating values inside
+    // the `health_checks`, `provision_list`, and `setup_list` fields
+    //
+    // Variables mentioned here may optionally be used by the puppet and
+    // ansible provisioners.  In the case of puppet, environment variables
+    // must be used (so there is no support hashes and probably bad support
+    // for extremely long strings).  Ansible support is much more complete.
     'service_defaults' : {
     }
 }
