@@ -3,24 +3,16 @@
 """
 
 from voluptuous import Schema as _Schema
-from voluptuous import Required, Optional, Undefined
+from voluptuous import Required, Undefined
 
 
 from ymir.schema import data
-from ymir.schema import validators
 from ymir.service import AmazonService, VagrantService
-
-SupervisorSchema = {
-    Optional("supervisor_user", default='admin'): unicode,
-    Optional("supervisor_pass", default='676be646-c477-11e5-bfdc-0800272dfc6a'): unicode,
-    Optional("supervisor_port", default='9001'): validators.string_or_int,
-}
 
 VagrantSchema = data.BASE_DATA.copy()
 VagrantSchema.update(data.PROVISION_DATA)
 
 EC2Schema = data.BASE_DATA.copy()
-EC2Schema.update(SupervisorSchema)
 EC2Schema.update(data.AWS_DATA)
 EC2Schema.update(data.PROVISION_DATA)
 EC2Schema.update({
