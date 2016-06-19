@@ -3,12 +3,14 @@
 
     Defines a ansible mixin for the base ymir service service class
 """
-
 import os
 import json
+
 from fabric import api
 from fabric.colors import yellow
+
 from ymir import util
+
 ANSIBLE_CMD = (
     'ansible all {debug} -u {user} '
     '--private-key "{pem}" '

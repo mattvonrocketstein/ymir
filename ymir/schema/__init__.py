@@ -26,7 +26,7 @@ def choose_schema(json, quiet=False):
     instance_type = json.get('instance_type')
     if instance_type in [u'elastic_beanstalk', u'elasticbeanstalk']:
         schema = eb_schema
-    elif instance_type in ['vagrant']:
+    elif instance_type in ['vagrant', ]:
         schema = vagrant_schema
     else:
         schema = default_schema

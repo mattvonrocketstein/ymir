@@ -13,7 +13,6 @@
 // example opens ssh web port for everyone from anywhere:
 //   ['tcp', 80, 80, '0.0.0.0/0'],     // web
 //   ['tcp', 22, 22, '0.0.0.0/0'],     // ssh
-
 [
     { "name":'demo_security_group',
       "description": 'demo security group',

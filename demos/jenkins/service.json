@@ -9,13 +9,6 @@
     // Display extra debugging information
     "ymir_debug": true,
 
-    // Whether ymir should build puppet on the remote side.
-    // Puppet-builds only occur during the `setup` operation, and
-    // are skipped if a good version of puppet is found to already exist
-    // on the remote side.  When this key is not found in this configuration,
-    // it defaults to true.
-    "ymir_build_puppet": false,
-
     // Sets namespace for this service.
     // This is used in tagging for AWS-based services,
     // and these variables are often useful for templating.
@@ -24,33 +17,9 @@
     "env_name": "EnvName",
     "service_name": "ServiceName",
 
-    // Declare s3 buckets here.  during the `setup` operation,
-    // these buckets will be created if they do not already exist.
-    "s3_buckets": [],
-
-    // Sets the name for this service.
-    // This will be used in service discovery for provisioning, etc,
-    // after this service has been created.  Choose wisely!
-    //
-    // For readability and logging you might add later,
-    // the suggested format is: "org_name-app_name-env_name"
-    "name" : "{{org_name}}-{{app_name}}-{{env_name}}",
+    "name" : "ymir-demo",
     "service_description": "Service description goes here",
 
-    // AWS tags which are set to "true".
-    // This will be useful for sorting/filtering instances later.
-    "tags": [],
-
-    // Declare logfile locations on this service
-    // This can be used later to tail/retrieve logs.
-    "logs": [
-        "/var/logs/syslog"
-    ],
-
-    // Declare elastic (static) IP addresses for AWS here.
-    // During the `setup` operation, these will be bound if unbound
-    // but they must already exist according to the AWS API.
-    "elastic_ips": [],
 
     // Sets the AMI for this service.  The default is ubuntu 14.04,
     // amd64 ebs us-east-1.  Other potentially useful hints follow:
@@ -87,9 +56,6 @@
     // A list of instructions that will be executed during the `setup` operation.
     // See also: mattvonrocketstein.github.io/ymir/
     "setup_list" : [
-        // By default this just installs a suite of devops packages
-        // suggested by ymir, including nmap, tree, ruby/python dev, etc.
-        "puppet/modules/ymir/packages.pp",
         ],
 
     // A list of names for the AWS security groups this service will belong
