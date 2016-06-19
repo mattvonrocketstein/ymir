@@ -7,6 +7,7 @@ import pprint
 import webbrowser
 import logging
 
+import demjson
 import fabric
 from fabric import api
 from fabric.colors import blue, yellow
@@ -202,6 +203,32 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
             return super(AbstractService, self).__str__()
 
     __repr__ = __str__
+
+    @property
+    def _security_group_file(self):
+        """ """
+        tmp = os.path.join(self._ymir_service_root, 'security_groups.json')
+        if os.path.exists(tmp):
+            return tmp
+    _sg_file = _security_group_file
+
+    @property
+    def _security_group_json(self):
+        """ returns JSON for $service_root/security_groups.json
+            if the file exists and is decodable, otherwise return
+            None.  WARNING: this doesn't guarantee anything about the
+            JSON schema
+        """
+        fname = self._security_group_file
+        if fname is not None:
+            with open(fname) as fhandle:
+                try:
+                    json = demjson.decode(fhandle.read())
+                except demjson.JSONDecodeError:
+                    self.report("error decoding: {0}".format(fname))
+                else:
+                    return json
+    _sg_json = _security_group_json
 
     def service(self, command):
         """ run `sudo service <cmd>` on the remote host"""
