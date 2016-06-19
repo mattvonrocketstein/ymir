@@ -13,6 +13,7 @@ from ymir.base import report as base_report
 from ymir import schema as yschema
 
 import jinja2
+
 env = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
 
@@ -107,8 +108,8 @@ def load_service_from_json(filename=None, quiet=False):
         quiet=quiet)
     return service_obj
 
-# NB: alias is frequently imported in fabfiles to avoid cluttering fabric
-# namespace
+# this alias is frequently imported in
+# fabfiles to avoid cluttering fabric namespace
 _load_service_from_json = load_service_from_json
 
 
@@ -147,6 +148,4 @@ def _load_service_from_json_helper(service_json_file=None,
     obj._schema = chosen_schema
     service_json = set_schema_defaults(service_json, chosen_schema)
     ServiceFromJSON._service_json = service_json
-    #ServiceFromJSON.template_data = lambda himself, **kargs: service_json
-    #service_json.update(service_json['service_defaults'])
     return obj
