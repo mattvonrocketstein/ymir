@@ -4,7 +4,6 @@
     NB: this module is prefixed with an underscore to avoid
         confusion with the module from python-vagrant.
 """
-import copy
 from functools import wraps
 import subprocess
 
@@ -26,16 +25,13 @@ def catch_vagrant_error(fxn):
                 "is the box started yet?")
             self.report("Original exception follows:")
             print str(exc)
-            raise SystemExit()
+            raise  # SystemExit()
     return newf
 
 
 class VagrantService(AbstractService):
 
     _vagrant = None
-
-    FABRIC_COMMANDS = copy.copy(AbstractService.FABRIC_COMMANDS)
-    FABRIC_COMMANDS += ['up']
 
     @property
     @catch_vagrant_error
@@ -73,6 +69,7 @@ class VagrantService(AbstractService):
 
         return self._vagrant
 
+    @util.declare_operation
     def up(self):
         """ shortcut for `vagrant up` """
         self.report("invoking `vagrant up`")
@@ -113,6 +110,7 @@ class VagrantService(AbstractService):
         self._status_computed = result
         return result
 
+    @util.declare_operation
     def create(self, force=False):
         """ create new instance of this service ('force' defaults to False) """
         self.report('creating vagrant instance', section=True)
@@ -132,6 +130,7 @@ class VagrantService(AbstractService):
             raise SystemExit(1)
         return result
 
+    @util.declare_operation
     def terminate(self, force=False):
         """ terminate this service (delete from virtualbox) """
         instance = self._instance
@@ -147,3 +146,9 @@ class VagrantService(AbstractService):
                 answer = raw_input(msg.format(instance, name))
             if answer == 'y':
                 self.terminate(force=True)
+
+    @util.declare_operation
+    def shell(self):
+        """ """
+        return util.shell(
+            Service=self, service=self)

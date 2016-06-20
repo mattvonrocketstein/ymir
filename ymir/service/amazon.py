@@ -2,7 +2,6 @@
 """ ymir.service.amazon
 """
 import time
-import copy
 import boto
 
 from ymir import util
@@ -11,9 +10,6 @@ from ymir.service.base import AbstractService
 
 class AmazonService(AbstractService):
     """ """
-    FABRIC_COMMANDS = copy.copy(AbstractService.FABRIC_COMMANDS) + \
-        ['mosh', 's3', 'terminate',
-         'sync_buckets', 'sync_eips', 'sync_tags', ]
 
     def __init__(self, conn=None, **kargs):
         """"""
@@ -27,6 +23,7 @@ class AmazonService(AbstractService):
         self.sync_eips()
         super(AmazonService, self).setup_ip(ip)
 
+    @util.declare_operation
     def s3(self):
         """ show summary of s3 information for this service """
         buckets = self.sync_buckets(quiet=True).items()
@@ -58,6 +55,7 @@ class AmazonService(AbstractService):
         """
         return util.unexpand(self._service_json['pem'])
 
+    @util.declare_operation
     def sync_buckets(self, quiet=False):
         report = self.report if not quiet else util.NOOP
         buckets = self.template_data()['s3_buckets']
@@ -73,6 +71,7 @@ class AmazonService(AbstractService):
             tmp[name] = conn.create_bucket(name, location=self.S3_LOCATION)
         return tmp
 
+    @util.declare_operation
     def sync_eips(self, quiet=False):
         """ synchronizes elastic IPs with service.json data """
         report = self.report if not quiet else lambda *args, **kargs: None
@@ -97,6 +96,7 @@ class AmazonService(AbstractService):
                     aws_address.instance_id))
     sync_elastic_ips = sync_eips
 
+    @util.declare_operation
     @util.require_running_instance
     def sync_tags(self):
         """ update aws instance tags from service.json `tags` field """
@@ -134,6 +134,7 @@ class AmazonService(AbstractService):
             if answer == 'y':
                 self.terminate(force=True)
 
+    @util.declare_operation
     @util.require_running_instance
     def mosh(self):
         """ connect to this service with mosh """
@@ -171,6 +172,7 @@ class AmazonService(AbstractService):
         self._status_computed = result
         return result
 
+    @util.declare_operation
     def create(self, force=False):
         """ create new instance of this service ('force' defaults to False)"""
         self.report('creating ec2 instance', section=True)

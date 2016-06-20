@@ -1,3 +1,0 @@
-ansible/play.retry
-.vagrant
-ansible/roles/*

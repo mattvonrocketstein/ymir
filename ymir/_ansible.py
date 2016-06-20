@@ -39,14 +39,14 @@ class AnsibleMixin(object):
 
     """ """
 
+    @util.declare_operation
     def ansible_inventory(self):
         """ display the inventory for use with ansible """
         data = self.template_data()
         print json.dumps({
             data['name']: dict(
                 hosts=[data['host']],
-                vars=self.facts)
-        })
+                vars=self.facts)})
 
     @property
     def _ansible_dir(self):

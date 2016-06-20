@@ -15,6 +15,7 @@ from fabric.contrib.files import exists
 from fabric.contrib.project import rsync_project
 from fabric.colors import blue
 from ymir.util import puppet as util_puppet
+from ymir import data as ydata
 
 PUPPET_URL = 'http://downloads.puppetlabs.com'
 FACTER_TARBALL_URL = '{0}/facter/facter-1.7.5.tar.gz'.format(PUPPET_URL)
@@ -134,17 +135,18 @@ class PuppetMixin(object):
         """ puppet itself is already installed at this point,
             this sets up the provisioning dependencies
         """
-        self.report('installing puppet & puppet deps', section=True)
-
         def _init_puppet(_dir):
             if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
                 self.report("  puppet-librarian has already processed modules")
                 return
-            self.report("  puppet-librarian will install dependencies")
+            self.report("puppet-librarian will install dependencies")
             with api.cd(_dir):
-                api.run('librarian-puppet init')
-                api.run('librarian-puppet install --verbose')
-        self.report("  bootstrapping puppet dependencies on remote host")
+                api.run('librarian-puppet clean')
+                api.run('librarian-puppet install {0}'.format(
+                    '--verbose' if self._debug_mode else ''))
+        self.report('installing puppet & puppet deps', section=True)
+        self._install_puppet()
+        self.report("bootstrapping puppet dependencies on remote host")
         util_puppet.run_puppet(
             'puppet/modules/ymir/install_librarian.pp',
             debug=self._debug_mode)
@@ -154,14 +156,6 @@ class PuppetMixin(object):
         """ """
         # puppet build more or less follows the instructions here:
         #   https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html
-        self.report("should we build puppet on the remote side? {0}".format(
-            blue(str(self._supports_puppet))))
-        if not self._supports_puppet:
-            return
-        self.report("installing puppet")
-        self._update_sys_packages()
-        self._bootstrap_dev()
-
         def decompress(x):
             """ helper to unwrap tarball, removing the
                 original file if it was successful
@@ -189,10 +183,18 @@ class PuppetMixin(object):
                 with api.cd(_dir):
                     run_install()
 
+        self.report("should we build puppet on the remote side? {0}".format(
+            blue(str(self._supports_puppet))))
+        if not self._supports_puppet:
+            return
         self.report("installing puppet pre-reqs")
+        self._update_sys_packages()
+        self._bootstrap_dev()
         self._install_system_package('ruby-dev ruby-json', quiet=True)
-        # required for puppet --parser=future
-        api.sudo('gem install rgen')
+
+        # rgen is required for puppet --parser=future,
+        # but the command below only installs it if it's not already found
+        api.sudo('{ gem list|grep rgen; } || gem install rgen')
 
         with api.quiet():
             with api.settings(warn_only=True):
@@ -201,10 +203,11 @@ class PuppetMixin(object):
         if puppet_installed:
             puppet_version = puppet_version.strip().split('.')
             puppet_version = map(int, puppet_version)
-            self.report("  puppet is already installed")
+            self.report(ydata.SUCCESS + "puppet is already installed")
         else:
             puppet_version = None
-            self.report("  puppet not installed, building it from scratch")
+            self.report(
+                ydata.FAIL + "  puppet not installed, building it from scratch")
             doit()
         if puppet_version and puppet_version != [3, 4, 3]:
             self.report(

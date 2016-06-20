@@ -25,15 +25,18 @@ class PackageMixin(object):
         if self._require_pacapt_already_run:
             return  # optimization hack: let's only run once per process
         self.report("checking remote side for pacapt "
-                    "(an OS-agnostic package managemer)")
+                    "(an OS-agnostic package manager)")
         with api.quiet():
             remote_missing_pacapt = api.run('ls /usr/bin/pacapt').failed
         if remote_missing_pacapt:
-            self.report("pacapt does not exist, installing it now")
+            self.report(
+                ydata.FAIL + "  pacapt does not exist, installing it now")
             local_pacapt_path = os.path.join(
                 os.path.dirname(ydata.__file__), 'pacapt')
             self.put(local_pacapt_path, '/usr/bin', use_sudo=True)
             api.sudo('chmod o+x /usr/bin/pacapt')
+        else:
+            self.report(ydata.SUCCESS + " pacapt is already present")
         self._require_pacapt_already_run = True
 
     def _update_system_packages(self, quiet=True):
@@ -42,12 +45,13 @@ class PackageMixin(object):
         quiet = '> /dev/null' if quiet else ''
         self.report("updating system packages, this might take a while.")
         canary = '/tmp/.ymir_package_update'
-        max_age = 5
-        with api.shell_env(warn_only=True):
-            need_update = api.sudo('[ $(date +%s -r ' + canary + ') -lt $(date +%s --date="' + str(
-                max_age) + ' min ago") ] ', shell='/bin/bash').succeeded
+        max_age = 180
+        with api.settings(quiet=True, warn_only=True):
+            age_test = '''[[ `date +%s -r {0}` -gt `date +%s --date='{1} min ago'` ]]'''
+            need_update = api.sudo(age_test.format(canary, max_age)).failed
         if not need_update:
-            self.report("  packages were updated recently, skipping")
+            self.report(
+                ydata.SUCCESS + "packages were updated less than {0} minutes ago".format(max_age))
             return True
         with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
             result = api.sudo(

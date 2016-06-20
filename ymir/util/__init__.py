@@ -28,6 +28,19 @@ NOOP = lambda *args, **kargs: None
 remote_path_exists = remote_exists
 __all__ = [x.__name__ for x in [TemporaryDirectory, NOOP]]
 
+OPERATION_MAGIC = '_declared_ymir_operation'
+
+
+def declare_operation(fxn):
+    """ """
+    setattr(fxn, OPERATION_MAGIC, True)
+    return fxn
+
+
+def is_operation(obj, name):
+    obj = getattr(obj.__class__, name)
+    return callable(obj) and hasattr(obj, OPERATION_MAGIC)
+
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)

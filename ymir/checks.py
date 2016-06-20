@@ -20,8 +20,8 @@
 
 import requests
 from ymir import util
-
-from fabric.colors import blue, yellow, red, cyan
+from ymir import data as ydata
+from fabric.colors import blue, yellow
 from peak.util.imports import lazyModule
 
 yapi = lazyModule('ymir.api')
@@ -64,7 +64,7 @@ class Check(object):
                 blue(self.check_type),
                 self.url,
                 message if message else '',
-                red('✖ fail') if not success else cyan('✓ ok')
+                ydata.FAIL + 'fail' if not success else ydata.SUCCESS + 'ok'
             )
         return self
 

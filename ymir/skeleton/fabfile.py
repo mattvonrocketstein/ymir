@@ -16,7 +16,6 @@ YMIR_SERVICE_JSON = os.path.abspath(
 
 # Create the ymir service from the service description
 _service = load_service_from_json(YMIR_SERVICE_JSON)
-service_data = _service.template_data()
 
 # Install the standard service operations
 # (like create, terminate, provision, etc) as fabric commands
@@ -29,7 +28,7 @@ def deploy(branch='master'):
         branch, _service))
 
 
-def tail():
-    """ tail syslog on remote server """
+def tail_syslog():
+    """ example: tail syslog on remote server """
     with _service.ssh_ctx():
         api.sudo('tail /var/log/syslog')

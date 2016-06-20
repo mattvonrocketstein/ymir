@@ -17,11 +17,13 @@ from ymir import util
 
 from ymir.base import Reporter
 from ymir.util import puppet
+
 from ymir.puppet import PuppetMixin
 from ymir._ansible import AnsibleMixin
 from ymir.caching import cached
-from ymir import data as ydata
 from ymir import checks as ychecks
+
+from ymir.mixins import PackageMixin
 
 yapi = lazyModule('ymir.api')
 
@@ -36,19 +38,8 @@ api.env.disable_known_hosts = True
 
 
 class FabricMixin(object):
-    FABRIC_COMMANDS = [
-        'ansible_inventory',
-        'check', 'create', 'get',
-        'integration_test', 'logs',
-        'provision', 'put',
-        'reboot', 'run',
-        'service', 'setup',
-        'shell', 'show', 'show_facts',
-        'ssh', 'status',
-        'supervisor', 'supervisorctl',
-        'tail', 'terminate',
-    ]
 
+    @util.declare_operation
     def status(self):
         """ shows IP, running status, tags, etc for this service """
         self.report('checking status', section=True)
@@ -57,12 +48,14 @@ class FabricMixin(object):
             self.report('  {0}: {1}'.format(k, v))
         return result
 
+    @util.declare_operation
     @util.require_running_instance
     def tail(self, filename):
         """ tail a file on the service host """
         with self.ssh_ctx():
             api.run('tail -f ' + filename)
 
+    @util.declare_operation
     @util.require_running_instance
     def put(self, src, dest, *args, **kargs):
         """ thin wrapper around fabric's scp command
@@ -80,6 +73,7 @@ class FabricMixin(object):
                         owner, remote_fname))
             return result.succeeded
 
+    @util.declare_operation
     @util.require_running_instance
     def get(self, fname, local_path='.'):
         """ thin wrapper around fabric's scp command
@@ -88,6 +82,7 @@ class FabricMixin(object):
         with self.ssh_ctx():
             return api.get(fname, local_path=local_path, use_sudo=True)
 
+    @util.declare_operation
     def ssh(self):
         """ connect to this service with ssh """
         self.report('connecting with ssh')
@@ -97,6 +92,7 @@ class FabricMixin(object):
             pem=self._pem,
             port=self._port,)
 
+    @util.declare_operation
     @util.require_running_instance
     def show(self):
         """ open health-check webpages for this service in a browser """
@@ -109,6 +105,7 @@ class FabricMixin(object):
             check, url = health_checks[check_name]
             _show_url(yapi.str_reflect(url, self.template_data()))
 
+    @util.declare_operation
     @util.require_running_instance
     def check(self, name=None):
         """ reports health for this service """
@@ -129,6 +126,7 @@ class FabricMixin(object):
         if not success:
             raise SystemExit(1)
 
+    @util.declare_operation
     def integration_test(self):
         """ runs integration tests for this service """
         self.report('running integration tests')
@@ -139,64 +137,13 @@ class FabricMixin(object):
             self.report('no instance is running for this'
                         ' service, start (or create) it first')
 
+    @util.declare_operation
     @util.require_running_instance
     def reboot(self):
         """ TODO: blocking until reboot is complete? """
         self.report('rebooting service')
         with self.ssh_ctx():
             api.run('sudo reboot')
-
-
-class PackageMixin(object):
-    """ To be linux-base agnostic, services should call apt or yum directly.
-
-        Actually.. services should not be installing packages directly because
-        one of the CAP languages is used, but, to build puppet on the remote
-        side we do need to add system packages first.
-
-        Pacapt is used as a universal front-end for the backend
-        package manager.  See: https://github.com/icy/pacapt
-    """
-    _require_pacapt_already_run = False
-
-    def _require_pacapt(self):
-        """ installs pacapt (a universal front-end for apt/yum/dpkg)
-            on the remote server if it does not already exist there
-        """
-        if self._require_pacapt_already_run:
-            return  # optimization hack: let's only run once per process
-        self.report("checking remote side for pacapt "
-                    "(an OS-agnostic package managemer)")
-        with api.quiet():
-            remote_missing_pacapt = api.run('ls /usr/bin/pacapt').failed
-        if remote_missing_pacapt:
-            self.report("pacapt does not exist, installing it now")
-            local_pacapt_path = os.path.join(
-                os.path.dirname(ydata.__file__), 'pacapt')
-            self.put(local_pacapt_path, '/usr/bin', use_sudo=True)
-            api.sudo('chmod o+x /usr/bin/pacapt')
-        self._require_pacapt_already_run = True
-
-    def _update_system_packages(self, quiet=True):
-        """ """
-        self._require_pacapt()
-        quiet = '> /dev/null' if quiet else ''
-        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            return api.sudo('pacapt --noconfirm -Sy {0}'.format(quiet)).succeeded
-    _update_sys_packages = _update_system_packages
-
-    def _install_system_package(self, pkg_name, quiet=False):
-        """ FIXME: only works with ubuntu/debian """
-        self._require_pacapt()
-        quiet = '> /dev/null' if quiet else ''
-        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            return api.sudo('pacapt --noconfirm -S {0} {1}'.format(
-                pkg_name, quiet)).succeeded
-
-    def _remove_system_package(self, pkg_name, quiet=True):
-        self._require_pacapt()
-        quiet = '> /dev/null' if quiet else ''
-        return api.sudo('pacapt -R {0} {1}'.format(pkg_name, quiet)).succeeded
 
 
 class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricMixin):
@@ -239,22 +186,26 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
                     return json
     _sg_json = _security_group_json
 
+    @util.declare_operation
     def service(self, command):
         """ run `sudo service <cmd>` on the remote host"""
         with self.ssh_ctx():
             api.run('sudo service {0}'.format(command))
 
+    @util.declare_operation
     def supervisorctl(self, command):
         """ run `sudo supervisorctl <cmd>` on the remote host """
         with self.ssh_ctx():
             api.run('sudo supervisorctl {0}'.format(command))
     supervisor = supervisorctl
 
+    @util.declare_operation
     def logs(self, *args):
         """ lists the known log files for this service"""
         if not args:
             self.list_log_files()
 
+    @util.declare_operation
     def list_log_files(self):
         """ """
         with self.ssh_ctx():
@@ -273,11 +224,13 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
             only be called from inside fabfiles
         """
         import fabfile
-        for x in set(self.FABRIC_COMMANDS):
+        for x in dir(self):
+            if not util.is_operation(self, x):
+                continue
             try:
                 tmp = getattr(fabfile, x)
             except AttributeError:
-                setattr(fabfile, x, getattr(self, x))
+                setattr(fabfile, x, api.task(getattr(self, x)))
             else:
                 err = ('Service definition "{0}" attempted'
                        ' to publish method "{1}" as a fabric '
@@ -303,13 +256,13 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
                 'bad return code bootstrapping dev.. waiting and trying again')
             time.sleep(35)
             self._bootstrap_dev()
-        self._install_puppet()
 
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
         label = self._report_name()
         return util.report(label, msg, *args, **kargs)
 
+    @util.declare_operation
     def setup(self):
         """ setup service (operation should be after
             'create', before 'provision') """
@@ -378,6 +331,7 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
                 result = restart()
                 count += 1
 
+    @util.declare_operation
     def provision(self, fname=None, **kargs):
         """ provision this service """
         self.report('preparing to provision: {0}'.format(
@@ -488,10 +442,12 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
                     "facts should not contain mustaches: {0}".format(tmp))
         return service_defaults
 
+    @util.declare_operation
     def sudo(self, *args, **kargs):
         with self.ssh_ctx():
             api.sudo(*args, **kargs)
 
+    @util.declare_operation
     def run(self, command):
         """ run command on service host """
         with self.ssh_ctx():
@@ -527,11 +483,13 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
         tmp['setup_list'] = slist
         return tmp
 
+    @util.declare_operation
     def shell(self):
         """ """
         return util.shell(
             conn=self.conn, Service=self, service=self)
 
+    @util.declare_operation
     def show_facts(self):
         """ show facts (puppet key-values available to templates)"""
         self.report("facts available to puppet/ansible:")
