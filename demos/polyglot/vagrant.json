@@ -1,0 +1,89 @@
+//
+// vagrant.json
+//
+//   This file configures vagrant support for ymir.
+//
+//   See also: mattvonrocketstein.github.io/ymir/vagrant
+//
+{
+    // Whether ymir should display extra debugging information.
+    // NB: This parameter also control puppet and ansible debug levels
+    //"ymir_debug": true,
+
+    // Whether ymir should build puppet on the remote side.
+    // Puppet-builds only occur during the `setup` operation, and
+    // are skipped if a good version of puppet is found to already exist
+    // on the remote side.  When this key is not found in this configuration,
+    // it defaults to true.
+    "ymir_build_puppet": true,
+
+    // Sets the namespace for this service.
+    // This is currently unused for vagrant-based configs,
+    // but these variables are potentially useful for templating.
+    "org_name": "orgName",
+    "app_name": "appName",
+    "env_name": "envName",
+    "service_name": "jenkins-demo",
+
+    "logs": [
+        // declare logfile locations on this service
+        // this can be used to tail/retrieve logs.
+    ],
+
+    // sets the name for this service.
+    // this will be used in AWS tags: choose wisely
+    // for readability and any logging you add later
+    // Suggested format: "org_name-app_name-env_name"
+    "name" : "demo-service",
+
+    "service_description": "demo service for vagrant",
+
+    // NB: instance_type for vagrant configs should always be "vagrant"
+    "instance_type"   : "vagrant",
+
+    // The `setup_list` field provides a list of instructions to
+    // execute during the setup operation for this service.  Even
+    // when this list is empty, the setup operation potentially has
+    // much time-consuming work to do (such as refreshing ansible/puppet
+    // dependencies or refreshing the system package list with apt/yum).
+    // Use `setup_list` for heavy-lifting that doesn't need to happen
+    // often and work that is uncacheable or not-quite idempotent.
+    // Use `provision_list` for things that are more comfortable to
+    // run repeatedly.
+    "setup_list" : [
+    ],
+
+    // The `provision_list` field provides a list of  instructions to
+    // execute during the provisioning of this service.  By the time
+    // provisioning happens, any puppet or ansible dependencies (mentioned
+    // in puppet/metadata.json and ansible/requirements.yml, respectively)
+    // are guaranteed to be installed as long as the `setup` operation has
+    // already run.
+    //
+    // Note that instructions in the following list may use {{variables}}
+    // mentioned elsewhere in this file, subject to the standard
+    // template-scoping rules.  File locations are relative to the
+    // service-root, i.e. the directory this file is in.
+    "provision_list" : [
+        "ansible_playbook://ansible/play.yml",
+        "puppet://puppet/demo_service.pp",
+    ],
+
+    // Health checks to execute against this service when the `check`
+    // operation is used.  Reflective-templating (with values in this config)
+    // is allowed and encouraged, because anything IP-based will be useless
+    // after executing terminate/create operations.
+    "health_checks": {
+        "web" :
+        ['http_200', 'http://{{host}}'],
+    },
+
+    // Schema-free section for misc. site configuration.
+    // Useful for template-variables that can be passed on to the
+    // puppet FACTer, the ansible environment, or used to configure
+    // application particulars.
+    'service_defaults' : {
+        "ansible_variable": "ANSIBLE_VARIABLE_VALUE",
+        "puppet_variable": "PUPPET_VARIABLE_VALUE",
+    }
+}
