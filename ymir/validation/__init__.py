@@ -7,15 +7,17 @@ import logging
 import voluptuous
 
 from fabric import api
-from fabric.colors import red, green, yellow
+from fabric.colors import yellow
 from peak.util.imports import lazyModule
 
 from ymir import util
-from ymir import schema as yschema
-from ymir.base import report as base_report
-from ymir import api as yapi
 from ymir import checks
 from ymir.util import puppet
+from ymir.base import report as base_report
+
+from ymir import schema as yschema
+from ymir import data as ydata
+from ymir import api as yapi
 
 beanstalk = lazyModule('ymir.beanstalk')
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ def validate_puppet(service):
         code, not just things things in the service.json `setup_list`
         and `provision_list` fields
     """
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     pdir = service._puppet_dir
     if service._supports_puppet and not os.path.exists(pdir):
         msg = 'puppet directory does not exist @ {0}'
@@ -56,8 +58,8 @@ def validate_puppet(service):
                         short_fname, validation_cmd)
                     errors.append(error)
                 else:
-                    messages.append(".. ok: " + filename)
-    return errors, messages
+                    messages.append(filename)
+    return errors, warnings, messages
 
 
 def validate_puppet_templates(service):
@@ -66,7 +68,7 @@ def validate_puppet_templates(service):
     """
     if not service._supports_puppet:
         return [], ["`ymir_build_puppet` is false supported for this service, skipping"]
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     default_facts = puppet.DEFAULT_FACTS
 
     service_vars = service._service_json.keys()
@@ -78,7 +80,7 @@ def validate_puppet_templates(service):
                        "which is not defined for service").format(
                     f, template_var)
                 errors.append(msg)
-    return errors, messages
+    return errors, warnings, messages
 
 
 def validate_keypairs(service):
@@ -86,7 +88,7 @@ def validate_keypairs(service):
         are present on the filesystem and on AWS with the
         current account
     """
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     service_data = service._service_json
     pem_file = service_data.get('pem')
     pem_file = os.path.expanduser(pem_file)
@@ -96,14 +98,14 @@ def validate_keypairs(service):
     key_name = service._service_json['key_name']
     if key_name not in keys:
         errors.append(
-            'aws keypair {0} not found in {1}'.format(key_name, keys))
-    return errors, messages
+            'aws keypair {0} not found in any of {1} keys'.format(key_name, len(keys)))
+    return errors, warnings, messages
 
 
 def validate_vagrant(service):
     """ """
-    errors, messages = [], []
-    return errors, messages
+    errors, warnings, messages = [], [], []
+    return errors, warnings, messages
 
 
 def validate_security_groups_json(service):
@@ -112,7 +114,7 @@ def validate_security_groups_json(service):
         service_json['security_groups']
     """
     groups = service._service_json['security_groups']
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     sg_json = service._sg_json
     if not service._sg_file:
         msg = "this service doesn't have a security_groups.json file."
@@ -131,11 +133,11 @@ def validate_security_groups_json(service):
             set1 = set([group['name'] for group in sg_json])
             set2 = set(groups)
             if set1 != set2:
-                messages.append(
+                warnings.append(
                     "mismatch between names in {0} and service.json".format(
                         service._sg_file))
-                messages.append("{0} vs {1}".format(set1, set2))
-    return errors, messages
+                warnings.append("{0} vs {1}".format(set1, set2))
+    return errors, warnings, messages
 
 
 def validate_security_groups(service):
@@ -144,7 +146,7 @@ def validate_security_groups(service):
         with the current account
     """
     groups = service._service_json['security_groups']
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     # filter for only named groups, in case the security_groups field
     # eventually supports more complete data (like security_groups.json)
     configured_sgs = [x for x in groups if isinstance(x, basestring)]
@@ -153,17 +155,16 @@ def validate_security_groups(service):
         if sg not in actual_sgs:
             err = "name `{0}` mentioned in security_groups is missing from AWS"
             errors.append(err.format(sg))
-    return errors, messages
+    return errors, warnings, messages
 
 
 def validate_health_checks(service):
-    """
-    """
+    """ """
     # here we fake the host value just for validation because we
-    # don't know whether this service has been bootstrapped or not
+    # don't actually know whether this service has been bootstrapped or not
     service_json = service.template_data()
     service_json.update(host='host_name')
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     for check_name in service_json['health_checks']:
         check_type, url = service_json['health_checks'][check_name]
         try:
@@ -172,12 +173,12 @@ def validate_health_checks(service):
             err = '  check-type "{0}" does not exist in ymir.checks'
             err = err.format(check_type)
             errors.append(err)
-            return errors, messages
+            return errors, warnings, messages
         tmp = service_json.copy()
         tmp.update(dict(host='host'))
         try:
-            url = url.format(**service_json)
-        except KeyError, exc:
+            url = yapi.str_reflect(url, service_json)
+        except yapi.ReflectionError as exc:
             msg = 'url "{0}" could not be formatted: missing {1}'
             msg = msg.format(url, str(exc))
             errors.append(msg)
@@ -187,27 +188,27 @@ def validate_health_checks(service):
             err = checker_validator(url)
             if err:
                 errors.append(err)
-            messages.append(' .. ok: {0}'.format([
+            messages.append('{0}'.format([
                 check_name, check_type, url]))
-    return errors, messages
+    return errors, warnings, messages
 
 
-def print_errs(msg, (errors, messages), quiet=False, die=False, report=_report):
+def print_errs(msg, (errors, warnings, messages), quiet=False, die=False, report=_report):
     """ helper for main validation functions """
-    err = "print_errs requires a tuple of (errors,messages)"
-    assert isinstance(errors, list), err
-    assert isinstance(messages, list), err
+    err = "print_errs requires a tuple of (errors, warnings, messages)"
+    for tmp in (errors, warnings, messages):
+        assert isinstance(tmp, list), err
     if msg:
         report(msg)
-    space2 = '    '
-    for m in errors:
-        report(red('  error[{0}]: '.format(errors.index(m))))
-        report(space2 + str(m))
-    for m in messages:
-        report(yellow('  message[{0}]: '.format(messages.index(m))))
-        report(green(space2 + str(m)))
+    space2 = '  '
+    _map = {ydata.FAIL: errors,
+            ydata.SUCCESS: messages,
+            ydata.WARN: warnings}
+    for icon, _list in _map.items():
+        for msg in _list:
+            report(space2 + icon + str(msg))
     if errors and die:
-        raise SystemExit(str(errors))
+        raise SystemExit("encountered {0} errors".format(len(errors)))
 
 
 def validate(service_json, schema=None, simple=True, quiet=False):
@@ -257,7 +258,7 @@ def validate(service_json, schema=None, simple=True, quiet=False):
 
 def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
     """ naive schema validation for service.json """
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     report = report if not quiet else util.NOOP
     if schema:
         report('validating file using explicit schema: {0}'.format(
@@ -273,11 +274,11 @@ def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
     except voluptuous.Invalid, e:
         msg = "error validating {0}:\n\n{1}"
         msg = msg.format(os.path.abspath(fname), e)
-        return [msg], []
+        return [msg], [], []
     SERVICE_ROOT = os.path.dirname(fname)
     SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
     if is_eb:
-        return [], []
+        return [], [], []
     files = tmp['setup_list'] + tmp['provision_list']
     for _file in files:
         no_protocol = '://' not in _file
@@ -288,4 +289,4 @@ def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
                    ' was not found').format(
                 SERVICE_ROOT, _file)
             return [err], []
-    return errors, messages
+    return errors, warnings, messages

@@ -43,8 +43,8 @@ def test_validate_outermost(*mocks):
         each of the other validation subroutines
     """
     for m in mocks:
-        errors = messages = []
-        m.return_value = errors, messages
+        errors = messages = warnings = []
+        m.return_value = errors, warnings, messages
     with test_common.demo_service() as ctx:
         validation.validate(service_json=ctx.service_json, simple=False)
         for m in mocks:
@@ -57,12 +57,12 @@ def test_validate_puppet_with_no_files():
         ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
         api.local('find {0} -name "*.pp"|xargs rm'.format(ctx.service_dir))
-        errors, messages = validation.validate_puppet(service)
+        errors, warnings, messages = validation.validate_puppet(service)
         err = ('there were no puppet files to validate, '
                'so there should be no errors')
         assert errors == [], err
         shutil.rmtree(service._puppet_dir)
-        errors, messages = validation.validate_puppet(service)
+        errors, warnings, messages = validation.validate_puppet(service)
         err = ('deleting the services puppet directory'
                ' should cause an error in puppet validation')
         assert errors, err
@@ -76,7 +76,7 @@ def test_validate_puppet_with_skeleton_files():
     with test_common.demo_service() as ctx:
         ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
-        errors, messages = validation.validate_puppet(service)
+        errors, warnings, messages = validation.validate_puppet(service)
         err = 'skeleton-included puppet files should all validate'
         assert errors == [], err
 
@@ -90,7 +90,7 @@ def test_validate_puppet_with_bad_files():
         bad_puppet_file = os.path.join(service._puppet_dir, 'bad_puppet.pp')
         with open(bad_puppet_file, 'w') as fhandle:
             fhandle.write(bad_puppet_code)
-        errors, messages = validation.validate_puppet(service)
+        errors, warnings, messages = validation.validate_puppet(service)
         err = 'service with bad puppet files should not validate'
         assert len(errors) > 0, err
         errors = [x for x in errors if bad_puppet_file in x]
@@ -104,7 +104,8 @@ def test_validate_puppet_templates_with_skeleton():
     with test_common.demo_service() as ctx:
         ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
-        errors, messages = validation.validate_puppet_templates(service)
+        errors, warnings, messages = validation.validate_puppet_templates(
+            service)
         err = 'service with skeleton puppet files should validate'
         assert not errors
 
@@ -121,7 +122,8 @@ def test_validate_puppet_templates_with_bad_puppet_vars():
             'bad_template.erb')
         with open(bad_puppet_file, 'w') as fhandle:
             fhandle.write(bad_puppet_template)
-        errors, messages = validation.validate_puppet_templates(service)
+        errors, warnings, messages = validation.validate_puppet_templates(
+            service)
         err = 'service with bad puppet template files should not validate'
         assert errors, err
         errors = [x for x in errors if bad_puppet_file in x]
@@ -140,7 +142,7 @@ def test_validate_keypairs():
         service_json['key_name'] = '!does_not_exist!'
         ctx.rewrite_json(service_json)
         service = ctx.get_service()
-        errors, messages = validation.validate_keypairs(service)
+        errors, warnings, messages = validation.validate_keypairs(service)
         pem_errors = [x for x in errors if service_json['pem'] in x]
         err = 'missing pem file should cause an error in keypair validation'
         assert pem_errors, err

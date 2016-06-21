@@ -19,7 +19,7 @@ def test_load_skeleton_service():
 
 def test_service_has_important_callables():
     service = test_load_skeleton_service()
-    for x in service.FABRIC_COMMANDS:
+    for x in service._fabric_commands:
         assert callable(getattr(service, x))
     assert callable(service.ssh_ctx)
     assert callable(service.fabric_install)

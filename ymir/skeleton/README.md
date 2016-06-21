@@ -52,6 +52,6 @@ Typical commands:
 Service implementation
 =======================
 
-*All services* are defined in folders which contain a `fabfile.py`.  This file describes the fabric commands for that service, and a puppet directory which stores the host configuration, directories, file templates, etc, which are used in the implementation of that service.  All services place files, logs, etc in `/opt/service_name`. *Most services* use [supervisor](http://supervisord.org/), in which case you can access "command and control" for daemon processes as well as logs at a URL like this: `http://{user}:{pass}@{host}:9001`.
+*All services* are defined in folders which contain a `fabfile.py`.  This file describes the fabric commands for that service, a directory for puppet/ansible files which store the host configuration, directories, file templates, etc, which are used in the implementation of that service.
 
 **The demo service** is implemented with..

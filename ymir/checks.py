@@ -23,7 +23,7 @@ from ymir import util
 from ymir import data as ydata
 from fabric.colors import blue, yellow
 from peak.util.imports import lazyModule
-
+from tempfile import NamedTemporaryFile
 yapi = lazyModule('ymir.api')
 
 
@@ -163,3 +163,46 @@ def http_403(service, url):
 
 def json_200(service, url):
     return json(service, url, codes=[200])
+
+
+def file_exists(service, instruction):
+    """ """
+    return testinfra("File('{0}').exists".format(instruction))
+
+
+def file_contains(service, instruction):
+    parts = instruction.split(",")
+    err = "expected formatting: file_contains://filename,string"
+    assert len(instruction) == 2, err
+    fname, string = parts
+    err = "please, dont use quotes in arguments for file-contains:// checks"
+    assert '"' not in string, err
+    assert "'" not in string, err
+    new_instruction = "File('{0}').contains('{1}')".format(fname, string)
+    return testinfra(service, new_instruction)
+
+
+def testinfra(service, instruction):
+    """ """
+    config = service._ssh_config_string
+    with NamedTemporaryFile() as tmpf:
+        tmpf.file.write(config)
+        tmpf.file.seek(0)
+        return _test_infra(service, instruction, tmpf.name)
+
+
+def _test_infra(service, instruction, ssh_config_file):
+    import testinfra
+    backend = testinfra.get_backend(
+        "paramiko://default", ssh_config=ssh_config_file, sudo=True)
+    namespace = ['File', ]
+    namespace = dict([[name, backend.get_module(name)] for name in namespace])
+    try:
+        exec('assert ' + instruction, namespace)
+    except Exception as exc:
+        success = False
+        message = str(exc)
+    else:
+        success = True
+        message = ''
+    return instruction, success, message

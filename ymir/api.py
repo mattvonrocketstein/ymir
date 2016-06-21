@@ -17,6 +17,10 @@ import jinja2
 env = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
 
+class ReflectionError(Exception):
+    pass
+
+
 def str_reflect(obj, ctx, simple=True):
     """ when `simple` is true, lazy JIT params like host/username/pem need
         not be resolved and certain errors are allowed
@@ -32,7 +36,7 @@ def str_reflect(obj, ctx, simple=True):
         if group in lazy_keys and simple:
             return obj
         else:
-            raise Exception(
+            raise ReflectionError(
                 str(dict(
                     original_err=err,
                     group=group,
@@ -97,7 +101,6 @@ def load_service_from_json(filename=None, quiet=False):
     """
     from ymir.version import __version__
     report = util.NOOP if quiet else base_report
-    report('aws profile', os.environ.get('AWS_PROFILE', 'default'))
     report('ymir', 'version {0}'.format(__version__))
     service_json_file = filename or util.get_or_guess_service_json_file()
     report('ymir', 'service.json is {0}'.format(
@@ -135,7 +138,7 @@ def _load_service_from_json_helper(service_json_file=None,
     validation.validate(service_json_file, chosen_schema, simple=True)
     report = util.NOOP if quiet else base_report
     # report("ymir", "ymir service.json version:")
-    report('ymir.api', 'loading service object from description')
+    # report('ymir.api', 'loading service object from description')
     service_json = set_schema_defaults(service_json, chosen_schema)
     service_json = _reflect(service_json)
     classname = str(service_json["name"])

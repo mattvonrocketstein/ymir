@@ -4,7 +4,7 @@ Polyglot
 ### Service Description
 
 This folder contains "polyglot", a demonstration of a ymir project suitable for AWS or
-vagrant, which is provisioned with both ansible and puppet using shared variables.
+vagrant, which is provisioned using both ansible and puppet with shared variables.
 
 ## What gets provisioned on this service
 
@@ -16,6 +16,12 @@ vagrant, which is provisioned with both ansible and puppet using shared variable
 6. via demo.pp, puppet installs a system package "nmap"
 7. via demo.pp, puppet appends content to `/etc/motd`
 
+### Prerequisites
+
+You need to have ansible already installed.  If you don't, you can run this:
+
+    $ pip install ansible==2.1.0.0
+
 ### Quickstart: Vagrant
 
 You need to have vagrant/virtualbox already installed.  Afterwards, run these commands:
@@ -23,6 +29,13 @@ You need to have vagrant/virtualbox already installed.  Afterwards, run these co
     $ cd ymir/demos/polyglot
     $ export YMIR_SERVICE_JSON=vagrant.json
     $ fab create
+    $ fab setup
+    $ fab provision
+
+Run the checks:
+
+    $ fab check
+
 
 ### TODO:
 

@@ -11,6 +11,7 @@ import vagrant as _vagrant
 
 from ymir import util
 from .base import AbstractService
+from ymir import data as ydata
 
 
 def catch_vagrant_error(fxn):
@@ -119,7 +120,11 @@ class VagrantService(AbstractService):
         if state in ['not_created']:
             self.vagrant.up()
         else:
-            self.report("already created!  status={0}".format(state))
+            self.report(
+                ydata.FAIL + "already created!  status={0}".format(state))
+            if state == 'poweroff':
+                self.report("use `fab up` to start the virtualmachine")
+            raise SystemExit(1)
 
     def _get_instance(self, strict=False):
         """ """

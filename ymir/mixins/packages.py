@@ -46,12 +46,13 @@ class PackageMixin(object):
         self.report("updating system packages, this might take a while.")
         canary = '/tmp/.ymir_package_update'
         max_age = 180
-        with api.settings(quiet=True, warn_only=True):
-            age_test = '''[[ `date +%s -r {0}` -gt `date +%s --date='{1} min ago'` ]]'''
+        age_test = "[[ `date +%s -r {0}` -gt `date +%s --date='{1} min ago'` ]]"
+        with api.quiet():
+
             need_update = api.sudo(age_test.format(canary, max_age)).failed
         if not need_update:
-            self.report(
-                ydata.SUCCESS + "packages were updated less than {0} minutes ago".format(max_age))
+            msg = "packages were updated less than {0} minutes ago"
+            self.report(ydata.SUCCESS + msg.format(max_age))
             return True
         with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
             result = api.sudo(

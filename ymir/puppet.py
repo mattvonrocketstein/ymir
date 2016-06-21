@@ -13,7 +13,6 @@ import functools
 from fabric import api
 from fabric.contrib.files import exists
 from fabric.contrib.project import rsync_project
-from fabric.colors import blue
 from ymir.util import puppet as util_puppet
 from ymir import data as ydata
 
@@ -101,10 +100,10 @@ class PuppetMixin(object):
             and these temporary files can interfere with
             validation
         """
-        self.report("  .. cleaning puppet tmp dir")
         tdir = os.path.join(self._ymir_service_root, 'puppet', '.tmp')
         if os.path.exists(tdir):
             shutil.rmtree(tdir)
+        self.report(ydata.SUCCESS + "cleaned puppet-librarian tmp dir")
 
     def _compress_local_puppet_code(self, puppet_dir='puppet/', lcd=None):
         """ returns an absolute path to a temporary file
@@ -131,26 +130,30 @@ class PuppetMixin(object):
         )
 
     @noop_if_no_puppet_support
-    def _bootstrap_puppet(self, force=False):
+    def _setup_puppet_deps(self, force=False):
         """ puppet itself is already installed at this point,
             this sets up the provisioning dependencies
         """
-        def _init_puppet(_dir):
+        def install_puppet_deps(_dir):
             if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
-                self.report("  puppet-librarian has already processed modules")
+                msg = "puppet-librarian has already processed modules"
+                self.report(ydata.SUCCESS + msg)
                 return
-            self.report("puppet-librarian will install dependencies")
+            msg = "puppet-librarian hasn't run yet, modules dir is missing"
+            self.report(ydata.FAIL + msg)
             with api.cd(_dir):
                 api.run('librarian-puppet clean')
                 api.run('librarian-puppet install {0}'.format(
                     '--verbose' if self._debug_mode else ''))
+                msg = "puppet-librarian finished updating puppet modules"
+                self.report(ydata.SUCCESS + msg)
         self.report('installing puppet & puppet deps', section=True)
         self._install_puppet()
-        self.report("bootstrapping puppet dependencies on remote host")
+        self.report("checking puppet module dependencies on remote host")
         util_puppet.run_puppet(
             'puppet/modules/ymir/install_librarian.pp',
             debug=self._debug_mode)
-        _init_puppet("puppet")
+        install_puppet_deps("puppet")
 
     def _install_puppet(self):
         """ """
@@ -163,7 +166,7 @@ class PuppetMixin(object):
             if not api.run('tar -zxf "{0}"'.format(x)).failed:
                 api.run('rm "{0}"'.format(x))
 
-        def doit():
+        def build_puppet():
             run_install = lambda: api.sudo('ruby install.rb')
             download = lambda x: api.run(
                 'wget -O {0} {1}'.format(os.path.basename(x), x))
@@ -182,9 +185,8 @@ class PuppetMixin(object):
                 decompress(tarball)
                 with api.cd(_dir):
                     run_install()
-
-        self.report("should we build puppet on the remote side? {0}".format(
-            blue(str(self._supports_puppet))))
+        icon = ydata.SUCCESS if self._supports_puppet else ydata.FAIL
+        self.report(icon + "ymir puppet support enabled?")
         if not self._supports_puppet:
             return
         self.report("installing puppet pre-reqs")
@@ -197,23 +199,22 @@ class PuppetMixin(object):
         api.sudo('{ gem list|grep rgen; } || gem install rgen')
 
         with api.quiet():
-            with api.settings(warn_only=True):
-                puppet_version = api.run('puppet --version')
+            puppet_version = api.run('puppet --version')
         puppet_installed = not puppet_version.failed
         if puppet_installed:
             puppet_version = puppet_version.strip().split('.')
             puppet_version = map(int, puppet_version)
-            self.report(ydata.SUCCESS + "puppet is already installed")
+            msg = "puppet is already installed, version is {0}"
+            self.report(ydata.SUCCESS + msg.format(puppet_version))
         else:
             puppet_version = None
-            self.report(
-                ydata.FAIL + "  puppet not installed, building it from scratch")
-            doit()
+            msg = "puppet not installed, building it from scratch"
+            self.report(ydata.FAIL + msg)
+            build_puppet()
         if puppet_version and puppet_version != [3, 4, 3]:
-            self.report(
-                "bad puppet version @ {0}, attempting uninstall".format(
-                    puppet_version))
+            msg = "bad puppet version @ {0}, attempting uninstall"
+            self.report(msg.format(puppet_version))
             pkgs = 'puppet facter hiera puppet-common'.split()
             for pkg in pkgs:
                 self._remove_system_package(pkg)
-            doit()
+            build_puppet()

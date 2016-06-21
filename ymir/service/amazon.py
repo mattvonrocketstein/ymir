@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """ ymir.service.amazon
 """
+import os
 import time
 import boto
 
@@ -13,15 +14,28 @@ class AmazonService(AbstractService):
 
     def __init__(self, conn=None, **kargs):
         """"""
+        self.report('aws profile', os.environ.get('AWS_PROFILE', 'default'))
         self.conn = conn or util.get_conn()
         super(AmazonService, self).__init__(**kargs)
 
-    def setup_ip(self, ip):
+    def _get_instance(self, strict=False):
+        """ """
+        conn = self.conn
+        name = self.template_data()['name']
+        i = util.get_instance_by_name(name, conn)
+        if strict and i is None:
+            err = "Could not acquire instance! Is the name '{0}' correct?"
+            err = err.format(name)
+            self.report(err)
+            raise SystemExit(1)
+        return i
+
+    def setup_ip(self):
         """ """
         self.sync_tags()
         self.sync_buckets()
         self.sync_eips()
-        super(AmazonService, self).setup_ip(ip)
+        super(AmazonService, self).setup_ip()
 
     @util.declare_operation
     def s3(self):

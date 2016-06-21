@@ -10,6 +10,7 @@ from fabric import api
 from fabric.colors import yellow
 
 from ymir import util
+from ymir import data as ydata
 
 ANSIBLE_CMD = (
     'ansible all {debug} -u {user} '
@@ -60,22 +61,27 @@ class AnsibleMixin(object):
         role_dir = os.path.join(self._ansible_dir, 'roles')
         return role_dir
 
-    def _setup_ansible_requirements(self):
-        """ during setup, stuff from ansible-galaxy will be
-            fetched if there exists a requirements file
-            at <service_root>/ansible/requirements.yml
-        """
+    @util.declare_operation
+    def setup_ansible(self):
+        """ refreshes (local) ansible roles from ansible/requirements.yml """
         reqs_file = self._ansible_requirements_file
         if reqs_file is None:
-            self.report("no ansible requirements found, nothing to refresh")
+            msg = "no ansible requirements found, nothing to refresh"
+            self.report(ydata.FAIL + msg)
             return
         self.report("refreshing local ansible requirements:")
-        self.report("  {0}".format(
+        self.report("  requirements: {0}".format(
             yellow(util.unexpand(reqs_file))))
-        with api.lcd(self._ansible_dir):
-            api.local(ANSIBLE_GALAXY_CMD.format(
-                reqs_file=reqs_file,
-                role_dir=self._ansible_roles_dir))
+        self.report("  role-dir: {0}".format(
+            yellow(util.unexpand(self._ansible_roles_dir))))
+        with api.settings(api.hide('everything')):
+            with api.lcd(self._ansible_dir):
+                result = api.local(ANSIBLE_GALAXY_CMD.format(
+                    reqs_file=reqs_file,
+                    role_dir=self._ansible_roles_dir))
+                if result.succeeded:
+                    self.report(
+                        ydata.SUCCESS + "ansible-galaxy requirements up to date")
 
     @property
     def _ansible_requirements_file(self):
@@ -122,7 +128,10 @@ class AnsibleMixin(object):
             same service-json as ymir is using, otherwise the
             ansible dynamic inventory will be incorrect
         """
-        return api.shell_env(YMIR_SERVICE_JSON=self.service_json_file)
+        return api.shell_env(
+            YMIR_SERVICE_JSON=self.service_json_file,
+            ANSIBLE_HOST_KEY_CHECKING="False",
+        )
 
     def _provision_ansible(self, cmd):
         """ handler for provision-list entries prefixed with `ansible://` """

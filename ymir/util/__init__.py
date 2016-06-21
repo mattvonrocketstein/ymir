@@ -38,7 +38,17 @@ def declare_operation(fxn):
 
 
 def is_operation(obj, name):
-    obj = getattr(obj.__class__, name)
+    """ """
+    try:
+        # get things from the parent class, because we don't
+        # want to trigger the evaluation of properties by
+        # retrieving from the object instance
+        obj = getattr(obj.__class__, name)
+    except AttributeError:
+        # only instance methods can be declared operations,
+        # and naturally all instance methods should be present
+        # on the parent class
+        return False
     return callable(obj) and hasattr(obj, OPERATION_MAGIC)
 
 
@@ -154,6 +164,23 @@ def get_instance_by_id(id, conn):
         #          on this working as written
         if tmp[0].update() not in ['terminated']:
             return tmp
+
+
+class require_gem(object):
+    """ decorator """
+
+    def __init__(self, gem_name):
+        self.gem_name = gem_name
+
+    def __call__(self, fxn):
+        """ """
+        @wraps(fxn)
+        def newf(*args, **kargs):
+            if not has_gem(self.gem_name):
+                err = "function {0} requires ruby-gem {1} to already be installed"
+                raise RuntimeError(err.format(fxn.__name__, self.gem_name))
+            return fxn(*args, **kargs)
+        return newf
 
 
 def has_gem(name):

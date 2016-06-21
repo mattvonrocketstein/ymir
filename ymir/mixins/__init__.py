@@ -3,7 +3,7 @@
 """
 
 from .packages import PackageMixin
-
+from ._ansible import AnsibleMixin
 __all__ = [tmp.__name__ for tmp in
-           [PackageMixin,
+           [PackageMixin, AnsibleMixin,
             ]]

@@ -35,7 +35,7 @@ def validate_metadata_file(metadata_f):
     """ returns a list of errors encountered while validating
         a puppet metadata.json file
     """
-    errors, messages = [], []
+    errors, warnings, messages = [], [], []
     if not os.path.exists(metadata_f):
         errors.append('{0} does not exist!'.format(metadata_f))
     else:
@@ -51,4 +51,4 @@ def validate_metadata_file(metadata_f):
             errors.append(
                 'cannot validate.  '
                 'run "gem install metadata-json-lint" first')
-    return errors, messages
+    return errors, warnings, messages

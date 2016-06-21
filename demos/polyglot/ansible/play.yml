@@ -13,4 +13,4 @@
       register: apt_output
     - debug: var=apt_output # show the content of apt_output var
     - name: Push a file to the demo service
-      copy: src=files/tmp_file dest=/tmp/tmp_file_ansible mode=0644
+      copy: src=files/tmp_file dest=/tmp/ansible_tmp_file mode=0644
