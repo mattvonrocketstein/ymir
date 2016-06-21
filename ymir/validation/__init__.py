@@ -168,12 +168,12 @@ def validate_health_checks(service):
     for check_name in service_json['health_checks']:
         check_type, url = service_json['health_checks'][check_name]
         try:
-            checker = getattr(checks, check_type)
+            checker = getattr(checks, check_type.replace('-', '_'))
         except AttributeError:
             err = '  check-type "{0}" does not exist in ymir.checks'
             err = err.format(check_type)
             errors.append(err)
-            return errors, warnings, messages
+            continue
         tmp = service_json.copy()
         tmp.update(dict(host='host'))
         try:
@@ -184,12 +184,17 @@ def validate_health_checks(service):
             errors.append(msg)
         else:
             checker_validator = getattr(
-                checker, 'validate', lambda url: None)
-            err = checker_validator(url)
-            if err:
-                errors.append(err)
-            messages.append('{0}'.format([
-                check_name, check_type, url]))
+                checker, 'validate', None)
+            if checker_validator is None:
+                warnings.append("checker '{0}' has no validation defined".format(
+                    checker.__name__))
+            else:
+                err = checker_validator(url)
+                if err:
+                    errors.append(err)
+                else:
+                    messages.append('{0}'.format([
+                        check_name, '{0}://{1}'.format(check_type, url)]))
     return errors, warnings, messages
 
 

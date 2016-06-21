@@ -191,20 +191,35 @@ def file_exists(service, instruction):
         _type='file_exists')
 
 
+def _file_exists_validator(instruction):
+    base_err = "check `file-exists` should "
+    if not instruction.startswith('/'):
+        err = "have an absolute path as it's instruction'"
+        return base_err + err
+file_exists.validate = _file_exists_validator
+
+
 def file_contains(service, instruction):
     """ a checker for whether a given file contains a given string.
         ex: file-contains://remote_filename,some_string
     """
     parts = instruction.split(",")
-    if len(instruction) == 2:
+    fname, string = parts
+    new_instruction = "File('{0}').contains('{1}')".format(fname, string)
+    return testinfra(service, new_instruction, _type='file_contains')
+
+
+def _file_contains_validator(instruction):
+    parts = instruction.split(",")
+    if len(parts) != 2:
         err = "Expected formatting: file_contains://filename,string"
-        raise InvalidCheck(err)
+        return err
     fname, string = parts
     if '"' in string or "'" in string:
         err = "please, dont use quotes in arguments for file-contains:// checks"
-        raise InvalidCheck(err)
-    new_instruction = "File('{0}').contains('{1}')".format(fname, string)
-    return testinfra(service, new_instruction, _type='file_contains')
+        return err
+
+file_contains.validate = _file_contains_validator
 
 
 def testinfra(service, instruction, _type="testinfra"):

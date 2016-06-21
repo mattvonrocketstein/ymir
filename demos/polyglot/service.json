@@ -84,9 +84,16 @@
     // is allowed and encouraged, because anything IP-based will be useless
     // after executing terminate/create operations.
     "health_checks": {
-        "homepage" :
-        ['http_200',
-         'http://{{host}}'],
+        "ansible_file_created" :
+          ['file-exists', '/tmp/ansible_tmp_file'],
+        "puppet_file_created":
+          ['file-exists', '/tmp/puppet_tmp_file'],
+        "motd_tagged_with_ansible_var":
+          ['file-contains', '/etc/motd,{{ansible_variable}}'],
+        "motd_tagged_with_puppet_var":
+          ['file-contains', '/etc/motd,{{puppet_variable}}'],
+        "nginx running":
+          ['testinfra', 'Service("nginx").is_running'],
     },
 
     // Schema-free section for misc. site configuration.
