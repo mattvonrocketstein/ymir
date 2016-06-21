@@ -73,9 +73,9 @@ class Check(object):
         self.success = success
         self.failed = not self.success
         if not quiet:
-            print '  {4} [{0}] [?{1}] -- {2} {3} '.format(
+            print '  {4} [{0}] {1}{2} {3} '.format(
                 yellow(self.name),
-                blue(self.check_type),
+                blue(self.check_type + '://'),
                 self.url,
                 message if message else '',
                 ydata.FAIL + 'fail' if not success else ydata.SUCCESS + 'ok'

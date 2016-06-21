@@ -17,8 +17,8 @@ from ymir.base import report as base_report
 
 from ymir import schema as yschema
 from ymir import data as ydata
-from ymir import api as yapi
 
+yapi = lazyModule('ymir.api')
 beanstalk = lazyModule('ymir.beanstalk')
 logger = logging.getLogger(__name__)
 _report = lambda msg: base_report('ymir.validation', msg)

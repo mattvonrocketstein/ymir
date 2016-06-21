@@ -5,7 +5,6 @@ import pytest
 import addict
 import demjson
 from ymir import validation
-from ymir.util import TemporaryDirectory
 from ymir import api as yapi
 from tests import common as test_common
 
