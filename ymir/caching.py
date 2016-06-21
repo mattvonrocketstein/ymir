@@ -8,12 +8,13 @@
 
 """
 from functools import wraps
+from werkzeug.contrib.cache import SimpleCache
 
 
 def cached(key_or_fxn, timeout=5 * 60):
     """ dumb hack adapted from
-        http://flask.pocoo.org/docs/patterns/viewdecorators/ """
-    from werkzeug.contrib.cache import SimpleCache
+        http://flask.pocoo.org/docs/patterns/viewdecorators/
+    """
     from ymir import caching as c
     if not getattr(c, 'CACHE', None):
         c.CACHE = SimpleCache()

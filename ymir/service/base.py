@@ -106,24 +106,31 @@ class FabricMixin(object):
 
     @util.declare_operation
     @util.require_running_instance
-    def check(self, name=None):
+    def check(self, name=None, failfast=False):
         """ reports health for this service """
         # TODO: include relevant sections of status results
         # for x in 'status eb_health eb_status'.split():
         #    if x in data:
         #        out['aws://'+x] = ['read', data[x]]
-        checks = self.template_data()['health_checks']
-        self.report('running health checks ({0} total)'.format(len(checks)))
-        names = [name] if name is not None else checks.keys()
-        service_health_checks = checks
+        def fail():
+            raise SystemExit(1)
+        service_health_checks = self.template_data()['health_checks']
+        self.report('running health checks ({0} total)'.format(
+            len(service_health_checks)))
+        names = [name] if name is not None else service_health_checks.keys()
         success = True
         for check_name, (_type, url_t) in service_health_checks.items():
             if check_name in names:
                 check_obj = ychecks.Check(
                     url_t=url_t, check_type=_type, name=check_name)
-                success = success and check_obj.run(self).success
+                result = check_obj.run(self)
+                success = success and result.success
+                if failfast and not success:
+                    fail()
+            else:
+                self.report(ydata.WARNING + "skipped: " + check_name)
         if not success:
-            raise SystemExit(1)
+            fail()
 
     @util.declare_operation
     def integration_test(self):
@@ -226,6 +233,7 @@ class AbstractService(Reporter, PuppetMixin, AnsibleMixin, PackageMixin, FabricM
         return out
 
     @property
+    @cached('service._ssh_config_string', 60 * 20)
     def _ssh_config_string(self):
         """ return a string suitable for use as ssh-config file """
         out = [

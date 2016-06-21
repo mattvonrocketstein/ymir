@@ -4,14 +4,18 @@
     This file describes 'check_types' which are available for
     use with integration tests or health checks.
 
-      | Check type  | Description
-      |-------------|-----------------------------
-      | http        | check a http, yield status code
-      | http_200    | check for http 200. yield bool
-      | http_301    | check for http 301. yield bool
-      | json        | check that response is json.  yield bool
-      | json_200    | check that response is json, code is 200. yield bool
-      | port_open   | check that port is open.  yield bool
+      | Check type    | Description
+      |---------------|---------------------------------------------------------
+      | http          | check a http, yield status code
+      | http_200      | check for http 200. yield bool
+      | http_301      | check for http 301. yield bool
+      | json          | check that response is json.  yield bool
+      | json_200      | check response is json, code is 200. yield bool
+      | port_open     | check that port is open.  yield bool
+      | file-exists   | check that file exists.  yield bool
+      | file-contains | check that file exists.  yield bool
+      | testinfra     | testinfra assertions.  yield exceptions
+      |---------------|---------------------------------------------------------
 
    Every checker can optionally include it's own validation.  This validation
    is NOT run during `ymir check` invocations but will be run during the
@@ -19,15 +23,24 @@
 """
 
 import requests
-from ymir import util
-from ymir import data as ydata
+from tempfile import NamedTemporaryFile
+
+import testinfra as testinfra_mod
 from fabric.colors import blue, yellow
 from peak.util.imports import lazyModule
-from tempfile import NamedTemporaryFile
+
+from ymir import util
+from ymir import data as ydata
+
+backend_cache = {}
 yapi = lazyModule('ymir.api')
 
 
 class InvalidCheckType(RuntimeError):
+    pass
+
+
+class InvalidCheck(RuntimeError):
     pass
 
 
@@ -48,8 +61,9 @@ class Check(object):
         import ymir.checks as modyool
         data = service.template_data()
         self.url = yapi.str_reflect(self.url_t, ctx=data)
+
         try:
-            checker = getattr(modyool, self.check_type)
+            checker = getattr(modyool, self.check_type.replace('-', '_'))
         except AttributeError:
             err = 'Cannot find checker "{0}"'.format(
                 self.check_type, self.url)
@@ -158,47 +172,47 @@ def http_401(service, url):
 
 
 def http_403(service, url):
+    """ """
     return http(service, url, codes=[403])
 
 
 def json_200(service, url):
+    """ """
     return json(service, url, codes=[200])
 
 
 def file_exists(service, instruction):
-    """ """
-    return testinfra("File('{0}').exists".format(instruction))
+    """ a checker for whether a given file exists
+        ex: file-exists://remote_filename
+    """
+    return testinfra(
+        service,
+        "File('{0}').exists".format(instruction),
+        _type='file_exists')
 
 
 def file_contains(service, instruction):
+    """ a checker for whether a given file contains a given string.
+        ex: file-contains://remote_filename,some_string
+    """
     parts = instruction.split(",")
-    err = "expected formatting: file_contains://filename,string"
-    assert len(instruction) == 2, err
+    if len(instruction) == 2:
+        err = "Expected formatting: file_contains://filename,string"
+        raise InvalidCheck(err)
     fname, string = parts
-    err = "please, dont use quotes in arguments for file-contains:// checks"
-    assert '"' not in string, err
-    assert "'" not in string, err
+    if '"' in string or "'" in string:
+        err = "please, dont use quotes in arguments for file-contains:// checks"
+        raise InvalidCheck(err)
     new_instruction = "File('{0}').contains('{1}')".format(fname, string)
-    return testinfra(service, new_instruction)
+    return testinfra(service, new_instruction, _type='file_contains')
 
 
-def testinfra(service, instruction):
-    """ """
-    config = service._ssh_config_string
-    with NamedTemporaryFile() as tmpf:
-        tmpf.file.write(config)
-        tmpf.file.seek(0)
-        return _test_infra(service, instruction, tmpf.name)
-
-
-def _test_infra(service, instruction, ssh_config_file):
-    import testinfra
-    backend = testinfra.get_backend(
-        "paramiko://default", ssh_config=ssh_config_file, sudo=True)
-    namespace = ['File', ]
-    namespace = dict([[name, backend.get_module(name)] for name in namespace])
+def testinfra(service, instruction, _type="testinfra"):
+    """ a checker for raw testinfra assertions
+        ex: testinfra://File('/etc/passwd').exists
+    """
     try:
-        exec('assert ' + instruction, namespace)
+        exec('assert ' + instruction, _testinfra_namespace(service))
     except Exception as exc:
         success = False
         message = str(exc)
@@ -206,3 +220,43 @@ def _test_infra(service, instruction, ssh_config_file):
         success = True
         message = ''
     return instruction, success, message
+
+
+def _testinfra_backend(service):
+    """ this call is very expensive in terms of
+        time and I/O, so cache carefully
+    """
+    cache_key = id(service)
+    if cache_key in backend_cache:
+        return backend_cache[cache_key]
+    config = service._ssh_config_string
+    with NamedTemporaryFile() as tmpf:
+        tmpf.file.write(config)
+        tmpf.file.seek(0)
+        backend = testinfra_mod.get_backend(
+            "paramiko://default", ssh_config=tmpf.name, sudo=True)
+        # this call is necessary to unlazy-ify the testinfra
+        # backend before we leave the context manager
+        backend.get_module('File')
+        backend_cache[cache_key] = backend
+        return backend
+
+
+def _testinfra_namespace(service):
+    """ testinfra primitives like {File, Package, Service} etc are defined differently
+        for each backend, so they cannot be imported directly.  need to create a
+        namespace containing all of these primitives, so one has to use inspection
+        to avoid listing them out explicitly.
+    """
+    cache_key = -id(service)
+    if cache_key in backend_cache:
+        return backend_cache[cache_key]
+    backend = _testinfra_backend(service)
+    namespace = [
+        x for x in dir(testinfra_mod.modules)
+        if '_' not in x and x[0].upper() == x[0]]
+    namespace = dict(
+        [[name, backend.get_module(name)]
+         for name in namespace])
+    backend_cache[cache_key] = namespace
+    return namespace
