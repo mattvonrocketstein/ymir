@@ -5,6 +5,8 @@ import os
 import time
 import boto
 
+from fabric.colors import yellow
+
 from ymir import util
 from ymir.service.base import AbstractService
 
@@ -14,7 +16,6 @@ class AmazonService(AbstractService):
 
     def __init__(self, conn=None, **kargs):
         """"""
-        self.report('aws profile', os.environ.get('AWS_PROFILE', 'default'))
         self.conn = conn or util.get_conn()
         super(AmazonService, self).__init__(**kargs)
 
@@ -115,7 +116,7 @@ class AmazonService(AbstractService):
     def sync_tags(self):
         """ update aws instance tags from service.json `tags` field """
         self.report('updating instance tags: ')
-        json = self.template_data(simple=True)
+        json = self.template_data()
         tags = dict(
             description=json.get('service_description', ''),
             org=json.get('org_name', ''),
@@ -130,6 +131,7 @@ class AmazonService(AbstractService):
         self.report('  {0}'.format(tags.keys()))
         self._instance.add_tags(tags)
 
+    @util.declare_operation
     @util.require_running_instance
     def terminate(self, force=False):
         """ terminate this service (delete from ec2) """
@@ -167,7 +169,8 @@ class AmazonService(AbstractService):
         """
         tdata = self._service_json  # NOT template_data(), that's cyclic
         if not self._status_computed and self._debug_mode:
-            self.report("handshaking with AWS..")
+            self.report("AWS profile: {0}".format(yellow(
+                os.environ.get('AWS_PROFILE', 'default'))))
         name = tdata['name']
         instance = util.get_instance_by_name(name, self.conn)
         result = dict(

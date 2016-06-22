@@ -4,30 +4,25 @@
     NB: this module is prefixed with an underscore to avoid
         confusion with the module from python-vagrant.
 """
-from functools import wraps
 import subprocess
 
+from fabric import api
 import vagrant as _vagrant
 
 from ymir import util
 from .base import AbstractService
 from ymir import data as ydata
+STATUS_NC = 'not_created'
 
 
-def catch_vagrant_error(fxn):
-    """ """
-    @wraps(fxn)
-    def newf(self, *args, **kargs):
-        try:
-            return fxn(self, *args, **kargs)
-        except (subprocess.CalledProcessError,) as exc:
-            self.report(
-                "ERROR: vagrant did not respond as expected.. "
-                "is the box started yet?")
-            self.report("Original exception follows:")
-            print str(exc)
-            raise  # SystemExit()
-    return newf
+class VagrantNotReady(object):
+
+    def not_ready(self):
+        return "not_ready"
+
+    def status(self):
+        return None  # [type('fakestatus',(object,),dict())]
+    user = keyfile = hostname = port = not_ready
 
 
 class VagrantService(AbstractService):
@@ -35,7 +30,6 @@ class VagrantService(AbstractService):
     _vagrant = None
 
     @property
-    @catch_vagrant_error
     def _username(self):
         """ username data is accessible only as a property because
             it must overridden for i.e. vagrant-based services
@@ -43,19 +37,16 @@ class VagrantService(AbstractService):
         return self.vagrant.user()
 
     @property
-    @catch_vagrant_error
     def _pem(self):
         """ value available JIT """
         return util.unexpand(self.vagrant.keyfile())
 
     @property
-    @catch_vagrant_error
     def _host(self):
         """ value available JIT: """
         return self.vagrant.hostname()
 
     @property
-    @catch_vagrant_error
     def _port(self):
         """ value available JIT: """
         return self.vagrant.port()
@@ -64,17 +55,30 @@ class VagrantService(AbstractService):
     def vagrant(self):
         """ """
         if not self._vagrant:
-            self._vagrant = _vagrant.Vagrant(
+            self._cache_vagrant_handle()
+        return self._vagrant
+
+    def _cache_vagrant_handle(self):
+        try:
+            tmp = _vagrant.Vagrant(
                 quiet_stdout=self._debug_mode,
                 quiet_stderr=self._debug_mode,)
-
-        return self._vagrant
+            tmp.user()  # unlazify the handle
+        except (subprocess.CalledProcessError,):
+            self.report(
+                ydata.WARN + "vagrant did not respond as expected!")
+            self._vagrant = VagrantNotReady()
+        else:
+            self._vagrant = tmp
 
     @util.declare_operation
     def up(self):
         """ shortcut for `vagrant up` """
         self.report("invoking `vagrant up`")
-        self.vagrant.up()
+        with api.lcd(self._ymir_service_root):
+            with api.shell_env(YMIR_SERVICE_JSON=self._ymir_service_json_file):
+                api.local('vagrant up')
+        self._cache_vagrant_handle()
 
     def _status(self):
         """ retrieves service status information.
@@ -88,7 +92,7 @@ class VagrantService(AbstractService):
         ip = None
         result = dict(
             instance=None, ip=ip,
-            status='terminated?',
+            status='not_created',
             # perhaps provide for compatability with EC2?
             # private_ip=None, tags=[],
         )
@@ -97,7 +101,7 @@ class VagrantService(AbstractService):
             # vagrant.status() is a list with potentially many items,
             # depending on if the Vagrantfile supports multi-vm
             status = status.pop()
-            if status.state not in ['poweroff', 'not_created']:
+            if status.state not in ['poweroff', STATUS_NC]:
                 # DONT use self._host here, that's cyclic
                 ip = self.vagrant.hostname()
             result.update(
@@ -118,7 +122,7 @@ class VagrantService(AbstractService):
         state = self._status()['status']
         assert not force, 'force=True not supported for vagrant yet'
         if state in ['not_created']:
-            self.vagrant.up()
+            self.up()
         else:
             self.report(
                 ydata.FAIL + "already created!  status={0}".format(state))
@@ -136,6 +140,7 @@ class VagrantService(AbstractService):
         return result
 
     @util.declare_operation
+    @util.require_running_instance
     def terminate(self, force=False):
         """ terminate this service (delete from virtualbox) """
         instance = self._instance
