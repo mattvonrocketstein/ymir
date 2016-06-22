@@ -17,9 +17,10 @@
       | testinfra     | testinfra assertions.  yield exceptions
       |---------------|---------------------------------------------------------
 
-   Every checker can optionally include it's own validation.  This validation
-   is NOT run during `ymir check` invocations but will be run during the
-   `ymir validate` invocation.
+   Every checker can optionally include it's own validation, which will be invoked
+   during calls to `ymir validate`.  This validation is NOT run during `fab check`
+   invocations.  Validators should simply return None if everything is fine or a string
+   if there is an error.  Find the ".validate" assignments below for further example.
 """
 
 import requests
@@ -31,6 +32,7 @@ from peak.util.imports import lazyModule
 
 from ymir import util
 from ymir import data as ydata
+import yurl
 
 backend_cache = {}
 yapi = lazyModule('ymir.api')
@@ -181,6 +183,16 @@ def json_200(service, url):
     return json(service, url, codes=[200])
 
 
+def _url_validator(instruction):
+    try:
+        yurl.URL(instruction).validate()
+    except Exception as exc:
+        return str(exc)
+
+for _fxn in [json, json_200, http_200, http_301, http_401, http_403]:
+    _fxn.validate = _url_validator
+
+
 def file_exists(service, instruction):
     """ a checker for whether a given file exists
         ex: file-exists://remote_filename
@@ -235,6 +247,15 @@ def testinfra(service, instruction, _type="testinfra"):
         success = True
         message = ''
     return instruction, success, message
+
+
+def _testinfra_validator(instruction):
+    """ """
+    try:
+        compile(instruction, '_testinfra_validator', 'exec')
+    except SyntaxError as exc:
+        return str(exc)
+testinfra.validate = _testinfra_validator
 
 
 def _testinfra_backend(service):

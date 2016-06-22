@@ -7,6 +7,7 @@ import sys
 import logging
 from argparse import ArgumentParser
 
+from ymir.base import report
 from ymir.version import __version__
 from ymir.commands import (
     ymir_init, ymir_sg, ymir_list,
@@ -56,14 +57,15 @@ def get_parser():
     list_parser.add_argument('-k', '--keypairs', action='store_true',
                              help='list keypairs')
 
-    sgkargs = dict(metavar='security_group_json',
-                   type=str,)
-    sgkargs.update(
-        dict(nargs='?', default='security_groups.json'))
+    sgkargs = dict(
+        metavar='security_group_json', type=str,
+        nargs='?', default='security_groups.json')
     sg_parser = subparsers.add_parser(
         'sg', help='shortcut for security_group command')
     sg_parser.set_defaults(subcommand='sg')
     sg_parser.add_argument('sg_json', **sgkargs)
+    sg_parser.add_argument(
+        '--list', '-l', action='store_true', help='list security groups')
     security_group_parser = subparsers.add_parser(
         'security_group', help='updates AWS security group from JSON')
     security_group_parser.set_defaults(subcommand='security_group')
@@ -109,6 +111,7 @@ def get_parser():
 
 def entry(settings=None):
     """ Main entry point """
+    report('ymir', 'version {0}'.format(__version__))
     parser = get_parser()
     args = parser.parse_args(sys.argv[1:])
     service_json_not_found = (

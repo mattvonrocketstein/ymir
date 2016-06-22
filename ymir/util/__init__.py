@@ -87,7 +87,12 @@ def report(label, msg, *args, **kargs):
 
 
 def require_running_instance(fxn):
-    """ NB: only for use with Service instance methods! """
+    """ a decorator you can apply to service operations that
+        can only work when the service is already up and running.
+        this decorator is ONLY for use with Service instance methods!
+        it should work on any type of service-subclass as long as that
+        subclass has a correctly written _status() method
+    """
     @wraps(fxn)
     def newf(self, *args, **kargs):
         cm_data = self._status()
@@ -97,7 +102,7 @@ def require_running_instance(fxn):
             self.report(
                 "need an instance to run `{0}` command".format(fxn.__name__))
             self.report("no instance found!")
-            return None
+            raise SystemExit(1)
     return newf
 
 
@@ -112,6 +117,7 @@ def list_dir(dir_=None):
 
 
 def shell(conn=None, **namespace):
+    """ """
     conn = conn or get_conn()
     try:
         from smashlib import embed
@@ -164,23 +170,6 @@ def get_instance_by_id(id, conn):
         #          on this working as written
         if tmp[0].update() not in ['terminated']:
             return tmp
-
-
-class require_gem(object):
-    """ decorator """
-
-    def __init__(self, gem_name):
-        self.gem_name = gem_name
-
-    def __call__(self, fxn):
-        """ """
-        @wraps(fxn)
-        def newf(*args, **kargs):
-            if not has_gem(self.gem_name):
-                err = "function {0} requires ruby-gem {1} to already be installed"
-                raise RuntimeError(err.format(fxn.__name__, self.gem_name))
-            return fxn(*args, **kargs)
-        return newf
 
 
 def has_gem(name):
@@ -325,3 +314,25 @@ def copytree(src, dst, symlinks=False, ignore=None):
             if not os.path.exists(d) or \
                     os.stat(src).st_mtime - os.stat(dst).st_mtime > 1:
                 shutil.copy2(s, d)
+
+
+class InvalidValidator(Exception):
+    pass
+
+
+def declare_validator(fxn):
+    @wraps(fxn)
+    def newf(*args, **kargs):
+        result = fxn(*args, **kargs)
+        try:
+            errors, warnings, messages = result
+        except ValueError:
+            raise InvalidValidator(
+                ("{0} should return a tuple of "
+                 "errors/warnings/messages if it"
+                 " is declared a validator!").format(
+                    fxn.__name__))
+        if not errors and not warnings and not messages:
+            messages.append("no problems found")
+        return result
+    return newf

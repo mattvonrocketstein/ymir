@@ -64,7 +64,25 @@
         ['http_200', 'http://{{host}}'],
     },
 
-    // Data that will be passed on to the puppet FACTer
+    // Schema-free section for misc. site configuration.
+    // Useful for template-variables that can be passed on to the
+    // puppet FACTer, the ansible environment, or used to configure
+    // application particulars.
     'service_defaults' : {
+    }
+
+    // This section is parsed directly by vagrant (see the Vagrantfile).
+    // Do NOT use {{templating}} inside here, it won't work.  Each variable
+    // must be defined, and any changes will be picked up by vagrant immediately
+    // NOT during the next call to ymir's' `setup` operation.  Only the most common
+    // vagrant variables are included here.. for other kinds of virtualmachine hackery
+    // you'll need to modify the Vagrantfile directly.
+    'vagrant': {
+        'name': 'default',
+        'box': 'ubuntu/trusty32',
+        'box_check_update': false,
+        'sync_disabled': true,
+        'ram': 512,
+        'cpus': 1,
     }
 }

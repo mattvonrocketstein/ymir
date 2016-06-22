@@ -29,26 +29,3 @@ def run_puppet(_fname, parser=None, debug=False, puppet_dir=None, facts={}):
             debug='--debug' if debug else '',
             pdir=puppet_dir or os.path.dirname(_fname),
             fname=_fname))
-
-
-def validate_metadata_file(metadata_f):
-    """ returns a list of errors encountered while validating
-        a puppet metadata.json file
-    """
-    errors, warnings, messages = [], [], []
-    if not os.path.exists(metadata_f):
-        errors.append('{0} does not exist!'.format(metadata_f))
-    else:
-        if util.has_gem('metadata-json-lint'):
-            cmd_t = 'metadata-json-lint {0}'
-            with api.quiet():
-                x = api.local(cmd_t.format(metadata_f), capture=True)
-            error = x.return_code != 0
-            if error:
-                errors.append('could not validate {0}'.format(metadata_f))
-                errors.append(x.stderr.strip())
-        else:
-            errors.append(
-                'cannot validate.  '
-                'run "gem install metadata-json-lint" first')
-    return errors, warnings, messages

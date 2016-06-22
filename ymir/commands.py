@@ -39,6 +39,11 @@ def ymir_sg(args):
                 return True
         return False
 
+    def list_groups():
+        print [sg.name for sg in util.get_conn().get_all_security_groups()]
+
+    if args.list:
+        return list_groups()
     force = args.force
     fname = os.path.abspath(args.sg_json)
     if not os.path.exists(fname):
@@ -69,28 +74,31 @@ def ymir_validate(args):
     """ """
     default_service_json = os.path.join(os.getcwd(), 'service.json')
     default_vagrant_json = os.path.join(os.getcwd(), 'vagrant.json')
-    default_files = any(
-        map(os.path.exists, [default_service_json, default_vagrant_json]))
-    if args.service_json is None and not default_files:
+    default_service_json_found = os.path.exists(default_service_json)
+    default_vagrant_json_found = os.path.exists(default_vagrant_json)
+    default_files_found = default_vagrant_json_found or default_service_json_found
+    if args.service_json is None and not default_files_found:
         err = ('either filename should be passed, '
                '$YMIR_SERVICE_JSON must be set, '
                'or ./service.json should exist')
         report(err)
         raise SystemExit(1)
-    elif args.service_json is None and default_files:
-        report(
-            "No service-description provided, but default values are in the working directory")
-        if os.path.exists(default_service_json):
+    elif args.service_json is None and default_files_found:
+        report("No service-description provided.  Found defaults:")
+        if default_service_json_found:
+            report("  {0}".format(default_service_json))
+        if default_vagrant_json_found:
+            report("  {0}".format(default_vagrant_json))
+        if default_service_json_found:
             report("validating {0}".format(default_service_json))
             tmp_args = copy.copy(args)
             tmp_args.service_json = default_service_json
             ymir_validate(tmp_args)
-        if os.path.exists(default_vagrant_json):
+        if default_vagrant_json_found:
             report("validating {0}".format(default_vagrant_json))
             tmp_args = copy.copy(args)
             tmp_args.service_json = default_vagrant_json
             ymir_validate(tmp_args)
-
     elif args.service_json:
         validation.validate(args.service_json, simple=False)
 

@@ -99,12 +99,9 @@ def load_service_from_json(filename=None, quiet=False):
     """ return a service object from ymir-style service.json file.
         when filename is not given it will be guessed based on cwd.
     """
-    from ymir.version import __version__
-    report = util.NOOP if quiet else base_report
-    report('ymir', 'version {0}'.format(__version__))
     service_json_file = filename or util.get_or_guess_service_json_file()
-    report('ymir', 'service.json is {0}'.format(
-        util.unexpand(service_json_file)))
+    # report('ymir.api', 'service.json is {0}'.format(
+    #    util.unexpand(service_json_file)))
     service_obj = _load_service_from_json_helper(
         service_json_file=service_json_file,
         service_json=load_json(service_json_file),
@@ -134,9 +131,11 @@ def _load_service_from_json_helper(service_json_file=None,
                                    service_json={}, quiet=False, simple=False):
     """ load service obj from service json """
     from ymir import validation
-    chosen_schema = yschema.choose_schema(service_json, quiet=True)
+    chosen_schema = yschema.choose_schema(service_json)
     validation.validate(service_json_file, chosen_schema, simple=True)
     report = util.NOOP if quiet else base_report
+    report('ymir.api', 'chose schema: {0}'.format(
+        yellow(chosen_schema.schema_name)))
     # report("ymir", "ymir service.json version:")
     # report('ymir.api', 'loading service object from description')
     service_json = set_schema_defaults(service_json, chosen_schema)
@@ -147,7 +146,7 @@ def _load_service_from_json_helper(service_json_file=None,
         yellow(BaseService.__name__)))
     ServiceFromJSON = type(classname, (BaseService,),
                            dict(service_json_file=service_json_file))
-    obj = ServiceFromJSON(service_root=os.path.dirname(service_json_file))
+    obj = ServiceFromJSON(service_json_file=service_json_file)
     obj._schema = chosen_schema
     service_json = set_schema_defaults(service_json, chosen_schema)
     ServiceFromJSON._service_json = service_json
