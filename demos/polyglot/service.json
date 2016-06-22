@@ -1,5 +1,5 @@
 //
-// service.json for the `demo` service
+// service.json for the `polyglot` demo service
 //
 //  Complete documentation for the file schema is here:
 //   http://mattvonrocketstein.github.io/ymir/pages/service-description.html
@@ -12,12 +12,12 @@
     // Sets namespace for this service.
     // This is used in tagging for AWS-based services,
     // and these variables are often useful for templating.
-    "org_name": "OrgName",
-    "app_name": "AppName",
-    "env_name": "EnvName",
-    "service_name": "ServiceName",
+    "org_name": "ymir",
+    "app_name": "ymir",
+    "env_name": "dev",
+    "service_name": "polyglot",
 
-    "name" : "ymir-demo",
+    "name" : "ymir-polyglot-aws-demo",
     "service_description": "Service description goes here",
 
 
@@ -41,17 +41,21 @@
     // The location of the pem file for this service.
     // This will be used for ssh connections with the service,
     // and if it is not correct then no remote commands can be executed.
-    "pem" : "~/.ssh/{{app_name}}.pem",
+    "pem" : "~/.ssh/your_key_file.pem",
 
-    // Allows sane iteration using rubyish `each` inside puppet files
+
+    // Set the puppet parser that will be used.  Currently the only
+    // valid value here is `future`, which allows for sane iteration
+    // using rubyish `each` inside puppet files.
     'puppet_parser': 'future',
 
     // Sets up the AWS key_name for this service.
     // By default, the value for the "app_name" field
     // in this file will be used.  You can find the
-    // keys for your AWS account at the console here**
-    // **: https://console.aws.amazon.com/iam/home#encryptionKeys
-    "key_name" : "{{app_name}}",
+    // names of the keys using `ymir list -k`, or by visiting
+    // your AWS account at the web console here:
+    //   https://console.aws.amazon.com/iam/home#encryptionKeys
+    "key_name" : "aws_key_name",
 
     // A list of instructions that will be executed during the `setup` operation.
     // See also: mattvonrocketstein.github.io/ymir/
@@ -61,7 +65,7 @@
     // A list of names for the AWS security groups this service will belong
     // to. The existence of these security groups will be confirmed when
     // `ymir validate` is run from the command line.
-    "security_groups" : ['your_sg_name'],
+    "security_groups" : ['default'],
 
     // The `provision_list` field provides a list of  instructions to
     // execute during the provisioning of this service.  By the time

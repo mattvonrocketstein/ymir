@@ -14,7 +14,7 @@
 //   ['tcp', 80, 80, '0.0.0.0/0'],     // web
 //   ['tcp', 22, 22, '0.0.0.0/0'],     // ssh
 [
-    { "name":'demo_security_group',
+    { "name":'default',
       "description": 'demo security group',
       "rules": [
           // place rules here:
