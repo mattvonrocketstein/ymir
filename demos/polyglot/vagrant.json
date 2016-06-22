@@ -98,7 +98,8 @@
     //
     'vagrant': {
         'name': 'default',
-        'box': 'ubuntu/trusty32',
+        //'box': 'ubuntu/trusty32',
+        'box': 'centos/7',
         'box_check_update': false,
         'sync_disabled': true,
         'ram': 512,

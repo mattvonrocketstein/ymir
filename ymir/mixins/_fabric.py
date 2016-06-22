@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """ ymir.mixins._fabric
 """
+import time
 import webbrowser
 
 from fabric import api
@@ -57,6 +58,16 @@ class FabricMixin(object):
         """
         with self.ssh_ctx():
             return api.get(fname, local_path=local_path, use_sudo=True)
+
+    @util.declare_operation
+    def wait(self, delay=30):
+        """ useful for inserting a delay between fabric commands """
+        try:
+            delay = int(delay)
+        except ValueError:
+            raise SystemExit("wait command requires integer delay")
+        self.report("waiting for {0} seconds".format(delay))
+        time.sleep(delay)
 
     @util.declare_operation
     def ssh(self):

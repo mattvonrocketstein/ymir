@@ -21,7 +21,7 @@ def test_puppet_support():
 
 
 @test_common.mock_aws
-@mock.patch('ymir.puppet.rsync_project')
+@mock.patch('ymir.mixins.puppet.rsync_project')
 def test_copy_puppet(rsync_mock):
     with test_common.demo_service() as ctx:
         ctx.rewrite_json(ymir_build_puppet=True)

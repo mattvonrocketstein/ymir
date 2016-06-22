@@ -17,6 +17,11 @@ def test_load_skeleton_service():
     return service
 
 
+def test_ssh_config_string_prop(self):
+    service = test_load_skeleton_service()
+    assert isinstance(service._ssh_config_string, basestring)
+
+
 def test_service_has_important_callables():
     service = test_load_skeleton_service()
     for x in service._fabric_commands:

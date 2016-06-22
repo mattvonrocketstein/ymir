@@ -141,8 +141,6 @@ class AbstractService(Reporter,
         """
         import fabfile
         for x in self._fabric_commands:
-            if not util.is_operation(self, x):
-                continue
             try:
                 tmp = getattr(fabfile, x)
             except AttributeError:
@@ -250,35 +248,33 @@ class AbstractService(Reporter,
         """ provision this service """
         self.report('preparing to provision: {0}'.format(
             yellow(instruction or '(everything)')))
-        self._provision_ip(instruction=instruction, **kargs)
+        self._clean_puppet_tmp_dir()
 
-    def _provision_ip(self, instruction=None, force=False, **kargs):
+        try:
+            instruction_index = int(instruction)
+        except:
+            return self._provision_helper(instruction=instruction, **kargs)
+        else:
+            return self._provision_from_index(instruction_index, **kargs)
+
+    def _provision_from_index(self, instruction_index, **kargs):
+        """ given an integer, run the instruction at
+            that index in the provision list
+        """
+        try:
+            instruction = self.template_data()['provision_list'][
+                instruction_index]
+        except IndexError:
+            msg = "bad instruction_index passed, not found in provision_list"
+            raise SystemExit(msg)
+        else:
+            return self._provision_helper(instruction=instruction, **kargs)
+
+    def _provision_helper(self, instruction=None, force=False, **kargs):
         """ `force` must be True to provision with arguments not
             mentioned in service's provision_list """
-
-        def provision_from_index(instruction_index):
-            """ given an integer, run the instruction at
-                that index in the provision list
-            """
-            try:
-                instruction = provision_list[instruction_index]
-            except IndexError:
-                msg = "bad instruction_index passed, not found in provision_list"
-                raise SystemExit(msg)
-            else:
-                return self._provision_ip(
-                    instruction=instruction, force=force, **kargs)
-
-        self._clean_puppet_tmp_dir()
         provision_list = self.template_data()['provision_list']
-
         if instruction is not None:
-            try:
-                instruction_index = int(instruction)
-            except:
-                pass
-            else:
-                return provision_from_index(instruction_index)
             if not force and instruction not in provision_list:
                 err = ('ERROR: Provisioning a single file requires that '
                        'the file should be mentioned in service.json, '
@@ -316,10 +312,11 @@ class AbstractService(Reporter,
                 "Fatal: no sucher provisioner `{0}`".format(provisioner_name))
             raise SystemExit()
         else:
-            cmd = yapi.str_reflect(provision_instruction,
-                                   ctx=self.template_data())
+            cmd = yapi.str_reflect(
+                provision_instruction,
+                ctx=self.template_data())
             if cmd != provision_instruction:
-                self.report("  translated to: {0}".format(cmd))
+                self.report(yellow("≈") + "translated to: {0}".format(cmd))
             return provision_fxn(cmd, **kargs)
 
     def _provision_remote(self, cmd):
