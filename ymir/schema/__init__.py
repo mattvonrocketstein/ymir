@@ -9,7 +9,8 @@
 from ymir import util
 from ymir.base import report as base_report
 from .security_groups import sg_schema
-from .base import Schema, BeanstalkSchema, EC2Schema, VagrantSchema
+from .base import Schema, BeanstalkSchema, EC2Schema
+from .data import VAGRANT_DATA
 
 NOOP = util.NOOP
 _report = lambda *args: base_report("ymir.schema", *args)
@@ -17,12 +18,11 @@ SGFileSchema = Schema(sg_schema)
 
 default_schema = Schema(EC2Schema, name='EC2-Schema')
 eb_schema = Schema(BeanstalkSchema, name='BeanstalkSchema',)
-vagrant_schema = Schema(VagrantSchema, name='VagrantSchema')
+vagrant_schema = Schema(VAGRANT_DATA, name='VagrantSchema')
 
 
-def choose_schema(json, quiet=False):
+def choose_schema(json):
     """ """
-    report = NOOP if quiet else _report
     instance_type = json.get('instance_type')
     if instance_type in [u'elastic_beanstalk', u'elasticbeanstalk']:
         schema = eb_schema
@@ -30,6 +30,4 @@ def choose_schema(json, quiet=False):
         schema = vagrant_schema
     else:
         schema = default_schema
-    report("chose schema {0} based on instance_type `{1}`".format(
-        schema.schema_name, instance_type))
     return schema

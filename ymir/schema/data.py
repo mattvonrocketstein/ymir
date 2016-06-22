@@ -40,3 +40,8 @@ BASE_DATA = {
     Optional("service_defaults", default={}): dict,
     Optional("env_name", default='env'): unicode,
 }
+
+VAGRANT_DATA = BASE_DATA.copy()
+VAGRANT_DATA.update(PROVISION_DATA)
+VAGRANT_DATA.update(
+    {Required("vagrant"): validators.nested_vagrant_validator})

@@ -9,8 +9,6 @@ from voluptuous import Required, Undefined
 from ymir.schema import data
 from ymir.service import AmazonService, VagrantService
 
-VagrantSchema = data.BASE_DATA.copy()
-VagrantSchema.update(data.PROVISION_DATA)
 
 EC2Schema = data.BASE_DATA.copy()
 EC2Schema.update(data.AWS_DATA)
