@@ -93,5 +93,15 @@
     'service_defaults' : {
         "ansible_variable": "ANSIBLE_VARIABLE_VALUE",
         "puppet_variable": "PUPPET_VARIABLE_VALUE",
+    },
+
+    //
+    'vagrant': {
+        'name': 'default',
+        'box': 'ubuntu/trusty32',
+        'box_check_update': false,
+        'sync_disabled': true,
+        'ram': 512,
+        'cpus': 1,
     }
 }
