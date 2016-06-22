@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """ ymir.commands
+
+    Entry points for commandline utilities
 """
 
 import os
+import copy
+import logging
 
 import boto
 import demjson
@@ -19,7 +23,7 @@ from ymir.base import report as _report
 
 YMIR_SRC = os.path.dirname(__file__)
 
-import logging
+
 logger = logging.getLogger(__name__)
 
 report = lambda *args: _report("ymir.commands", *args)
@@ -62,13 +66,33 @@ def ymir_sg(args):
 
 
 def ymir_validate(args):
-    if args.service_json is None:
-        err = 'either $YMIR_SERVICE_JSON must be set or ./service.json should exist'
+    """ """
+    default_service_json = os.path.join(os.getcwd(), 'service.json')
+    default_vagrant_json = os.path.join(os.getcwd(), 'vagrant.json')
+    default_files = any(
+        map(os.path.exists, [default_service_json, default_vagrant_json]))
+    if args.service_json is None and not default_files:
+        err = ('either filename should be passed, '
+               '$YMIR_SERVICE_JSON must be set, '
+               'or ./service.json should exist')
         report(err)
         raise SystemExit(1)
-    else:
-        return validation.validate(
-            args.service_json, simple=False)
+    elif args.service_json is None and default_files:
+        report(
+            "No service-description provided, but default values are in the working directory")
+        if os.path.exists(default_service_json):
+            report("validating {0}".format(default_service_json))
+            tmp_args = copy.copy(args)
+            tmp_args.service_json = default_service_json
+            ymir_validate(tmp_args)
+        if os.path.exists(default_vagrant_json):
+            report("validating {0}".format(default_vagrant_json))
+            tmp_args = copy.copy(args)
+            tmp_args.service_json = default_vagrant_json
+            ymir_validate(tmp_args)
+
+    elif args.service_json:
+        validation.validate(args.service_json, simple=False)
 
 
 def ymir_shell(args):

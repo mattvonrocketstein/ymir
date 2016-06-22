@@ -19,6 +19,7 @@ from ymir import schema as yschema
 from ymir import data as ydata
 
 yapi = lazyModule('ymir.api')
+yservice = lazyModule('ymir.service')
 beanstalk = lazyModule('ymir.beanstalk')
 logger = logging.getLogger(__name__)
 _report = lambda msg: base_report('ymir.validation', msg)
@@ -243,7 +244,7 @@ def validate(service_json, schema=None, simple=True, quiet=False):
         'checking content in `health_checks` field..',
         validate_health_checks(service),
         report=report,)
-    if not isinstance(service, beanstalk.ElasticBeanstalkService):
+    if isinstance(service, yservice.AmazonService):
         print_errs(
             'checking AWS security groups in field `security_groups` exist..',
             validate_security_groups(service), report=report,)
@@ -252,13 +253,13 @@ def validate(service_json, schema=None, simple=True, quiet=False):
             validate_security_groups_json(service), report=report,)
         print_errs('checking AWS keypair at field `key_name`..',
                    validate_keypairs(service), report=report,)
-        print_errs('checking puppet-librarian\'s metadata.json',
-                   puppet.validate_metadata_file(service._puppet_metadata),
-                   report=report)
-        print_errs('checking puppet code validates with puppet parser..',
-                   validate_puppet(service), report=report,)
-        print_errs('checking puppet templates for undefined variables..',
-                   validate_puppet_templates(service), report=report,)
+    print_errs('checking puppet-librarian\'s metadata.json',
+               puppet.validate_metadata_file(service._puppet_metadata),
+               report=report)
+    print_errs('checking puppet code validates with puppet parser..',
+               validate_puppet(service), report=report,)
+    print_errs('checking puppet templates for undefined variables..',
+               validate_puppet_templates(service), report=report,)
 
 
 def validate_file(fname, schema=None, report=util.NOOP, quiet=False):

@@ -18,7 +18,7 @@ vagrant, which is provisioned using both ansible and puppet with shared variable
 
 ### Prerequisites
 
-You need to have ansible already installed.  If you don't, you can run this:
+You need to have ansible already installed.  If you don't, you can run the command below.  Ymir requires at least ansible >= 2.0.
 
     $ pip install ansible==2.1.0.0
 

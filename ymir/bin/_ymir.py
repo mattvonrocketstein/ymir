@@ -88,10 +88,10 @@ def get_parser():
 
     vpkargs = dict(metavar='service_json',
                    type=str,
-                   help='a (new) directory to initial a ymir project in')
+                   help='service json to validate against')
 
     vpkargs.update(
-        dict(nargs='?', default='service.json'))
+        dict(nargs='?', default=''))
     validate_parser.add_argument('service_json', **vpkargs)
 
     validate_parser.set_defaults(subcommand='validate')
@@ -111,8 +111,9 @@ def entry(settings=None):
     """ Main entry point """
     parser = get_parser()
     args = parser.parse_args(sys.argv[1:])
-    service_json_not_found = (not getattr(args, 'service_json', None) or
-                              not os.path.exists(args.service_json))
+    service_json_not_found = (
+        not getattr(args, 'service_json', None) or
+        not os.path.exists(args.service_json))
     if 'service_json' in args and service_json_not_found:
         args.service_json = os.environ.get('YMIR_SERVICE_JSON')
         # print 'using service_json:', args.service_json
