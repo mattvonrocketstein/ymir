@@ -7,7 +7,6 @@ import logging
 import voluptuous
 
 from fabric import api
-from fabric.colors import yellow
 from peak.util.imports import lazyModule
 
 from ymir import util
@@ -25,6 +24,7 @@ logger = logging.getLogger(__name__)
 _report = lambda msg: base_report('ymir.validation', msg)
 
 
+@util.declare_validator
 def validate_puppet(service):
     """ runs puppet parser validation on puppet files contained
         inside the given service.  NB: this checks all the puppet
@@ -63,27 +63,31 @@ def validate_puppet(service):
     return errors, warnings, messages
 
 
+@util.declare_validator
 def validate_puppet_templates(service):
     """ validates that variables mentioned in puppet
         templates are defined in service.json
     """
-    if not service._supports_puppet:
-        return [], ["`ymir_build_puppet` is false supported for this service, skipping"]
     errors, warnings, messages = [], [], []
+    if not service._supports_puppet:
+        messages = [
+            "`ymir_build_puppet` is false supported for this service, skipping"]
+        return errors, warnings, messages
     default_facts = puppet.DEFAULT_FACTS
 
-    service_vars = service._service_json.keys()
+    service_vars = service.facts.keys()
     service_vars += default_facts
     for f, template_vars in service._get_puppet_template_vars().items():
         for template_var in template_vars:
             if template_var not in service_vars:
-                msg = ("template {0} defines variable `{1}` "
+                msg = ("template {0} uses variable `{1}` "
                        "which is not defined for service").format(
                     f, template_var)
                 errors.append(msg)
     return errors, warnings, messages
 
 
+@util.declare_validator
 def validate_keypairs(service):
     """ validates that keypairs mentioned in service.json
         are present on the filesystem and on AWS with the
@@ -103,6 +107,7 @@ def validate_keypairs(service):
     return errors, warnings, messages
 
 
+@util.declare_validator
 def validate_vagrant(service):
     """ """
     errors, warnings, messages = [], [], []
@@ -159,6 +164,7 @@ def validate_security_groups(service):
     return errors, warnings, messages
 
 
+@util.declare_validator
 def validate_health_checks(service):
     """ """
     # here we fake the host value just for validation because we
@@ -236,7 +242,7 @@ def validate(service_json, schema=None, simple=True, quiet=False):
     # simple validation has succeeded, begin second phase.
     # the schema can be loaded, so build a service object.
     # the service object can then begin to validate itself
-    report('Instantiating service to scrutinize it..')
+    # quiet or report('Instantiating service to scrutinize it..')
     service = yapi.load_service_from_json(service_json, quiet=quiet)
     report = util.NOOP if quiet else service.report
 
@@ -254,7 +260,7 @@ def validate(service_json, schema=None, simple=True, quiet=False):
         print_errs('checking AWS keypair at field `key_name`..',
                    validate_keypairs(service), report=report,)
     print_errs('checking puppet-librarian\'s metadata.json',
-               puppet.validate_metadata_file(service._puppet_metadata),
+               validate_metadata_file(service._puppet_metadata),
                report=report)
     print_errs('checking puppet code validates with puppet parser..',
                validate_puppet(service), report=report,)
@@ -262,18 +268,42 @@ def validate(service_json, schema=None, simple=True, quiet=False):
                validate_puppet_templates(service), report=report,)
 
 
+@util.declare_validator
+def validate_metadata_file(metadata_f):
+    """ returns a list of errors encountered while validating
+        a puppet metadata.json file
+    """
+    errors, warnings, messages = [], [], []
+    if not os.path.exists(metadata_f):
+        errors.append('{0} does not exist!'.format(metadata_f))
+    else:
+        if util.has_gem('metadata-json-lint'):
+            cmd_t = 'metadata-json-lint {0}'
+            with api.quiet():
+                x = api.local(cmd_t.format(metadata_f), capture=True)
+            error = x.return_code != 0
+            if error:
+                errors.append('could not validate {0}'.format(metadata_f))
+                errors.append(x.stderr.strip())
+        else:
+            errors.append(
+                'cannot validate.  '
+                'run "gem install metadata-json-lint" first')
+    return errors, warnings, messages
+
+
 def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
     """ naive schema validation for service.json """
     errors, warnings, messages = [], [], []
     report = report if not quiet else util.NOOP
-    if schema:
-        report('validating file using explicit schema: {0}'.format(
-            yellow(schema.schema_name)))
+    # if schema:
+    #    report('validating file using explicit schema: {0}'.format(
+    #        yellow(schema.schema_name)))
     err = 'got {0} instead of string for fname'.format(fname)
     assert isinstance(fname, basestring), err
     tmp = yapi.load_json(fname)
     if schema is None:
-        schema = yschema.choose_schema(tmp, quiet=quiet)
+        schema = yschema.choose_schema(tmp)
     is_eb = schema.schema_name == 'beanstalk_schema'
     try:
         schema(tmp)
