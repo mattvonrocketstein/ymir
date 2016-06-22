@@ -143,7 +143,8 @@ def ssh(ip, username='ubuntu', port='22', pem=None):
     assert ip is not None
     if ':' in ip:
         ip, port = ip.split(':')
-    cmd = "ssh -p {2} -l {0} {1}".format(username, ip, port)
+    cmd = "ssh -o StrictHostKeyChecking=no -p {2} -l {0} {1}".format(
+        username, ip, port)
     if pem is not None:
         cmd += ' -i {0}'.format(pem)
     with api.settings(warn_only=True):
