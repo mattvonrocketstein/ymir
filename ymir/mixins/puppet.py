@@ -17,6 +17,7 @@ from ymir.util import puppet as util_puppet
 from ymir import data as ydata
 
 RUBY_ROLE = "JhovaniC.ruby"
+GIT_ROLE = 'geerlingguy.git'
 
 # if/when puppet build happens, it more or less follows the instructions here:
 #   https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html
@@ -177,7 +178,7 @@ class PuppetMixin(object):
         else:
             self.report(ydata.SUCCESS + "puppet librarian already installed")
         self.report("installing git with ansible")
-        self._provision_ansible_role('geerlingguy.git')
+        self._install_git()
         sync_puppet_librarian("puppet")
 
     def _install_ruby(self):
@@ -189,6 +190,16 @@ class PuppetMixin(object):
             self._apply_ansible_role(RUBY_ROLE)
         else:
             self.report(ydata.SUCCESS + "ruby is present on the remote side")
+
+    def _install_git(self):
+        """ installs git on the remote service """
+        with api.quiet():
+            has_git = api.run("git --version").succeeded
+        if not has_git:
+            self.report(ydata.FAIL + "git is missing, installing it")
+            self._apply_ansible_role(GIT_ROLE)
+        else:
+            self.report(ydata.SUCCESS + "git is present on the remote side")
 
     def _install_puppet(self):
         """ """
