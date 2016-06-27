@@ -76,7 +76,7 @@ class AnsibleMixin(object):
                 raise RuntimeError(err)
         self.report(ydata.SUCCESS + "role '{0}' installed".format(role_name))
 
-    def _provision_ansible_role(self, role_name):
+    def _provision_ansible_role(self, role_name, **env):
         """ this provisioner applies a single ansible role.  this is more
             complicated than it sounds because there's no way to do this
             without a playbook, and so a temporary playbook is created just
@@ -91,13 +91,22 @@ class AnsibleMixin(object):
             "  become: yes",
             "  become_method: sudo",
             "  roles:",
-            "  - {role: {{role_path}} }",
+            "  - {role: {{role_path}} {{env}}}",
         ])
+        env = env.copy()
+        env_string = ''
+        for k, v in env.items():
+            if isinstance(v, bool):
+                v = str(v).lower()
+            env_string += ': '.join([k, v])
+        env_string = (',' + env_string) if env_string else env_string
         ctx = dict(
+            env=env_string,
             role_path=os.path.join(self._ansible_roles_dir, role_name),
             user=self._username)
         playbook_content = yapi.jinja_env.from_string(
             playbook_content).render(**ctx)
+        print playbook_content
         with NamedTemporaryFile() as tmpf:
             tmpf.write(playbook_content)
             tmpf.seek(0)

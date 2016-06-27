@@ -183,11 +183,17 @@ class PuppetMixin(object):
 
     def _install_ruby(self):
         """ installs ruby on the remote service """
+        # RUBY_DOWNLOAD_URL = "http://cache.ruby-lang.org/pub/ruby/2.2/ruby-2.2.1.tar.gz"
         with api.quiet():
             has_ruby = api.run("ruby --version").succeeded
         if not has_ruby:
             self.report(ydata.FAIL + "ruby is missing, installing it")
-            self._apply_ansible_role(RUBY_ROLE)
+            self._apply_ansible_role(
+                RUBY_ROLE,
+                # ruby_download_url=ruby_download_url,
+                ruby_version="2.2.1",
+                ruby_install_from_source=True,
+            )
         else:
             self.report(ydata.SUCCESS + "ruby is present on the remote side")
 
