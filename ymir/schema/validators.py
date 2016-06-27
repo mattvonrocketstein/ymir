@@ -10,7 +10,7 @@ def nested_vagrant_validator(dct, ):
     if not isinstance(dct, dict):
         err = ("expected hash for key @ `vagrant`")
         raise Invalid(err)
-    for key in 'name box box_check_update sync_disabled ram cpus'.split():
+    for key in 'name boot_timeout box box_check_update sync_disabled ram cpus'.split():
         if key not in dct:
             err = 'key at `vagrant` would contain sub-key "{0}"'
             raise Invalid(err.format(key))

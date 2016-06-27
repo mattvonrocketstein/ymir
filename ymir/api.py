@@ -14,7 +14,7 @@ from ymir import schema as yschema
 
 import jinja2
 
-env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+jinja_env = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
 
 class ReflectionError(Exception):
@@ -27,9 +27,7 @@ def str_reflect(obj, ctx, simple=True):
     """
     pattern = r"'([A-Za-z0-9_\./\\-]*)'"
     try:
-        # return obj.format(**ctx)
-        return env.from_string(obj).render(**ctx)
-    # except KeyError as err:
+        return jinja_env.from_string(obj).render(**ctx)
     except jinja2.UndefinedError as err:
         lazy_keys = ['host', 'username', 'pem']
         group = re.search(pattern, str(err)).group().replace("'", '')

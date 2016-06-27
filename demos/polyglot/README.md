@@ -35,8 +35,3 @@ You need to have vagrant/virtualbox already installed.  Afterwards, run these co
 Run the checks:
 
     $ fab check
-
-
-### TODO:
-
-1. try the vagrant-quickstart with a missing basebox

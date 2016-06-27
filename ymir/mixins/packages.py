@@ -2,7 +2,10 @@
 """ ymir.mixins.packages
 """
 import os
+import contextlib
+
 from fabric import api
+
 from ymir import data as ydata
 
 
@@ -34,9 +37,9 @@ class PackageMixin(object):
             local_pacapt_path = os.path.join(
                 os.path.dirname(ydata.__file__), 'pacapt')
             self.put(local_pacapt_path, '/usr/bin', use_sudo=True)
-            api.sudo('chmod o+x /usr/bin/pacapt')
         else:
             self.report(ydata.SUCCESS + " pacapt is already present")
+        api.sudo('chmod o+x /usr/bin/pacapt')
         self._require_pacapt_already_run = True
 
     def _update_system_packages(self, quiet=True):
@@ -45,18 +48,19 @@ class PackageMixin(object):
         quiet = '> /dev/null' if quiet else ''
         self.report("updating system packages, this might take a while.")
         canary = '/tmp/.ymir_package_update'
-        max_age = 180
+        max_age = 360
         age_test = "[[ `date +%s -r {0}` -gt `date +%s --date='{1} min ago'` ]]"
         with api.quiet():
-
             need_update = api.sudo(age_test.format(canary, max_age)).failed
         if not need_update:
             msg = "packages were updated less than {0} minutes ago"
             self.report(ydata.SUCCESS + msg.format(max_age))
             return True
         with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            result = api.sudo(
-                'pacapt --noconfirm -Sy {0}'.format(quiet)).succeeded
+            with api.settings(warn_only=True):
+                # return code is "100" for centos
+                result = api.sudo(
+                    '/usr/bin/pacapt --noconfirm -Sy {0}'.format(quiet)).succeeded
             api.sudo('touch {0}'.format(canary))
             return result
     _update_sys_packages = _update_system_packages
@@ -66,10 +70,12 @@ class PackageMixin(object):
         self._require_pacapt()
         quiet = '> /dev/null' if quiet else ''
         with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            return api.sudo('pacapt --noconfirm -S {0} {1}'.format(
+            return api.sudo('/usr/bin/pacapt --noconfirm -S {0} {1}'.format(
                 pkg_name, quiet)).succeeded
 
-    def _remove_system_package(self, pkg_name, quiet=True):
+    def _remove_system_package(self, pkg_name, strict=False, quiet=True):
         self._require_pacapt()
         quiet = '> /dev/null' if quiet else ''
-        return api.sudo('pacapt -R {0} {1}'.format(pkg_name, quiet)).succeeded
+        ctx = [api.settings(warn_only=True)] if not strict else []
+        with contextlib.nested(ctx):
+            return api.sudo('/usr/bin/pacapt -R {0} {1}'.format(pkg_name, quiet)).succeeded

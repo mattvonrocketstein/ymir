@@ -7,8 +7,8 @@
 //
 {
     // Whether ymir should display extra debugging information.
-    // NB: This parameter also control puppet and ansible debug levels
-    //"ymir_debug": true,
+    // NB: This parameter also controls puppet and ansible debug levels
+    "ymir_debug": true,
 
     // Whether ymir should build puppet on the remote side.
     // Puppet-builds only occur during the `setup` operation, and
@@ -23,7 +23,7 @@
     "org_name": "orgName",
     "app_name": "appName",
     "env_name": "envName",
-    "service_name": "jenkins-demo",
+    "service_name": "polyglot-demo",
 
     "logs": [
         // declare logfile locations on this service
@@ -95,14 +95,25 @@
         "puppet_variable": "PUPPET_VARIABLE_VALUE",
     },
 
+    // This section is parsed directly by vagrant (see the Vagrantfile).
+    // Do NOT use {{templating}} inside here, it won't work.  Each variable
+    // must be defined, and any changes will be picked up by vagrant immediately
+    // NOT during the next call to ymir's' `setup` operation.  Only the most common
+    // vagrant variables are included here.. for other kinds of virtualmachine hackery
+    // you'll need to modify the Vagrantfile directly.
     //
+    // Hints:
+    //   Typical values for "box":
+    //     ubuntu/trusty32, puppetlabs/centos-6.6-32-puppet, centos/7, geerlingguy/centos6, boxcutter/debian80-i386
     'vagrant': {
-        'name': 'default',
+        'boot_timeout': 600,
         //'box': 'ubuntu/trusty32',
-        'box': 'centos/7',
+        'box': 'puppetlabs/centos-6.6-32-puppet',
         'box_check_update': false,
-        'sync_disabled': true,
-        'ram': 512,
         'cpus': 1,
+        'insert_key': true,
+        'name': 'default',
+        'ram': 1024,
+        'sync_disabled': true,
     }
 }

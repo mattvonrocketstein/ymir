@@ -7,7 +7,7 @@
 //
 {
     // Whether ymir should display extra debugging information
-    // NB: This parameter also control puppet and ansible debug levels
+    // NB: This parameter also controls puppet and ansible debug levels
     "ymir_debug": true,
 
     // Whether ymir should build puppet on the remote side.
@@ -69,7 +69,7 @@
     // puppet FACTer, the ansible environment, or used to configure
     // application particulars.
     'service_defaults' : {
-    }
+    },
 
     // This section is parsed directly by vagrant (see the Vagrantfile).
     // Do NOT use {{templating}} inside here, it won't work.  Each variable
@@ -77,12 +77,20 @@
     // NOT during the next call to ymir's' `setup` operation.  Only the most common
     // vagrant variables are included here.. for other kinds of virtualmachine hackery
     // you'll need to modify the Vagrantfile directly.
+    //
+    // Hints:
+    //    ubuntu/trusty32
+    //    centos/7  (NB: i can't ssh into this box, maybe only 64bit?)
+    //    boxcutter/debian82-i386
+    //    puppetlabs/centos-6.6-32-puppet
     'vagrant': {
-        'name': 'default',
+        'boot_timeout': 400,
         'box': 'ubuntu/trusty32',
         'box_check_update': false,
-        'sync_disabled': true,
-        'ram': 512,
         'cpus': 1,
+        'insert_key': true,
+        'name': 'default',
+        'ram': 512,
+        'sync_disabled': true,
     }
 }

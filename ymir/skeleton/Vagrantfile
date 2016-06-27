@@ -29,17 +29,15 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # Always use Vagrant's default insecure key.  Saves time at
   # startup, and who cares if your local development is secure?
   config.ssh.insert_key = false
+  config.ssh.forward_x11 = true
 
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://atlas.hashicorp.com/search.
-  config.vm.box = "ubuntu/trusty32"
-  #config.vm.box = VAGRANT_JSON['box']
-  #config.vm.box = "centos/7"
+  config.vm.box = VAGRANT_JSON['box']
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
   # `vagrant box outdated`. This is not recommended.
-  #config.vm.box_check_update = false
   config.vm.box_check_update = VAGRANT_JSON['box_check_update']
 
   # Create a forwarded port mapping which allows access to a specific port

@@ -116,9 +116,8 @@ def list_dir(dir_=None):
     return files
 
 
-def shell(conn=None, **namespace):
+def shell(**namespace):
     """ """
-    conn = conn or get_conn()
     try:
         from smashlib import embed
         embed(user_ns=namespace)
@@ -190,7 +189,7 @@ def get_conn(key_name=None, region='us-east-1'):
         err = ("ERROR: no AWS credentials could be found.\n  "
                "Set AWS_PROFILE environment variable, or "
                "use ~/.boto, then try again")
-        raise SystemExit(err)
+        raise  # SystemExit(err)
     except (ProfileNotFoundError,) as exc:
         err = ("ERROR: found AWS_PROFILE {0}, but boto raises "
                "ProfileNotFound.  Set AWS_PROFILE environment "

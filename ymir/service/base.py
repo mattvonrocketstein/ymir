@@ -165,7 +165,14 @@ class AbstractService(Reporter,
         with api.settings(warn_only=True):
             results = [
                 self._install_system_package('git', quiet=True),
-                self._install_system_package('build-essential', quiet=True)]
+                # does not work for centos
+                # self._install_system_package('build-essential', quiet=True),
+                # this approach throws an error on centos
+                # self._apply_ansible_role("azavea.build-essential")
+
+                # this approach throws a deprecation warning..
+                self._apply_ansible_role("ANXS.build-essential"),
+            ]
         if not all(results):
             self.report(
                 'bad return code bootstrapping dev.. waiting and trying again')
@@ -359,14 +366,23 @@ class AbstractService(Reporter,
 
     @property
     def facts(self):
-        """ """
+        """ return a dictionary of facts, for use with
+            either the puppet or ansible provisioners
+        """
         json = self.template_data()
         service_defaults = json['service_defaults']
+        # migrate a few other variables from the toplevel json,
+        # this stuff might be used in filling out motds, etc
+        service_defaults.update(
+            # name=json['name'],
+            # org_name=json['org_name'],
+            # service_name=json['service_name'],
+        )
         for fact in service_defaults:
             tmp = service_defaults[fact]
             if isinstance(tmp, basestring) and ('{' in tmp or '}' in tmp):
-                raise SystemExit(
-                    "facts should not contain mustaches: {0}".format(tmp))
+                self.report(
+                    ydata.WARN + "facts containing mustaches is ignored: {0}".format(tmp))
         return service_defaults
 
     @util.declare_operation
@@ -409,12 +425,6 @@ class AbstractService(Reporter,
         tmp['provision_list'] = plist
         tmp['setup_list'] = slist
         return tmp
-
-    @util.declare_operation
-    def shell(self):
-        """ """
-        return util.shell(
-            conn=self.conn, Service=self, service=self)
 
     @util.declare_operation
     def show_facts(self):

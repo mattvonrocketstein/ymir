@@ -1,1 +1,1 @@
-See the full documentation [here](http://mattvonrocketstein.github.io/ymir)
+Please see the full documentation [here](https://mattvonrocketstein.github.io/ymir)

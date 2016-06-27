@@ -256,3 +256,10 @@ class AmazonService(AbstractService):
 
         time.sleep(5)
         self.report("Finished with creation.  Now run `fab setup`")
+
+    @util.declare_operation
+    def shell(self):
+        """ """
+        return util.shell(
+            conn=self.conn,
+            Service=self, service=self)

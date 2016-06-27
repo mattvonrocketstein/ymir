@@ -6,7 +6,8 @@
 //
 {
 
-    // Display extra debugging information
+    // Whether ymir should display extra debugging information.
+    // NB: This parameter also controls puppet and ansible debug levels
     "ymir_debug": true,
 
     // Sets namespace for this service.
@@ -43,6 +44,12 @@
     // and if it is not correct then no remote commands can be executed.
     "pem" : "~/.ssh/your_key_file.pem",
 
+    // Whether ymir should build puppet on the remote side.
+    // Puppet-builds only occur during the `setup` operation, and
+    // are skipped if a good version of puppet is found to already exist
+    // on the remote side.  When this key is not found in this configuration,
+    // it defaults to true.
+    "ymir_build_puppet": true,
 
     // Set the puppet parser that will be used.  Currently the only
     // valid value here is `future`, which allows for sane iteration

@@ -16,6 +16,11 @@ from fabric.contrib.project import rsync_project
 from ymir.util import puppet as util_puppet
 from ymir import data as ydata
 
+RUBY_ROLE = "JhovaniC.ruby"
+
+# if/when puppet build happens, it more or less follows the instructions here:
+#   https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html
+PUPPET_VERSION = [3, 4, 3]
 PUPPET_URL = 'http://downloads.puppetlabs.com'
 FACTER_TARBALL_URL = '{0}/facter/facter-1.7.5.tar.gz'.format(PUPPET_URL)
 PUPPET_TARBALL_URL = '{0}/puppet/puppet-3.4.3.tar.gz'.format(PUPPET_URL)
@@ -45,7 +50,12 @@ class PuppetMixin(object):
     @property
     def _supports_puppet(self):
         """ use _service_json here, it's a simple bool and not templated  """
-        return self._service_json['ymir_build_puppet']
+        if not hasattr(self, '_supports_puppet_cache'):
+            self._supports_puppet_cache = self._service_json[
+                'ymir_build_puppet']
+            icon = ydata.SUCCESS if self._supports_puppet_cache else ydata.FAIL
+            self.report(icon + "ymir puppet support enabled?")
+        return self._supports_puppet_cache
 
     @property
     def _puppet_metadata(self):
@@ -93,6 +103,7 @@ class PuppetMixin(object):
                 exclude=[
                     '.git', 'backups', 'venv',
                     '.vagrant', '*.pyc', ],)
+            self.report(ydata.SUCCESS + "sync finished")
 
     @noop_if_no_puppet_support
     def _clean_puppet_tmp_dir(self):
@@ -134,9 +145,9 @@ class PuppetMixin(object):
         """ puppet itself is already installed at this point,
             this sets up the provisioning dependencies
         """
-        def install_puppet_deps(_dir):
+        def sync_puppet_librarian(_dir):
             if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
-                msg = "puppet-librarian has already processed modules"
+                msg = "puppet-librarian has already processed modules and `force` was unset"
                 self.report(ydata.SUCCESS + msg)
                 return
             msg = "puppet-librarian hasn't run yet, modules dir is missing"
@@ -148,17 +159,39 @@ class PuppetMixin(object):
                 msg = "puppet-librarian finished updating puppet modules"
                 self.report(ydata.SUCCESS + msg)
         self.report('installing puppet & puppet deps', section=True)
+        if not self._supports_puppet:
+            return
         self._install_puppet()
-        self.report("checking puppet module dependencies on remote host")
-        util_puppet.run_puppet(
-            'puppet/modules/ymir/install_librarian.pp',
-            debug=self._debug_mode)
-        install_puppet_deps("puppet")
+        with api.quiet():
+            has_gem = api.run("gem --version").succeeded
+        if not has_gem:
+            self.report(
+                ydata.FAIL + "gem is not found, installing it with ansible")
+            self._install_ruby()
+        with api.quiet():
+            has_librarian = api.run(
+                "gem list | grep -c librarian-puppet").succeeded
+        if not has_librarian:
+            self.report(ydata.FAIL + "puppet librarian not found")
+            api.sudo('gem install librarian-puppet')
+        else:
+            self.report(ydata.SUCCESS + "puppet librarian already installed")
+        self.report("installing git with ansible")
+        self._provision_ansible_role('geerlingguy.git')
+        sync_puppet_librarian("puppet")
+
+    def _install_ruby(self):
+        """ installs ruby on the remote service """
+        with api.quiet():
+            has_ruby = api.run("ruby --version").succeeded
+        if not has_ruby:
+            self.report(ydata.FAIL + "ruby is missing, installing it")
+            self._apply_ansible_role(RUBY_ROLE)
+        else:
+            self.report(ydata.SUCCESS + "ruby is present on the remote side")
 
     def _install_puppet(self):
         """ """
-        # puppet build more or less follows the instructions here:
-        #   https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html
         def decompress(x):
             """ helper to unwrap tarball, removing the
                 original file if it was successful
@@ -179,24 +212,23 @@ class PuppetMixin(object):
                 [HIERA_TARBALL_URL, HIERA_TARBALL_FILE,
                     HIERA_TARBALL_UNCOMPRESS_DIR],
             ]
+            self.report("installing puppet pre-reqs")
+            self._update_sys_packages()
+            self._bootstrap_dev()
+
+            # doesnt work in centos
+            # self._install_system_package('ruby-dev ruby-json', quiet=True)
+            self._install_ruby()
+
+            # rgen is required for puppet --parser=future,
+            # but the command below only installs it if it's not already found
+            api.sudo('{ gem list|grep rgen; } || gem install rgen')
 
             for url, tarball, _dir in work_to_do:
                 download(url)
                 decompress(tarball)
                 with api.cd(_dir):
                     run_install()
-        icon = ydata.SUCCESS if self._supports_puppet else ydata.FAIL
-        self.report(icon + "ymir puppet support enabled?")
-        if not self._supports_puppet:
-            return
-        self.report("installing puppet pre-reqs")
-        self._update_sys_packages()
-        self._bootstrap_dev()
-        self._install_system_package('ruby-dev ruby-json', quiet=True)
-
-        # rgen is required for puppet --parser=future,
-        # but the command below only installs it if it's not already found
-        api.sudo('{ gem list|grep rgen; } || gem install rgen')
 
         with api.quiet():
             puppet_version = api.run('puppet --version')
@@ -210,11 +242,12 @@ class PuppetMixin(object):
             puppet_version = None
             msg = "puppet not installed, building it from scratch"
             self.report(ydata.FAIL + msg)
-            build_puppet()
-        if puppet_version and puppet_version != [3, 4, 3]:
+            return build_puppet()
+
+        if puppet_version and puppet_version < PUPPET_VERSION:
             msg = "bad puppet version @ {0}, attempting uninstall"
-            self.report(msg.format(puppet_version))
+            self.report(ydata.FAIL + msg.format(puppet_version))
             pkgs = 'puppet facter hiera puppet-common'.split()
             for pkg in pkgs:
-                self._remove_system_package(pkg)
-            build_puppet()
+                self._remove_system_package(pkg, quiet=False)
+            return build_puppet()

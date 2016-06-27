@@ -5,12 +5,15 @@
 """
 import os
 import json
+from tempfile import NamedTemporaryFile
 
 from fabric import api
 from fabric.colors import yellow
-
+from peak.util.imports import lazyModule
 from ymir import util
 from ymir import data as ydata
+
+yapi = lazyModule('ymir.api')
 
 ANSIBLE_CMD = (
     'ansible all {debug} -u {user} '
@@ -24,7 +27,7 @@ ANSIBLE_CMD = (
 ANSIBLE_PLAYBOOK_CMD = (
     'ansible-playbook {debug} -u {user} '
     '--private-key "{pem}" '
-    '-e "host_key_checking=False," '
+    '-e "host_key_checking=False,deprecation_warnings=False" '
     '--ssh-extra-args "-p {port}" '
     '--sftp-extra-args "-P {port}" '
     '-i {inventory} '
@@ -60,6 +63,51 @@ class AnsibleMixin(object):
         """ """
         role_dir = os.path.join(self._ansible_dir, 'roles')
         return role_dir
+
+    def _require_role(self, role_name):
+        """ """
+        if role_name not in os.listdir(self._ansible_roles_dir):
+            self.report(ydata.FAIL + "role '{0}' not found".format(role_name))
+            result = api.local('ansible-galaxy install -p {role_dir} {role_name}'.format(
+                role_dir=self._ansible_roles_dir, role_name=role_name))
+            if not result.succeeded:
+                err = "missing role {0} could not be installed".format(
+                    role_name)
+                raise RuntimeError(err)
+        self.report(ydata.SUCCESS + "role '{0}' installed".format(role_name))
+
+    def _provision_ansible_role(self, role_name):
+        """ this provisioner applies a single ansible role.  this is more
+            complicated than it sounds because there's no way to do this
+            without a playbook, and so a temporary playbook is created just
+            for this purpose.
+
+            see: https://groups.google.com/forum/#!topic/ansible-project/h-SGLuPDRrs
+        """
+        self._require_role(role_name)
+        playbook_content = '\n'.join([
+            "- hosts: all",
+            # "  user: {{user}}",
+            "  become: yes",
+            "  become_method: sudo",
+            "  roles:",
+            "  - {role: {{role_path}} }",
+        ])
+        ctx = dict(
+            role_path=os.path.join(self._ansible_roles_dir, role_name),
+            user=self._username)
+        playbook_content = yapi.jinja_env.from_string(
+            playbook_content).render(**ctx)
+        with NamedTemporaryFile() as tmpf:
+            tmpf.write(playbook_content)
+            tmpf.seek(0)
+            msg = "created playbook {0} for applying role: {1}"
+            self.report(ydata.SUCCESS + msg.format(tmpf.name, role_name))
+            result = self._provision_ansible_playbook(tmpf.name)
+            self.report(ydata.SUCCESS + "applied role: {0}".format(role_name))
+            return result
+
+    _apply_ansible_role = _provision_ansible_role
 
     @util.declare_operation
     def setup_ansible(self):
@@ -126,11 +174,17 @@ class AnsibleMixin(object):
         """ context manager for all ansible invocations.
             namely the inventory script must be invoked with the
             same service-json as ymir is using, otherwise the
-            ansible dynamic inventory will be incorrect
+            ansible dynamic inventory will be incorrect.
+            see also:
+              https://github.com/ansible/ansible/blob/devel/lib/ansible/constants.py
         """
         return api.shell_env(
             YMIR_SERVICE_JSON=self.service_json_file,
+            ANSIBLE_REMOTE_PORT=self._port,
+            ANSIBLE_TRANSPORT='paramiko',
             ANSIBLE_HOST_KEY_CHECKING="False",
+            ANSIBLE_DEPRECATION_WARNINGS="False",
+            ANSIBLE_TIMEOUT="60",
         )
 
     def _provision_ansible(self, cmd):
@@ -143,5 +197,5 @@ class AnsibleMixin(object):
             `ansible_playbook://` or `ansible-playbook://`
         """
         with self._ansible_ctx():
-            api.local(ANSIBLE_PLAYBOOK_CMD.format(
-                command=cmd, **self._ansible_env))
+            return api.local(ANSIBLE_PLAYBOOK_CMD.format(
+                command=cmd, **self._ansible_env)).succeeded
