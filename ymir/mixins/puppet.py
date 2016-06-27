@@ -177,7 +177,7 @@ class PuppetMixin(object):
             api.sudo('gem install librarian-puppet')
         else:
             self.report(ydata.SUCCESS + "puppet librarian already installed")
-        self.report("installing git with ansible")
+        self._install_ruby()
         self._install_git()
         sync_puppet_librarian("puppet")
 
