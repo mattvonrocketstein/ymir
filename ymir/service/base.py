@@ -159,26 +159,6 @@ class AbstractService(Reporter,
         self._ymir_service_root = os.path.dirname(service_json_file)
         self._ymir_service_json_file = service_json_file
 
-    def _bootstrap_dev(self):
-        """ """
-        self.report("installing git & build-essentials")
-        with api.settings(warn_only=True):
-            results = [
-                self._install_system_package('git', quiet=True),
-                # does not work for centos
-                # self._install_system_package('build-essential', quiet=True),
-                # this approach throws an error on centos
-                # self._apply_ansible_role("azavea.build-essential")
-
-                # this approach throws a deprecation warning..
-                self._apply_ansible_role("ANXS.build-essential"),
-            ]
-        if not all(results):
-            self.report(
-                'bad return code bootstrapping dev.. waiting and trying again')
-            time.sleep(35)
-            self._bootstrap_dev()
-
     def report(self, msg, *args, **kargs):
         """ 'print' shortcut that includes some color and formatting """
         label = self._report_name()

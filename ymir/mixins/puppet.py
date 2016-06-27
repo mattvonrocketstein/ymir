@@ -200,6 +200,8 @@ class PuppetMixin(object):
                 api.run('rm "{0}"'.format(x))
 
         def build_puppet():
+            self._apply_ansible_role("azavea.build-essential")
+            self._install_ruby()
             run_install = lambda: api.sudo('ruby install.rb')
             download = lambda x: api.run(
                 'wget -O {0} {1}'.format(os.path.basename(x), x))
@@ -213,13 +215,7 @@ class PuppetMixin(object):
                     HIERA_TARBALL_UNCOMPRESS_DIR],
             ]
             self.report("installing puppet pre-reqs")
-            self._update_sys_packages()
-            self._bootstrap_dev()
-
-            # doesnt work in centos
-            # self._install_system_package('ruby-dev ruby-json', quiet=True)
             self._install_ruby()
-
             # rgen is required for puppet --parser=future,
             # but the command below only installs it if it's not already found
             api.sudo('{ gem list|grep rgen; } || gem install rgen')

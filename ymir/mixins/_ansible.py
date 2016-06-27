@@ -181,7 +181,7 @@ class AnsibleMixin(object):
         return api.shell_env(
             YMIR_SERVICE_JSON=self.service_json_file,
             ANSIBLE_REMOTE_PORT=self._port,
-            ANSIBLE_TRANSPORT='paramiko',
+            # ANSIBLE_TRANSPORT='paramiko',
             ANSIBLE_HOST_KEY_CHECKING="False",
             ANSIBLE_DEPRECATION_WARNINGS="False",
             ANSIBLE_TIMEOUT="60",
