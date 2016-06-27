@@ -22,4 +22,3 @@
   # but, this is here to demonstrate the usage of roles
   roles:
     - { role: geerlingguy.nginx }
-    - { role: ANXS.build-essential }
