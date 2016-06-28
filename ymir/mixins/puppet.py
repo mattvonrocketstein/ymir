@@ -89,6 +89,15 @@ class PuppetMixin(object):
                 out[f] = [x for x in re.findall('<%= @(.*?) %>', content)]
         return out
 
+    def _require_rsync(self):
+            with api.quiet():
+                has_rsync = api.run('rsync --version').succeeded
+            if not has_rsync:
+                self.report(ydata.FAIL+"remote side is missing rsync.  installing it")
+                with api.settings(warn_only=True):#quiet():
+                  self._provision_ansible("--become -m setup -m yum -a 'name=rsync state=present'")
+                  self._provision_ansible("--become -m setup -m apt -a 'name=rsync state=present'")
+        
     @noop_if_no_puppet_support
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
@@ -96,6 +105,7 @@ class PuppetMixin(object):
         remote_user_home = '/home/' + self._username
         with self.ssh_ctx():
             self.report('  flushing remote puppet codes and refreshing')
+            self._require_rsync()
             rsync_project(
                 os.path.join(remote_user_home, puppet_dir),
                 local_dir=os.path.join(lcd, puppet_dir, '*'),
@@ -190,22 +200,22 @@ class PuppetMixin(object):
 
     def _install_ruby(self):
         """ installs ruby on the remote service """
-        # RUBY_DOWNLOAD_URL = "http://cache.ruby-lang.org/pub/ruby/2.2/ruby-2.2.1.tar.gz"
         with api.quiet():
             has_ruby = api.run("ruby --version")
         ruby_version = has_ruby.succeeded and has_ruby.split()[1]
         has_ruby = has_ruby.succeeded
-        if not has_ruby or not ruby_version.startswith('2'):
+        if not has_ruby or not (ruby_version.startswith('1.9') or ruby_version.startswith('2')):
             self.report(ydata.FAIL + "ruby is missing or old")
-            self._provision_ansible("-m package -a 'ruby state=absent'")
+            with api.quiet():
+                self._provision_ansible("-m setup -m yum -a 'name=ruby state=absent'")
+                self._provision_ansible("-m setup -m apt -a 'name=ruby state=absent'")
             self.report(ydata.SUCCESS + "flushed old ruby")
             self.report("installing new ruby")
-            self._apply_ansible_role(
-                RUBY_ROLE,
-                # ruby_download_url=ruby_download_url,
-                # ruby_version="2.2.1",
-                ruby_install_from_source=True,
-            )
+            with api.hide("output"):
+                self._apply_ansible_role(
+                    RUBY_ROLE,
+                    ruby_install_from_source=True,
+                )
             self.report(ydata.SUCCESS + "finished installing new ruby")
         else:
             self.report(
@@ -217,7 +227,9 @@ class PuppetMixin(object):
             has_git = api.run("git --version").succeeded
         if not has_git:
             self.report(ydata.FAIL + "git is missing, installing it")
-            self._apply_ansible_role(GIT_ROLE)
+            with api.hide("output"):
+                self._apply_ansible_role(GIT_ROLE)
+            self.report(ydata.SUCCESS + "git installed")
         else:
             self.report(ydata.SUCCESS + "git is present on the remote side")
 
@@ -231,7 +243,8 @@ class PuppetMixin(object):
                 api.run('rm "{0}"'.format(x))
 
         def build_puppet():
-            self._apply_ansible_role("azavea.build-essential")
+            with api.hide('output'):
+                self._apply_ansible_role("azavea.build-essential")
             self._install_ruby()
             run_install = lambda: api.sudo('ruby install.rb')
             download = lambda x: api.run(

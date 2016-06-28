@@ -12,7 +12,7 @@ from fabric.colors import yellow
 from peak.util.imports import lazyModule
 from ymir import util
 from ymir import data as ydata
-
+from ymir.base import eprint
 yapi = lazyModule('ymir.api')
 
 ANSIBLE_CMD = (
@@ -115,12 +115,14 @@ class AnsibleMixin(object):
             user=self._username)
         playbook_content = yapi.jinja_env.from_string(
             playbook_content).render(**ctx)
-        print playbook_content
         with NamedTemporaryFile() as tmpf:
             tmpf.write(playbook_content)
             tmpf.seek(0)
             msg = "created playbook {0} for applying role: {1}"
             self.report(ydata.SUCCESS + msg.format(tmpf.name, role_name))
+            if env_string:
+                self.report("playbook content:")
+                eprint(playbook_content)
             result = self._provision_ansible_playbook(tmpf.name)
             self.report(ydata.SUCCESS + "applied role: {0}".format(role_name))
             return result
@@ -208,7 +210,7 @@ class AnsibleMixin(object):
     def _provision_ansible(self, cmd):
         """ handler for provision-list entries prefixed with `ansible://` """
         with self._ansible_ctx():
-            api.local(ANSIBLE_CMD.format(command=cmd, **self.ansible_env))
+            api.local(ANSIBLE_CMD.format(command=cmd, **self._ansible_env))
 
     def _provision_ansible_playbook(self, cmd):
         """ handler for provision-list entries prefixed with
