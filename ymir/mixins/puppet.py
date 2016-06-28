@@ -186,8 +186,9 @@ class PuppetMixin(object):
         """ installs ruby on the remote service """
         # RUBY_DOWNLOAD_URL = "http://cache.ruby-lang.org/pub/ruby/2.2/ruby-2.2.1.tar.gz"
         with api.quiet():
-            has_ruby = api.run("ruby --version").succeeded
-        ruby_version = has_ruby and has_ruby.split()[1]
+            has_ruby = api.run("ruby --version")
+        ruby_version = has_ruby.succeeded and has_ruby.split()[1]
+        has_ruby = has_ruby.succeeded
         if not has_ruby or not ruby_version.startswith('2'):
             self.report(ydata.FAIL + "ruby is missing or old, installing")
             self._apply_ansible_role(
