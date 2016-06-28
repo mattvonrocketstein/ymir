@@ -82,7 +82,11 @@ class AnsibleMixin(object):
             without a playbook, and so a temporary playbook is created just
             for this purpose.
 
-            see: https://groups.google.com/forum/#!topic/ansible-project/h-SGLuPDRrs
+            To pass ansible variables through to the role, you can use kwargs
+            to this function.
+
+            see also:
+              https://groups.google.com/forum/#!topic/ansible-project/h-SGLuPDRrs
         """
         self._require_role(role_name)
         playbook_content = '\n'.join([
@@ -97,11 +101,14 @@ class AnsibleMixin(object):
         env_string = ''
         import json
         for k, v in env.items():
-            if isinstance(v, (bool,basestring)):
-                #v = str(v).lower()
-                v=json.dumps(v)           
+            if isinstance(v, (bool, basestring)):
+                v = json.dumps(v)
+            else:
+                err = ("Ansible-role apply only supports passing "
+                       "simple environment variables (strings or bools). "
+                       "Found type '{0}' at name '{1}'")
+                raise SystemExit(err.format(type(v), k))
             env_string += ', ' + ': '.join([k, v])
-        #env_string = (', ' + env_string) if env_string else env_string
         ctx = dict(
             env=env_string,
             role_path=os.path.join(self._ansible_roles_dir, role_name),

@@ -190,13 +190,17 @@ class PuppetMixin(object):
         ruby_version = has_ruby.succeeded and has_ruby.split()[1]
         has_ruby = has_ruby.succeeded
         if not has_ruby or not ruby_version.startswith('2'):
-            self.report(ydata.FAIL + "ruby is missing or old, installing")
+            self.report(ydata.FAIL + "ruby is missing or old")
+            self._provision_ansible("-m package -a 'ruby state=absent'")
+            self.report(ydata.SUCCESS + "flushed old ruby")
+            self.report("installing new ruby")
             self._apply_ansible_role(
                 RUBY_ROLE,
                 # ruby_download_url=ruby_download_url,
-                #ruby_version="2.2.1",
+                # ruby_version="2.2.1",
                 ruby_install_from_source=True,
             )
+            self.report(ydata.SUCCESS + "finished installing new ruby")
         else:
             self.report(
                 ydata.SUCCESS + "ruby is present on the remote side.  version={0}".format(ruby_version))
