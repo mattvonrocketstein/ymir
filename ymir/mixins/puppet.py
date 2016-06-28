@@ -24,7 +24,7 @@ GIT_ROLE = 'geerlingguy.git'
 PUPPET_VERSION = [3, 4, 3]
 PUPPET_URL = 'http://downloads.puppetlabs.com'
 FACTER_TARBALL_URL = '{0}/facter/facter-1.7.5.tar.gz'.format(PUPPET_URL)
-PUPPET_TARBALL_URL = '{0}/puppet/puppet-3.4.3.tar.gz'.format(PUPPET_URL)
+PUPPET_TARBALL_URL = '{0}/puppet/puppet-4.0.0.tar.gz'.format(PUPPET_URL)
 HIERA_TARBALL_URL = '{0}/hiera/hiera-1.3.0.tar.gz'.format(PUPPET_URL)
 PUPPET_TARBALL_FILE = PUPPET_TARBALL_URL.split('/')[-1]
 PUPPET_TARBALL_UNCOMPRESS_DIR = PUPPET_TARBALL_FILE.replace('.tar.gz', '')
@@ -90,14 +90,21 @@ class PuppetMixin(object):
         return out
 
     def _require_rsync(self):
-            with api.quiet():
-                has_rsync = api.run('rsync --version').succeeded
-            if not has_rsync:
-                self.report(ydata.FAIL+"remote side is missing rsync.  installing it")
-                with api.settings(warn_only=True):#quiet():
-                  self._provision_ansible("--become -m setup -m yum -a 'name=rsync state=present'")
-                  self._provision_ansible("--become -m setup -m apt -a 'name=rsync state=present'")
-        
+        """ """
+        with api.quiet():
+            has_rsync = api.run('rsync --version').succeeded
+        if not has_rsync:
+            self.report(
+                ydata.FAIL + "remote side is missing rsync.  installing it")
+            with api.settings(warn_only=True):  # quiet():
+                cmd = self._provision_ansible(
+                    "--become -m apt -a 'name=rsync state=present'")
+                if not cmd.succeeded:
+                    self._provision_ansible(
+                        "--become -m yum -a 'name=rsync state=present'")
+        else:
+            self.report(ydata.SUCCESS + "remote side already has rsync")
+
     @noop_if_no_puppet_support
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
@@ -207,19 +214,20 @@ class PuppetMixin(object):
         if not has_ruby or not (ruby_version.startswith('1.9') or ruby_version.startswith('2')):
             self.report(ydata.FAIL + "ruby is missing or old")
             with api.quiet():
-                self._provision_ansible("-m setup -m yum -a 'name=ruby state=absent'")
-                self._provision_ansible("-m setup -m apt -a 'name=ruby state=absent'")
+                self._provision_ansible(
+                    "-m setup -m yum -a 'name=ruby state=absent'")
+                self._provision_ansible(
+                    "-m setup -m apt -a 'name=ruby state=absent'")
             self.report(ydata.SUCCESS + "flushed old ruby")
             self.report("installing new ruby")
             with api.hide("output"):
                 self._apply_ansible_role(
                     RUBY_ROLE,
-                    ruby_install_from_source=True,
-                )
+                    ruby_install_from_source=True,)
             self.report(ydata.SUCCESS + "finished installing new ruby")
         else:
-            self.report(
-                ydata.SUCCESS + "ruby is present on the remote side.  version={0}".format(ruby_version))
+            msg = "ruby is present on the remote side.  version={0}"
+            self.report(ydata.SUCCESS + msg.format(ruby_version))
 
     def _install_git(self):
         """ installs git on the remote service """
@@ -229,9 +237,9 @@ class PuppetMixin(object):
             self.report(ydata.FAIL + "git is missing, installing it")
             with api.hide("output"):
                 self._apply_ansible_role(GIT_ROLE)
-            self.report(ydata.SUCCESS + "git installed")
+            self.report(ydata.SUCCESS + "git was installed")
         else:
-            self.report(ydata.SUCCESS + "git is present on the remote side")
+            self.report(ydata.SUCCESS + "remote side already has git")
 
     def _install_puppet(self):
         """ """
