@@ -163,12 +163,14 @@ class PuppetMixin(object):
         if not self._supports_puppet:
             return
         self._install_puppet()
+        self._install_ruby()
+        self._install_git()
         with api.quiet():
             has_gem = api.run("gem --version").succeeded
         if not has_gem:
             self.report(
-                ydata.FAIL + "gem is not found, installing it with ansible")
-            self._install_ruby()
+                ydata.FAIL + "gem not found, fatal error")
+            raise SystemExit(1)
         with api.quiet():
             has_librarian = api.run(
                 "gem list | grep -c librarian-puppet").succeeded
@@ -177,8 +179,7 @@ class PuppetMixin(object):
             api.sudo('gem install librarian-puppet')
         else:
             self.report(ydata.SUCCESS + "puppet librarian already installed")
-        self._install_ruby()
-        self._install_git()
+
         sync_puppet_librarian("puppet")
 
     def _install_ruby(self):
@@ -186,8 +187,9 @@ class PuppetMixin(object):
         # RUBY_DOWNLOAD_URL = "http://cache.ruby-lang.org/pub/ruby/2.2/ruby-2.2.1.tar.gz"
         with api.quiet():
             has_ruby = api.run("ruby --version").succeeded
-        if not has_ruby:
-            self.report(ydata.FAIL + "ruby is missing, installing it")
+        ruby_version = has_ruby and has_ruby.split()[1]
+        if not has_ruby or not ruby_version.startswith('2'):
+            self.report(ydata.FAIL + "ruby is missing or old, installing")
             self._apply_ansible_role(
                 RUBY_ROLE,
                 # ruby_download_url=ruby_download_url,
@@ -195,7 +197,8 @@ class PuppetMixin(object):
                 ruby_install_from_source=True,
             )
         else:
-            self.report(ydata.SUCCESS + "ruby is present on the remote side")
+            self.report(
+                ydata.SUCCESS + "ruby is present on the remote side.  version={0}".format(ruby_version))
 
     def _install_git(self):
         """ installs git on the remote service """
