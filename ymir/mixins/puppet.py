@@ -112,14 +112,15 @@ class PuppetMixin(object):
         with self.ssh_ctx():
             self.report('  flushing remote puppet codes and refreshing')
             self._require_rsync()
-            rsync_project(
-                os.path.join(remote_user_home, puppet_dir),
-                local_dir=os.path.join(lcd, puppet_dir, '*'),
-                ssh_opts="-o StrictHostKeyChecking=no",
-                delete=clean,
-                exclude=[
-                    '.git', 'backups', 'venv',
-                    '.vagrant', '*.pyc', ],)
+            with api.hide("output"):
+                rsync_project(
+                  os.path.join(remote_user_home, puppet_dir),
+                  local_dir=os.path.join(lcd, puppet_dir, '*'),
+                  ssh_opts="-o StrictHostKeyChecking=no",
+                  delete=clean,
+                  exclude=[
+                      '.git', 'backups', 'venv',
+                      '.vagrant', '*.pyc', ],)
             self.report(ydata.SUCCESS + "sync finished")
 
     @noop_if_no_puppet_support
@@ -260,10 +261,10 @@ class PuppetMixin(object):
             work_to_do = [
                 [FACTER_TARBALL_URL, FACTER_TARBALL_FILE,
                     FACTER_TARBALL_UNCOMPRESS_DIR],
-                [PUPPET_TARBALL_URL, PUPPET_TARBALL_FILE,
-                    PUPPET_TARBALL_UNCOMPRESS_DIR],
                 [HIERA_TARBALL_URL, HIERA_TARBALL_FILE,
                     HIERA_TARBALL_UNCOMPRESS_DIR],
+                [PUPPET_TARBALL_URL, PUPPET_TARBALL_FILE,
+                    PUPPET_TARBALL_UNCOMPRESS_DIR],
             ]
             self.report("installing puppet pre-reqs")
             self._install_ruby()
@@ -272,7 +273,8 @@ class PuppetMixin(object):
             api.sudo('{ gem list|grep rgen; } || gem install rgen')
 
             for url, tarball, _dir in work_to_do:
-                download(url)
+                with api.hide("output"):
+                    download(url)
                 decompress(tarball)
                 with api.cd(_dir):
                     run_install()

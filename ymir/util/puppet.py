@@ -25,7 +25,7 @@ def run_puppet(_fname, parser=None, debug=False, puppet_dir=None, facts={}):
         # sudo -E preserves the invoking enviroment,
         # thus we are able to pass through the facts
         api.run("sudo -E `which puppet` apply {parser} {debug} --modulepath={pdir}/modules {fname}".format(
-            parser=('--parser ' + parser) if parser else '',
+            parser='', #('--parser ' + parser) if parser else '',
             debug='--debug' if debug else '',
             pdir=puppet_dir or os.path.dirname(_fname),
             fname=_fname))

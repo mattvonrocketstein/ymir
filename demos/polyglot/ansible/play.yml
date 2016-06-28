@@ -9,7 +9,7 @@
     - name: Push a template to the demo service
       template: src=templates/motd dest=/etc/motd mode="u=rw,g=r,o=r"
     - name: Install a system package
-      apt: pkg=tree state=installed update_cache=no
+      package: pkg=tree state=installed update_cache=no
       register: apt_output
     - debug: var=apt_output # show the content of apt_output var
     - name: Push a file to the demo service

@@ -107,9 +107,9 @@
     //     ubuntu/trusty32, puppetlabs/centos-6.6-32-puppet, centos/7, geerlingguy/centos6, boxcutter/debian80-i386
     'vagrant': {
         'boot_timeout': 600,
-        'box':'boxcutter/debian80-i386',
+        //'box':'boxcutter/debian80-i386',
         //'box': 'ubuntu/trusty32',
-        //'box': 'puppetlabs/centos-6.6-32-puppet',
+        'box': 'puppetlabs/centos-6.6-32-puppet',
         'box_check_update': false,
         'cpus': 1,
         'insert_key': true,
