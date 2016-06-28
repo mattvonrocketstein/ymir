@@ -194,7 +194,7 @@ class PuppetMixin(object):
             self._apply_ansible_role(
                 RUBY_ROLE,
                 # ruby_download_url=ruby_download_url,
-                ruby_version="2.2.1",
+                #ruby_version="2.2.1",
                 ruby_install_from_source=True,
             )
         else:

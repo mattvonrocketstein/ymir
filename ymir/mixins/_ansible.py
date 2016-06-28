@@ -91,15 +91,17 @@ class AnsibleMixin(object):
             "  become: yes",
             "  become_method: sudo",
             "  roles:",
-            "  - {role: {{role_path}} {{env}}}",
+            "  - {role: {{role_path}}{{env}}}",
         ])
         env = env.copy()
         env_string = ''
+        import json
         for k, v in env.items():
-            if isinstance(v, bool):
-                v = str(v).lower()
-            env_string += ': '.join([k, v])
-        env_string = (',' + env_string) if env_string else env_string
+            if isinstance(v, (bool,basestring)):
+                #v = str(v).lower()
+                v=json.dumps(v)           
+            env_string += ', ' + ': '.join([k, v])
+        #env_string = (', ' + env_string) if env_string else env_string
         ctx = dict(
             env=env_string,
             role_path=os.path.join(self._ansible_roles_dir, role_name),
