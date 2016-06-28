@@ -147,12 +147,18 @@ class PuppetMixin(object):
             this sets up the provisioning dependencies
         """
         def sync_puppet_librarian(_dir):
-            if not force and exists(os.path.join(_dir, 'modules'), use_sudo=True):
+            found_modules = exists(os.path.join(
+                _dir, 'modules'), use_sudo=True)
+            if not force and found_modules:
                 msg = "puppet-librarian has already processed modules and `force` was unset"
                 self.report(ydata.SUCCESS + msg)
                 return
-            msg = "puppet-librarian hasn't run yet, modules dir is missing"
-            self.report(ydata.FAIL + msg)
+            if not found_modules:
+                msg = "puppet-librarian hasn't run yet, modules dir is missing"
+                self.report(ydata.FAIL + msg)
+            if force:
+                msg = "update for puppet-librarian will be enforced"
+                self.report(ydata.SUCCESS + msg)
             with api.cd(_dir):
                 api.run('librarian-puppet clean')
                 api.run('librarian-puppet install {0}'.format(
@@ -169,7 +175,7 @@ class PuppetMixin(object):
             has_gem = api.run("gem --version").succeeded
         if not has_gem:
             self.report(
-                ydata.FAIL + "gem not found, fatal error")
+                ydata.FAIL + "`gem` not found but ruby was already installed!")
             raise SystemExit(1)
         with api.quiet():
             has_librarian = api.run(
