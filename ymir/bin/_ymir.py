@@ -56,6 +56,8 @@ def get_parser():
     list_parser.set_defaults(subcommand='list')
     list_parser.add_argument('-k', '--keypairs', action='store_true',
                              help='list keypairs')
+    list_parser.add_argument('-i', '--instances', action='store_true',
+                             help='list instances')
 
     sgkargs = dict(
         metavar='security_group_json', type=str,
@@ -147,7 +149,7 @@ def entry(settings=None):
     if args.subcommand == 'sg':
         args.subcommand = 'security_group'
     if args.subcommand == 'version':
-        print 'ymir=={0}'.format(__version__)
+        print '{0}'.format(__version__)
         return
     subcommand_map[args.subcommand](args)
 

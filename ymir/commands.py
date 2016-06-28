@@ -153,6 +153,8 @@ def ymir_list(args):
     """
     if args.keypairs:
         print util.get_keypair_names()
+    elif args.instances:
+        print util.show_instances()
     else:
         msg = "not sure what to list."
         raise SystemExit(msg)

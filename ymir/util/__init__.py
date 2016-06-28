@@ -205,12 +205,17 @@ def get_conn(key_name=None, region='us-east-1'):
     return conn
 
 
-def show_instances(conn):
+def show_instances(conn=None):
     """ """
-    for i, tags in get_tags(None, conn).items():
-        eprint(i)
+    conn = conn or get_conn()
+    results = get_tags(None, conn).items()
+    for i, tags in results:
+        if i:
+            eprint(i)
         for k in tags:
             eprint('  ', k, tags[k])
+    if not results:
+        eprint("nothing to show")
 
 
 def get_instance_by_name(name, conn):
