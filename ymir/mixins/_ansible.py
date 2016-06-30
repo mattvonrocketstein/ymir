@@ -55,13 +55,18 @@ class AnsibleMixin(object):
     @property
     def _ansible_dir(self):
         """ """
-        return os.path.join(
+        ansible_dir = os.path.join(
             self._ymir_service_root, 'ansible')
+        if not os.path.exists(ansible_dir):
+            api.local("mkdir -p {0}".format(ansible_dir))
+        return ansible_dir
 
     @property
     def _ansible_roles_dir(self):
         """ """
         role_dir = os.path.join(self._ansible_dir, 'roles')
+        if not os.path.exists(role_dir):
+            api.local('mkdir -p {0}'.format(role_dir))
         return role_dir
 
     def _require_role(self, role_name):
@@ -176,8 +181,20 @@ class AnsibleMixin(object):
     @property
     def _ansible_inventory_script(self):
         """ """
-        return os.path.join(
+        script = os.path.join(
             self._ansible_dir, 'ymir_inventory.py')
+        if not os.path.exists(script):
+            # this can happen if ymir directory structure
+            # was not created with `ymir init`
+            script = os.path.join(
+                ydata.SKELETON_DIR,
+                'ansible',
+                'ymir_inventory.py')
+            if not os.path.exists(script):
+                # should never happen
+                err = 'Ansible inventory script is missing!'
+                raise SystemExit(err)
+        return script
 
     @property
     def _ansible_env(self):
