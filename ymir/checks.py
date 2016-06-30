@@ -62,6 +62,7 @@ class Check(object):
     def run(self, service, quiet=False):
         import ymir.checks as modyool
         data = service.template_data()
+        data.update(service.facts)
         self.url = yapi.str_reflect(self.url_t, ctx=data)
 
         try:
@@ -209,6 +210,23 @@ def _file_exists_validator(instruction):
         err = "have an absolute path as it's instruction'"
         return base_err + err
 file_exists.validate = _file_exists_validator
+
+
+def socket_listening(service, instruction):
+    """ a checker for whether a given socket is listening.
+        this is executed on the remote side, and so can
+        be very useful
+        for testing firewalled AWS stuff or vagrant
+        w/o port-forwarding
+
+        see: http://testinfra.readthedocs.io/en/latest/modules.html#socket
+    """
+    new_instruction = "Socket('{0}').is_listening".format(instruction)
+    return testinfra(service, new_instruction, _type='socket_listening')
+
+
+def _socket_listening_validator(instruction):
+    pass
 
 
 def file_contains(service, instruction):
