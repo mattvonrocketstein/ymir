@@ -21,8 +21,7 @@ from ymir.schema import SGFileSchema
 from ymir.security_groups import sg_sync
 from ymir.base import report as _report
 
-YMIR_SRC = os.path.dirname(__file__)
-
+from ymir import data as ydata
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +135,7 @@ def ymir_init(args):
                     os.unlink(file_path)
             except Exception, e:
                 print e
-    skeleton_dir = os.path.join(YMIR_SRC, 'skeleton')
+    skeleton_dir = ydata.YMIR_SKELETON
     if not os.path.exists(skeleton_dir):
         err = ('cannot find ymir skeleton project.  '
                'your ymir installation might be broken :(')
