@@ -171,6 +171,7 @@ def validate_health_checks(service):
     # don't actually know whether this service has been bootstrapped or not
     service_json = service.template_data()
     service_json.update(host='host_name')
+    service_json.update(service.facts)
     errors, warnings, messages = [], [], []
     for check_name in service_json['health_checks']:
         check_type, url = service_json['health_checks'][check_name]
@@ -205,9 +206,13 @@ def validate_health_checks(service):
     return errors, warnings, messages
 
 
-def print_errs(msg, (errors, warnings, messages), quiet=False, die=False, report=_report):
+def print_errs(msg, validator_result, quiet=False, die=False, report=_report):
     """ helper for main validation functions """
     err = "print_errs requires a tuple of (errors, warnings, messages)"
+    try:
+        (errors, warnings, messages) = validator_result
+    except ValueError:
+        raise ValueError(err + ", got: {0}".format(validator_result))
     for tmp in (errors, warnings, messages):
         assert isinstance(tmp, list), err
     if msg:
@@ -232,10 +237,8 @@ def validate(service_json, schema=None, simple=True, quiet=False):
     """
     report = util.NOOP if quiet else _report
     print_errs(
-        '',
-        validate_file(service_json, schema, report=report),
+        '', validate_file(service_json, schema, report=report),
         quiet=True, die=True)
-
     if simple:
         return True
 
@@ -324,5 +327,5 @@ def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
                    'must exist relative to {0}, but {1}'
                    ' was not found').format(
                 SERVICE_ROOT, _file)
-            return [err], []
+            return [err], [], []
     return errors, warnings, messages

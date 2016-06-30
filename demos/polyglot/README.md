@@ -16,21 +16,13 @@ vagrant, which is provisioned using both ansible and puppet with shared variable
 6. via demo.pp, puppet installs a system package "nmap"
 7. via demo.pp, puppet appends content to `/etc/motd`
 
-### Prerequisites
-
-You need to have ansible already installed.  If you don't, you can run the command below.  Ymir requires at least ansible >= 2.0.
-
-    $ pip install ansible==2.1.0.0
-
 ### Quickstart: Vagrant
 
 You need to have vagrant/virtualbox already installed.  Afterwards, run these commands:
 
     $ cd ymir/demos/polyglot
     $ export YMIR_SERVICE_JSON=vagrant.json
-    $ fab create
-    $ fab setup
-    $ fab provision
+    $ fab create && fab setup provision
 
 Run the checks:
 
