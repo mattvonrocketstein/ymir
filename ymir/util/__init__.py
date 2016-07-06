@@ -182,14 +182,16 @@ def has_gem(name):
 
 def get_conn(key_name=None, region='us-east-1'):
     """ get ec2 connection for aws API """
+    region = os.environ.get('AWS_REGION', region)
     try:
         conn = boto.ec2.connect_to_region(
-            region, profile_name=os.environ['AWS_PROFILE'])
+            region,
+            profile_name=os.environ['AWS_PROFILE'])
     except (KeyError, boto.exception.NoAuthHandlerFound):
         err = ("ERROR: no AWS credentials could be found.\n  "
                "Set AWS_PROFILE environment variable, or "
                "use ~/.boto, then try again")
-        raise  # SystemExit(err)
+        raise SystemExit(err)
     except (ProfileNotFoundError,) as exc:
         err = ("ERROR: found AWS_PROFILE {0}, but boto raises "
                "ProfileNotFound.  Set AWS_PROFILE environment "

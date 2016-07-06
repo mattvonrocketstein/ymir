@@ -66,15 +66,18 @@ def _test_factory(status_code):
         response = mock.Mock()
         request_mock.return_value = response
         response.status_code = status_code + 125
+        srv = mock_service()
         check = checks.Check(
             name='test-{0}'.format(status_code),
             check_type='http_{0}'.format(status_code),
             url_t='',)
-        result = check.run(mock_service())
+        result = check.run(srv)
         assert not result.success
         response.status_code = status_code
-        result = check.run(mock_service())
+        srv = mock_service()
+        result = check.run(srv)
         assert result.success
+    test_xxx.__name__ = "test_{0}".format(status_code)
     return test_xxx
 
 test_301 = _test_factory(301)

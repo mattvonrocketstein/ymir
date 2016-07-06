@@ -33,9 +33,12 @@ def fake_aws_conn():
 
 
 def mock_service():
+    """ """
     service = mock.Mock()
     service._service_json = {}
-    service.template_data = lambda *args: service._service_json
+    service.facts = {}
+    service.template_data = mock.Mock()
+    service.template_data.return_value = service._service_json
     service._status = mock.Mock(return_value=dict(ip=''))
     return service
 

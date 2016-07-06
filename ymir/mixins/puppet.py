@@ -89,10 +89,14 @@ class PuppetMixin(object):
                 out[f] = [x for x in re.findall('<%= @(.*?) %>', content)]
         return out
 
+    def _has_rsync(self):
+        """ answers whether the remote side has rsync """
+        with api.quiet():
+            return api.run('rsync --version').succeeded
+
     def _require_rsync(self):
         """ """
-        with api.quiet():
-            has_rsync = api.run('rsync --version').succeeded
+        has_rsync = self._has_rsync()
         if not has_rsync:
             self.report(
                 ydata.FAIL + "remote side is missing rsync.  installing it")

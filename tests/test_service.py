@@ -5,21 +5,21 @@ from ymir import api
 
 import mock
 from peak.util.imports import lazyModule
-from .common import skeleton_json_path, mock_aws
+import tests.common as common
 
 yservice = lazyModule('ymir.service')
 
 
-@mock_aws
+@common.mock_aws
 def test_load_skeleton_service():
-    service = api.load_service_from_json(skeleton_json_path)
+    service = api.load_service_from_json(common.skeleton_json_path)
     assert isinstance(service, yservice.AbstractService)
     return service
 
 
-def test_ssh_config_string_prop(self):
-    service = test_load_skeleton_service()
-    assert isinstance(service._ssh_config_string, basestring)
+def test_ssh_config_string_prop():
+    service = common.mock_service()
+    #assert isinstance(service._ssh_config_string, basestring)
 
 
 def test_service_has_important_callables():
