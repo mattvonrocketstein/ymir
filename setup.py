@@ -5,6 +5,13 @@
 import os
 import sys
 from setuptools import setup
+try:
+    from pip.req import parse_requirements  # flake8: noqa
+except ImportError:
+    raise SystemExit("please install pip before installing ymir")
+install_reqs = parse_requirements(os.path.join(
+    os.path.dirname(__file__), 'requirements.txt'), session=False)
+reqs = [str(ir.req) for ir in install_reqs]
 
 # make sure that finding packages works, even
 # when setup.py is invoked from outside this dir
@@ -33,14 +40,8 @@ setup(
     entry_points={
         'console_scripts':
         ['ymir = ymir.bin._ymir:entry', ]},
-    install_requires=[
-        'voluptuous',
-        'demjson',
-        'werkzeug',  # used for caching
-        'boto',
-        'Importing',
-        'requests',
-    ],
+    install_requires=reqs,
+
     # package_data={'ymir': ['skeleton/*']},
     # this will use MANIFEST.in during install where we specify additional
     # files
