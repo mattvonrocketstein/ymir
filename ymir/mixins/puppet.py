@@ -114,13 +114,13 @@ class PuppetMixin(object):
             self._require_rsync()
             with api.hide("output"):
                 rsync_project(
-                  os.path.join(remote_user_home, puppet_dir),
-                  local_dir=os.path.join(lcd, puppet_dir, '*'),
-                  ssh_opts="-o StrictHostKeyChecking=no",
-                  delete=clean,
-                  exclude=[
-                      '.git', 'backups', 'venv',
-                      '.vagrant', '*.pyc', ],)
+                    os.path.join(remote_user_home, puppet_dir),
+                    local_dir=os.path.join(lcd, puppet_dir, '*'),
+                    ssh_opts="-o StrictHostKeyChecking=no",
+                    delete=clean,
+                    exclude=[
+                        '.git', 'backups', 'venv',
+                        '.vagrant', '*.pyc', ],)
             self.report(ydata.SUCCESS + "sync finished")
 
     @noop_if_no_puppet_support
@@ -155,6 +155,7 @@ class PuppetMixin(object):
             provision_item,
             parser=service_data['puppet_parser'],
             facts=facts,
+            debug=self._debug_mode,
             puppet_dir=puppet_dir,
         )
 
