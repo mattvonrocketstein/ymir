@@ -32,8 +32,10 @@ VERSION_DELTA = .01
 
 version_bump = create_version_bump_cmd(
     pkg_name='ymir', version_delta=VERSION_DELTA)
+version_bump = api.task(version_bump)
 
 
+@api.task
 def pypi_repackage():
     ldir = _dirname(__file__)
     print red("warning:") + (" by now you should have commited local"
@@ -50,6 +52,7 @@ def pypi_repackage():
         api.local("python setup.py sdist upload -r pypi")
 
 
+@api.task
 def test():
     with api.lcd(os.path.dirname(__file__)):
         api.local('py.test --cov-config .coveragerc '
@@ -57,6 +60,7 @@ def test():
                   '--pyargs ./tests')
 
 
+@api.task
 def vulture():
     with api.lcd(os.path.dirname(__file__)):
         api.local('vulture ymir|grep -v _provision_|grep -v ymir/checks.py')
