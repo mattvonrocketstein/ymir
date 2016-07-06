@@ -104,6 +104,9 @@ def load_service_from_json(filename=None, quiet=False):
         service_json_file=service_json_file,
         service_json=load_json(service_json_file),
         quiet=quiet)
+    # trigger the caching of this value now,
+    # just to print the message as early as possible
+    service_obj._debug_mode
     return service_obj
 
 # this alias is frequently imported in
