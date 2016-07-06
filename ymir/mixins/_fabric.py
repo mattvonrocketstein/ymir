@@ -34,7 +34,7 @@ class FabricMixin(object):
 
     @util.declare_operation
     @util.require_running_instance
-    def put(self, src, dest, *args, **kargs):
+    def put(self, src, dest="~", *args, **kargs):
         """ thin wrapper around fabric's scp command
             just to use this service ssh context
         """
