@@ -22,12 +22,14 @@ _service = load_service_from_json(YMIR_SERVICE_JSON)
 _service.fabric_install()
 
 
+@api.task
 def deploy(branch='master'):
     """ example usage: "fab deploy:branch=master" """
     _service.report("deploy for branch {0} -> {1} is not defined yet".format(
         branch, _service))
 
 
+@api.task
 def tail_syslog():
     """ example: tail syslog on remote server """
     with _service.ssh_ctx():
