@@ -76,7 +76,7 @@ class AbstractService(Reporter,
     _sg_json = _security_group_json
 
     @util.declare_operation
-    def service(self, command):
+    def system_service(self, command):
         """ run `sudo service <cmd>` on the remote host"""
         with self.ssh_ctx():
             api.run('sudo service {0}'.format(command))
@@ -317,7 +317,13 @@ class AbstractService(Reporter,
     @property
     def _debug_mode(self):
         """ use _service_json here, it's a simple bool and not templated  """
-        return self._service_json['ymir_debug']
+        if hasattr(self, '_debug_mode_cache'):
+            return self._debug_mode_cache
+        else:
+            self._debug_mode_cache = self._service_json['ymir_debug']
+            icon = ydata.SUCCESS if self._debug_mode_cache else ydata.FAIL
+            self.report(icon + "ymir debug mode enabled?")
+        return self._debug_mode_cache
 
     def setup_puppet(self):
         """ """
