@@ -7,7 +7,6 @@ import re
 import os
 import glob
 import shutil
-import tempfile
 import functools
 
 from fabric import api
@@ -137,18 +136,6 @@ class PuppetMixin(object):
         if os.path.exists(tdir):
             shutil.rmtree(tdir)
         self.report(ydata.SUCCESS + "cleaned puppet-librarian tmp dir")
-
-    def _compress_local_puppet_code(self, puppet_dir='puppet/', lcd=None):
-        """ returns an absolute path to a temporary file
-            containing puppet code for this service.
-            NB: caller is responsible for deletion
-        """
-        assert lcd is not None
-        with api.lcd(lcd):
-            pfile = tempfile.mktemp(suffix='.tgz')
-            # build a local tarball to copy and unzip on the remote side
-            api.local('tar -czf {0} {1} '.format(pfile, puppet_dir))
-        return pfile
 
     def _provision_puppet(self, provision_item, puppet_dir='puppet', extra_facts={}):
         """ runs puppet on remote host.  puppet files must already have been copied """

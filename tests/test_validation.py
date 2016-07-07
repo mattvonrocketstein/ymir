@@ -32,7 +32,7 @@ def test_validate_skeleton_json():
 
 
 @test_common.mock_aws
-@mock.patch('ymir.validation.validate_file')
+@mock.patch('ymir.validation.validate_simple')
 @mock.patch('ymir.validation.validate_health_checks')
 @mock.patch('ymir.validation.validate_security_groups')
 @mock.patch('ymir.validation.validate_puppet_templates')
@@ -46,7 +46,7 @@ def test_validate_outermost(*mocks):
         errors = messages = warnings = []
         m.return_value = errors, warnings, messages
     with test_common.demo_service() as ctx:
-        validation.validate(service_json=ctx.service_json, simple=False)
+        validation.validate(service_json_file=ctx.service_json, simple=False)
         for m in mocks:
             assert m.called
 

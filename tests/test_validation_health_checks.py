@@ -20,7 +20,7 @@ def test_validate_health_checks():
         assert not errors, err
         service_json['health_checks'] = []  # should be dict
         ctx.rewrite_json(service_json)
-        with pytest.raises(SystemExit):
+        with pytest.raises(Exception):
             service = ctx.get_service()
         bad_check_type = 'nonexistant_check_type'
         service_json['health_checks'] = {
