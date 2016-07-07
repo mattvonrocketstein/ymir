@@ -71,7 +71,7 @@ def validate_puppet_templates(service):
     errors, warnings, messages = [], [], []
     if not service._supports_puppet:
         messages = [
-            "`ymir_build_puppet` is false supported for this service, skipping"]
+            "`ymir_build_puppet` is false here, skipping"]
         return errors, warnings, messages
     default_facts = puppet.DEFAULT_FACTS
 
@@ -258,12 +258,12 @@ def validate(service_json, schema=None, simple=True, quiet=False):
             'checking AWS security groups in field `security_groups` exist..',
             validate_security_groups(service), report=report,)
         print_errs(
-            'checking for agreement between `security_groups` field and security_groups.json file..',
+            'checking parity of `security_groups` field and security_groups.json file..',
             validate_security_groups_json(service), report=report,)
         print_errs('checking AWS keypair at field `key_name`..',
                    validate_keypairs(service), report=report,)
     print_errs('checking puppet-librarian\'s metadata.json',
-               validate_metadata_file(service._puppet_metadata),
+               validate_metadata_file(service),
                report=report)
     print_errs('checking puppet code validates with puppet parser..',
                validate_puppet(service), report=report,)
@@ -272,12 +272,15 @@ def validate(service_json, schema=None, simple=True, quiet=False):
 
 
 @util.declare_validator
-def validate_metadata_file(metadata_f):
+def validate_metadata_file(service):
     """ returns a list of errors encountered while validating
         a puppet metadata.json file
     """
+    metadata_f = service._puppet_metadata
     errors, warnings, messages = [], [], []
-    if not os.path.exists(metadata_f):
+    if not service._supports_puppet:
+        messages.append("`ymir_build_puppet` is false here, skipping")
+    elif not os.path.exists(metadata_f):
         errors.append('{0} does not exist!'.format(metadata_f))
     else:
         if util.has_gem('metadata-json-lint'):
