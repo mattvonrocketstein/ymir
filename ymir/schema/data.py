@@ -40,7 +40,7 @@ BASE_DATA = {
     Optional("service_defaults", default={}): dict,
     Optional("env_name", default='env'): unicode,
 }
-
+EXTENSION_DATA = {Required("extends"): validators._validate_extends_field}
 VAGRANT_DATA = BASE_DATA.copy()
 VAGRANT_DATA.update(PROVISION_DATA)
 VAGRANT_DATA.update(

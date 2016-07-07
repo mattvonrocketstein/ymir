@@ -228,17 +228,21 @@ def print_errs(msg, validator_result, quiet=False, die=False, report=_report):
         raise SystemExit("encountered {0} errors".format(len(errors)))
 
 
-def validate(service_json, schema=None, simple=True, quiet=False):
+def validate(service_json_file=None, service_json=None,
+             schema=None, simple=True, quiet=False, die=True):
     """ validate service json is 2 step.  when simple==True,
         validation exits early after running against the main
         JSON schema.  otherwise, the service will be instantiated
         and sanity-checked against real-world requirements such as
         actually existing security-groups, keyfiles, etc.
     """
-    report = util.NOOP if quiet else _report
+    report = _report  # util.NOOP if quiet else _report
     print_errs(
-        '', validate_file(service_json, schema, report=report),
-        quiet=True, die=True)
+        'checking data schema',
+        validate_simple(
+            service_json_file=service_json_file,
+            schema=schema, service_json=service_json, report=report),
+        quiet=True, die=die)
     if simple:
         return True
 
@@ -246,7 +250,7 @@ def validate(service_json, schema=None, simple=True, quiet=False):
     # the schema can be loaded, so build a service object.
     # the service object can then begin to validate itself
     # quiet or report('Instantiating service to scrutinize it..')
-    service = yapi.load_service_from_json(service_json, quiet=quiet)
+    service = yapi.load_service_from_json(service_json_file, quiet=quiet)
     report = util.NOOP if quiet else service.report
 
     print_errs(
@@ -298,37 +302,29 @@ def validate_metadata_file(service):
     return errors, warnings, messages
 
 
-def validate_file(fname, schema=None, report=util.NOOP, quiet=False):
+def validate_simple(service_json_file=None, service_json=None,
+                    schema=None, report=util.NOOP, quiet=False, die=True):
     """ naive schema validation for service.json """
     errors, warnings, messages = [], [], []
     report = report if not quiet else util.NOOP
     # if schema:
     #    report('validating file using explicit schema: {0}'.format(
     #        yellow(schema.schema_name)))
-    err = 'got {0} instead of string for fname'.format(fname)
-    assert isinstance(fname, basestring), err
-    tmp = yapi.load_json(fname)
+    if all([
+            not service_json,
+            service_json_file,
+            service_json_file != yapi.EXTENSION_MAGIC]):
+        service_json = yapi.load_json(service_json_file)
+
     if schema is None:
-        schema = yschema.choose_schema(tmp)
-    is_eb = schema.schema_name == 'beanstalk_schema'
+        schema = yschema.choose_schema(service_json)
     try:
-        schema(tmp)
+        schema(service_json)
     except voluptuous.Invalid, e:
         msg = "error validating {0}:\n\n{1}"
-        msg = msg.format(os.path.abspath(fname), e)
-        return [msg], [], []
-    SERVICE_ROOT = os.path.dirname(fname)
-    SERVICE_ROOT = os.path.abspath(SERVICE_ROOT)
-    if is_eb:
-        return [], [], []
-    files = tmp['setup_list'] + tmp['provision_list']
-    for _file in files:
-        no_protocol = '://' not in _file
-        abspath = os.path.join(SERVICE_ROOT, _file)
-        if no_protocol and not os.path.exists(abspath):
-            err = ('Files mentioned in service json '
-                   'must exist relative to {0}, but {1}'
-                   ' was not found').format(
-                SERVICE_ROOT, _file)
-            return [err], [], []
+        msg = msg.format(os.path.abspath(service_json_file), e)
+        if die:
+            raise
+        else:
+            return [msg], [], []
     return errors, warnings, messages

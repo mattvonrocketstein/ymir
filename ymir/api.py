@@ -93,7 +93,7 @@ def load_json(fname):
     return tmp
 
 
-def load_service_from_json(filename=None, quiet=False):
+def load_service_from_json(filename=None, quiet=False, die=True):
     """ return a service object from ymir-style service.json file.
         when filename is not given it will be guessed based on cwd.
     """
@@ -103,7 +103,7 @@ def load_service_from_json(filename=None, quiet=False):
     service_obj = _load_service_from_json_helper(
         service_json_file=service_json_file,
         service_json=load_json(service_json_file),
-        quiet=quiet)
+        quiet=quiet, die=die)
     # trigger the caching of some config values now,
     # just to print the message as early as possible
     service_obj._debug_mode
@@ -128,14 +128,29 @@ def set_schema_defaults(service_json, chosen_schema):
             service_json[k] = default
     return service_json
 
+EXTENSION_MAGIC = '__extension__'
+
 
 def _load_service_from_json_helper(service_json_file=None,
-                                   service_json={}, quiet=False, simple=False):
+                                   service_json={}, quiet=False,
+                                   simple=False, die=True):
     """ load service obj from service json """
     from ymir import validation
-    chosen_schema = yschema.choose_schema(service_json)
-    validation.validate(service_json_file, chosen_schema, simple=True)
     report = util.NOOP if quiet else base_report
+    chosen_schema = yschema.choose_schema(service_json)
+    validation.validate(
+        service_json_file=service_json_file,
+        service_json=service_json,
+        schema=chosen_schema, simple=True, die=die)
+    if chosen_schema == yschema.extension_schema:
+        report('ymir.api', 'extension schema detected, resolving..')
+        extending = load_json(service_json["extends"])
+        extending.update(**service_json)
+        extending.pop("extends")
+        return _load_service_from_json_helper(
+            service_json_file=EXTENSION_MAGIC,
+            service_json=extending,
+            quiet=quiet, simple=simple, die=die)
     report('ymir.api', 'chose schema: {0}'.format(
         yellow(chosen_schema.schema_name)))
     # report("ymir", "ymir service.json version:")

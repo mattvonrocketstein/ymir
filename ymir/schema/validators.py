@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """ ymir.schema.validators
 """
-
+import os
 from voluptuous import Invalid
 
 
@@ -14,6 +14,26 @@ def nested_vagrant_validator(dct, ):
         if key not in dct:
             err = 'key at `vagrant` would contain sub-key "{0}"'
             raise Invalid(err.format(key))
+
+
+def filepath_validator(string, key='unknown'):
+    """ """
+    if not isinstance(string, basestring):
+        raise Invalid("expected string for key @ `{0}`".format(
+            key))
+    string = string.strip()
+    if string.startswith("~"):
+        string = os.path.expanduser(string)
+    if not os.path.isabs(string):
+        string = os.path.abspath(string)
+    if not os.path.exists(string):
+        err = "filepath '{0}' at `{1}` does not exist"
+        raise Invalid(err.format(string, key))
+    if not os.path.isfile(string):
+        err = "filepath '{0}' at `{1}` exists, but is not a file"
+        raise Invalid(err.format(string, key))
+
+_validate_extends_field = lambda val: filepath_validator(val, key="extends")
 
 
 def list_of_dicts(lst, key=None):
