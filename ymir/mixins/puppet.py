@@ -99,11 +99,10 @@ class PuppetMixin(object):
         if not has_rsync:
             self.report(
                 ydata.FAIL + "remote side is missing rsync.  installing it")
-            common = "--become -a 'name=rsync state=present'"
             with api.quiet():
-                success = self._provision_ansible(common + " -m apt ")
+                success = self._provision_apt("rsync")
                 if not success:
-                    self._provision_ansible("-m yum")
+                    self._provision_yum("rsync")
         else:
             self.report(ydata.SUCCESS + "remote side already has rsync")
 
