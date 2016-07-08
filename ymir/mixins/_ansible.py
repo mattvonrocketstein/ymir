@@ -18,16 +18,16 @@ yapi = lazyModule('ymir.api')
 ANSIBLE_CMD = (
     'ansible all {debug} -u {user} '
     '--private-key "{pem}" '
-    '-e "host_key_checking=False," '
+    # '--extra-vars "host_key_checking=False," '
     '--ssh-extra-args "-p {port}" '
     '--sftp-extra-args "-P {port}" '
-    '-i {inventory} '
-    '-M "{module_path}" {command}')
+    '--inventory-file {inventory} '
+    '--module-path "{module_path}" {command}')
 
 ANSIBLE_PLAYBOOK_CMD = (
     'ansible-playbook {debug} -u {user} '
     '--private-key "{pem}" '
-    '-e "host_key_checking=False,deprecation_warnings=False" '
+    # '-e "host_key_checking=False,deprecation_warnings=False" '
     '--ssh-extra-args "-p {port}" '
     '--sftp-extra-args "-P {port}" '
     '-i {inventory} '
@@ -175,7 +175,7 @@ class AnsibleMixin(object):
             tied to the main `ymir_debug` entry
             in service.json files
         """
-        debug = '-vvvv' if self._debug_mode else ''
+        debug = '-vvv' if self._debug_mode else ''
         return debug
 
     @property
@@ -227,7 +227,7 @@ class AnsibleMixin(object):
     def _provision_ansible(self, cmd):
         """ handler for provision-list entries prefixed with `ansible://` """
         with self._ansible_ctx():
-            api.local(ANSIBLE_CMD.format(command=cmd, **self._ansible_env))
+            return api.local(ANSIBLE_CMD.format(command=cmd, **self._ansible_env)).succeeded
 
     def _provision_ansible_playbook(self, cmd):
         """ handler for provision-list entries prefixed with
