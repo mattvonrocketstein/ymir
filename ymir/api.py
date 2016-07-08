@@ -64,10 +64,8 @@ def rreflect(obj, ctx, simple=True):
         return obj
 
 
-def _reflect(service_json=None, service_json_file=None, simple=True):
+def _reflect(service_json=None, simple=True):
     """ given a dictionary of service-json, reflects that data onto the service object"""
-    assert service_json or service_json_file and not all(
-        [service_json, service_json_file])
     working = service_json.copy()
 
     service_defaults = service_json.get('service_defaults', {})
@@ -156,6 +154,7 @@ def _load_service_from_json_helper(service_json_file=None,
     # report("ymir", "ymir service.json version:")
     # report('ymir.api', 'loading service object from description')
     service_json = set_schema_defaults(service_json, chosen_schema)
+
     service_json = _reflect(service_json)
     classname = str(service_json["name"])
     BaseService = chosen_schema.get_service_class(service_json)
