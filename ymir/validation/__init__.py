@@ -238,7 +238,7 @@ def validate(service_json_file=None, service_json=None,
     """
     report = _report  # util.NOOP if quiet else _report
     print_errs(
-        'checking data schema',
+        '',  # 'checking data schema for {0}'.format(service_json_file),
         validate_simple(
             service_json_file=service_json_file,
             schema=schema, service_json=service_json, report=report),
@@ -315,7 +315,6 @@ def validate_simple(service_json_file=None, service_json=None,
             service_json_file,
             service_json_file != yapi.EXTENSION_MAGIC]):
         service_json = yapi.load_json(service_json_file)
-
     if schema is None:
         schema = yschema.choose_schema(service_json)
     try:
