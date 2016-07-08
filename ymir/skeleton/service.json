@@ -1,11 +1,10 @@
 //
-// service.json for `demo service`
+// service.json for ymir-skeleton
 //
 //  Complete documentation for the file schema is here:
-//   http://mattvonrocketstein.github.io/ymir/pages/service-description.html
+//    http://tinyurl.com/ymir-service-description
 //
 {
-
     // Whether ymir should display extra debugging information
     // NB: This parameter also controls puppet and ansible debug levels
     "ymir_debug": true,
@@ -38,7 +37,7 @@
     "name" : "{{org_name}}-{{app_name}}-{{env_name}}",
 
     // Human-friendly description of what this service does.
-    // Will also be used as an instance tag for AWS.
+    // This will also be used as an instance tag for AWS.
     "service_description": "Service description goes here",
 
     // AWS tags which are set to "true".  This will be useful for
@@ -48,7 +47,7 @@
     // also a good idea.
     "tags": [],
 
-    // Declare logfile locations on this service.  This will
+    // Declare logfile locations on this service.  This can
     // be used later for operations that tail or retrieve logs.
     "logs": [
         "/var/logs/syslog"
@@ -85,20 +84,21 @@
 
     // Allows sane iteration using rubyish `each` inside puppet files.
     // The only acceptable value currently is the default: `future`
-    'puppet_parser': 'future',
+    "puppet_parser": "future",
 
     // Sets up the AWS key_name for this service.
     // By default, the value for the "app_name" field
     // in this file will be used.  You can find the
     // keys for your AWS account at the console here**
     // **: https://console.aws.amazon.com/iam/home#encryptionKeys
-    "key_name" : "{{app_name}}",
+    "key_name": "{{app_name}}",
 
     // The `security_groups` field provides a list of names for the
     // AWS security groups this service will belong to. The existence
     // of these security groups will be confirmed when `ymir validate`
-    // is run on this service from the command line.
-    "security_groups" : ['your_sg_name'],
+    // is run on this service from the command line.  Typically this
+    // should match values in `security_groups.json` (if you use that).
+    "security_groups": ['your_sg_name'],
 
     // The `setup_list` field provides a list of instructions to
     // execute during the setup operation for this service.  Even
@@ -122,10 +122,15 @@
     // are guaranteed to be installed as long as the `setup` operation has
     // already run.
     //
-    // Note that instructions in the following list may use {{variables}}
-    // mentioned elsewhere in this file, subject to the standard
-    // template-scoping rules.  File locations are relative to the
-    // service-root, i.e. the directory this file is in.
+    // Note that instructions in the following list may use "{{variables}}"
+    // mentioned elsewhere in this file, subject to the standard template
+    // scoping rules.  File locations for "puppet://" instructions are
+    // relative to the service-root, i.e. the directory this file is in.
+    // Ansible modules/roles/playbooks for "ansible://" instructions must
+    // be available in the `ansible` folder.  Instructions of the form "local://"
+    // instructions have a default working-directory of the service root.
+    //
+    // Full docs for the provision_list instruction format:  http://tinyurl.com/jole3p9
     "provision_list" : [
         "puppet://puppet/demo_service.pp",
     ],
@@ -134,6 +139,8 @@
     // operation is used.  Reflective-templating (with values in this config)
     // is allowed and encouraged, because anything IP-based will be useless
     // after executing terminate/create operations.
+    //
+    // Full docs for the health_check instruction format:  http://tinyurl.com/hljecam
     "health_checks": {
         "homepage" :
         ['http_200',
@@ -148,7 +155,8 @@
     // Variables mentioned here may optionally be used by the puppet and
     // ansible provisioners.  In the case of puppet, environment variables
     // must be used (so there is no support hashes and probably bad support
-    // for extremely long strings).  Ansible support is much more complete.
-    'service_defaults' : {
+    // for extremely long strings).  Ansible support is much more complete,
+    // and may contain extremely long strings, nested dictionaries, etc.
+    "service_defaults" : {
     }
 }

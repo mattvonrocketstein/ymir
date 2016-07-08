@@ -40,12 +40,12 @@ $ fab -l
 
 Typical commands:
 
-* fab validate # attempts to make sure configuration files have all necessary settings, useful to execute before `fab create`
+* ymir validate # attempts to make sure configuration files have all necessary settings, useful to execute before `fab create`
 * fab create # create a new instance
 * fab create:force=True # for creating a new instance, overwriting if necessary
 * fab status # show status for current instance (assuming it exists)
 * fab setup # for (re)setup'ing an instance (useful when dependencies change)
-* fab provision # for reprovisioning an instance (useful after making code changes)
+* fab provision # for reprovisioning an instance (useful after making infracode changes)
 * fab ssh # connection to the service instance
 * fab check # verify that the instance is up and working (possible template for nagios code)
 
