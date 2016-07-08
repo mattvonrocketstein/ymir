@@ -57,7 +57,7 @@ def test_require_rsync(has_rsync, run, _provision_ansible):
         service._require_rsync()
         assert has_rsync.called
         _provision_ansible.assert_called_with(
-            "--become -a 'name=rsync state=present' -m apt ")
+            '--become --module-name yum -a "name=rsync state=present"')
 
 
 @test_common.mock_aws
