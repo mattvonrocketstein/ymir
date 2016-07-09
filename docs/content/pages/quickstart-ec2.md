@@ -41,11 +41,11 @@ Initializing a new service template with ymir copies boilerplate that you'll fin
 
 Customize your service description by making changes to the boilerplate in `demo_service/service.json` (this file was created in step 3) you can tune the instance size, tags, and other attributes for your service. The `service.json` file specifies other important service metadata like the service name, the base AMI, the EC2 instance size, and how health checks should be performed.  Most of the options are illustrated in the [default service.json](https://github.com/mattvonrocketstein/ymir/blob/master/ymir/skeleton/service.json).
 
-In particular you will want to change the `name`, `key_name`, and `pem` fields at minimum, where `key_name` and `pem` match what you setup in [step 2](#create_keypairs)  For more detailed information about the fields and what they do, see the [service description](pages/service-description.html#ec2-summary) section of this documentation.
+In particular you will want to change the `name`, `key_name`, and `pem` fields at minimum, where `key_name` and `pem` match what you setup in [step 2](#create_keypairs)  For more detailed information about the fields and what they do, see the [service description](service-description.html#ec2-summary) section of this documentation.
 
 **5. Customize your *service implementation* **
 
-Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](pages/service-implementation.html) section of this documentation.
+Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](service-implementation.html) section of this documentation.
 
 **7.  Customize and synchronize your AWS security groups**
 
@@ -61,7 +61,7 @@ If you're willing to write new code you can define new operations of any kind, b
 
     $ fab -l
 
-For an example of how you might write a deploy operation, see [this example](pages/examples.html#custom-operation).
+For an example of how you might write a deploy operation, see [this example](examples.html#custom-operation).
 
 -----------------------------------------------------------
 
@@ -73,7 +73,7 @@ To make sure your setup is sane so far, run
 
     $ ymir validate
 
-This will tell you if your AWS keys, security groups, pem files, etc are all setup correctly and will attempt to validate some of your provisioning code.  See the [validation docs](pages/misc.html#validating-boilerplate) for more information.
+This will tell you if your AWS keys, security groups, pem files, etc are all setup correctly and will attempt to validate some of your provisioning code.  See the [validation docs](misc.html#validating-boilerplate) for more information.
 
 **8. Instantiate your service, setup & provision it**
 
@@ -86,4 +86,3 @@ Run the create/setup/provision operations one by one, proceeding at each stage i
 If you have a great internet connection, try running everything at once:
 
     fab create wait:30 setup provision
-

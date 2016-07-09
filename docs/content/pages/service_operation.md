@@ -11,7 +11,7 @@ Summary: ymir service operations
 ### Overview
 
 
-*Service operations* are "command and control" helpers for your service.  Operations are always [fabric commands](http://docs.fabfile.org/en/latest/usage/fab.html) which are _invoked_ from your local environment (or from a buildbot like [jenkins](https://jenkins-ci.org/)) but are typically _executed_ on the remote service.  Authentication with the remote side happens transparently and automatically, provided your [service description](pages/service-description.html) is setup correctly.   To list operations, cd into the service root and run
+*Service operations* are "command and control" helpers for your service.  Operations are always [fabric commands](http://docs.fabfile.org/en/latest/usage/fab.html) which are _invoked_ from your local environment (or from a buildbot like [jenkins](https://jenkins-ci.org/)) but are typically _executed_ on the remote service.  Authentication with the remote side happens transparently and automatically, provided your [service description](service-description.html) is setup correctly.   To list operations, cd into the service root and run
 
     $ fab --list
 
@@ -27,7 +27,7 @@ The syntax above might look a little funny, but that's so each fabric task can h
 
 Note that the **global** arguments of fabric (to specify hosts, keyfiles, etc) should generally not be used with ymir at all, because these are implied your `service.json` or `vagrant.json` configurations.  <img width=24px src=../images/attention.gif>
 
-If you're willing to write code and especially if you're familiar with python and fabric, you can easily define new operations of any kind at any time (take a look at code for a [custom operation here](pages/examples.html#custom_operations)).  By default though, several operations are already defined for you automatically and they are described below.
+If you're willing to write code and especially if you're familiar with python and fabric, you can easily define new operations of any kind at any time (take a look at code for a [custom operation here](examples.html#custom_operations)).  By default though, several operations are already defined for you automatically and they are described below.
 
 -----------------------------------------------------------
 
@@ -53,7 +53,7 @@ The "status" operation shows service status, including IP address, EC2 status, e
 
 <tr><td class=td_operation> fab check</td><td>
 The "check" operation runs health checks on the service.<br/>
-The idea is to provide a simple starting point for integration with more sophisticated health monitoring via stuff like periodic jenkins jobs, nagios, etc.  See <a href="service-description.html#health-checks">this section</a> of the service-description documentation for more information.
+The idea is to provide a simple starting point for integration with more sophisticated health monitoring via stuff like periodic jenkins jobs, nagios, etc.  See [this section](service-description.html#health-checks) of the service-description documentation for more information.
 </td></tr>
 
 <tr><td class=td_operation>fab ssh</td><td>
@@ -131,4 +131,4 @@ Invoke this operation from the root directory of your service with the command
 
 ### Custom Operations
 
-[See this section of the examples page](pages/examples.html#custom_operation)
+[See this section of the examples page](examples.html#custom_operation)

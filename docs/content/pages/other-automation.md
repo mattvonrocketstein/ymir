@@ -3,14 +3,12 @@ Slug: misc
 sortorder: 7
 Authors: mvr
 Summary: ymir commandline and other automation helpers
-URL: pages/misc.html
 
 [TOC]
 
 ## Automation Helpers
 
-
-Primarily you will interact with your services using [service operations](pages/service-operations.html) which are generated for you based on your [service description](pages/service-description.html).  This section describes other, generic automation helpers  which are provided by the ymir command line utility and which do *not* interact with a specific concrete service.
+Primarily you will interact with your services using [service operations](service-operations.html) which are generated for you based on your [service description](service-description.html).  This section describes other, generic automation helpers  which are provided by the ymir command line utility and which do *not* interact with a specific concrete service.
 
 ## Validating boilerplate
 

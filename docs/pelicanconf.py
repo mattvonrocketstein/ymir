@@ -5,10 +5,16 @@
 #
 from __future__ import unicode_literals
 import os
+import sys
 
+sys.path.append(os.path.dirname(__file__))
+
+PORT = 8000
 AUTHOR = u'mvr'
-SITENAME = u'ymir'
-SITEURL = 'https://mattvonrocketstein.github.io/ymir'
+SITENAME = 'ymir'
+
+SITEURL = 'http://localhost:{0}/ymir'.format(PORT)
+RELATIVE_URLS = False
 
 PATH = os.path.join(os.path.dirname(__file__), 'content')
 
@@ -23,11 +29,12 @@ CATEGORY_FEED_ATOM = None
 TRANSLATION_FEED_ATOM = None
 AUTHOR_FEED_ATOM = None
 AUTHOR_FEED_RSS = None
+PAGE_PATHS = ['pages']
 DISPLAY_PAGES_ON_MENU = True
 MD_EXTENSIONS = [
     'codehilite(css_class=highlight)',
     'admonition',
-    'tables', 'toc',
+    'tables', 'toc', 'wikilinks'
 ]
 PLUGIN_PATHS = ["."]
 PLUGINS = ['extract_toc', 'simple_footnotes']
@@ -42,7 +49,4 @@ SOCIAL = (('You can add links in your config file', '#'),
           ('Another social link', '#'),)
 IGNORE_FILES = ['.#*']
 DEFAULT_PAGINATION = False
-
-# Uncomment following line if you want document-relative URLs when developing
-RELATIVE_URLS = True
 LOAD_CONTENT_CACHE = False

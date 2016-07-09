@@ -25,13 +25,13 @@ By default, ymir assumes your service description is in the `service.json` file.
     $ cd myservice
     $ mv vagrant.json service.json
 
-**If you want to use a file of a specific name**, you can set the environment variable `YMIR_SERVICE_JSON=...` before running [service operations](pages/service-operations.html) commands.  Use `export var=val` in bash or execute it per command, like this:
+**If you want to use a file of a specific name**, you can set the environment variable `YMIR_SERVICE_JSON=...` before running [service operations](service-operations.html) commands.  Use `export var=val` in bash or execute it per command, like this:
 
     $ YMIR_SERVICE_JSON=my_service.json fab create
 
 #### <a href="#templating" name="templating">Templating</a>
 
-Service description files support reflective templating, or to put it another way, values inside your JSON may be used to render [ref]Under the hood, this works with [jinja2](http://jinja.pocoo.org/docs/dev/)[/ref] other values inside your template.  
+Service description files support reflective templating, or to put it another way, values inside your JSON may be used to render [ref]Under the hood, this works with [jinja2](http://jinja.pocoo.org/docs/dev/)[/ref] other values inside your template.
 
 Always use double-mustaches to indicate template variables.  For example, in the JSON below, the value of "name" would be rendered to "OrgName-AppName-ServiceName-EnvName".
 

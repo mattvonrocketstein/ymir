@@ -29,7 +29,7 @@ To test if it worked, try running `ymir version`.
 
 ### Suggested software
 
-There's other stuff that you might need, depending on if you want to use vagrant, how you intend to provision stuff, and what kinds of [validation](other-automation.html#validation) you want ymir to do later.
+There's other stuff that you might need, depending on if you want to use vagrant, how you intend to provision stuff, and what kinds of [validation](misc.html#validation) you want ymir to do later.
 
 * [Ansible](https://www.ansible.com/)
 * [Puppet linter](http://puppet-lint.com/)

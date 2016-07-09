@@ -29,11 +29,11 @@ Initializing a new service template with ymir copies boilerplate that you'll fin
 
 **4. Customize your service description**
 
-Most of the instance specifics (RAM, base-box) are configured inside of `Vagrantfile` (this file was created for you in step 3).  Inside `vagrant.json`, make sure the **instance_type** field is always set to "vagrant", and that the **name** field matches the **vm.hostname** value inside `Vagrantfile`.  For more detailed information about the fields and what they do, see the [service description](pages/service-description.html#vagrant-summary) section of this documentation.
+Most of the instance specifics (RAM, base-box) are configured inside of `Vagrantfile` (this file was created for you in step 3).  Inside `vagrant.json`, make sure the **instance_type** field is always set to "vagrant", and that the **name** field matches the **vm.hostname** value inside `Vagrantfile`.  For more detailed information about the fields and what they do, see the [service description](service-description.html#vagrant-summary) section of this documentation.
 
 ### **5** Customize your service implementation
 
-Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](pages/service-implementation.html) section of this documentation.
+Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](service-implementation.html) section of this documentation.
 
 -----------------------------------------------------------
 
@@ -45,7 +45,7 @@ To make sure your setup is sane so far, run
 
     $ ymir validate
 
-See the [validation docs](pages/other-automation.html#validation) for more information.
+See the [validation docs](misc.html#validation) for more information.
 
 **7. Add customized service operations**
 

@@ -30,6 +30,7 @@ def extract_toc(content):  # flake8: noqa
     if not toc and readers.MarkdownReader.enabled and extension in readers.MarkdownReader.file_extensions:
         toc = soup.find('div', class_='toc')
         if toc:
+            #from smashlib import embed; embed()
             toc.extract()
 
     # default reStructuredText reader
