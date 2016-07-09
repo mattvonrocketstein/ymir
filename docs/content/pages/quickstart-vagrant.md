@@ -33,7 +33,7 @@ Most of the instance specifics (RAM, base-box) are configured inside of `Vagrant
 
 ### **5** Customize your service implementation
 
-Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](service-implementation.html) section of this documentation.
+Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](service-implementations.html) section of this documentation.
 
 -----------------------------------------------------------
 
@@ -64,3 +64,6 @@ Run the create/setup/provision operations one by one, proceeding at each stage i
 If you have a great internet connection, try running everything at once:
 
     fab create wait:30 setup provision
+
+Footnotes
+=============

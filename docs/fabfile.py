@@ -13,14 +13,28 @@ DEPLOY_PATH = "~/code/ghio/{0}".format(PROJECT_NAME)
 DEPLOY_PATH = os.path.expanduser(DEPLOY_PATH)
 
 
-def check_links_prod(url='/ymir'):
+def check_links_prod():
     return check_links(
-        url=url,
+        # proto='https',
         base_domain='mattvonrocketstein.github.io')
 
 
-def check_links(url='', base_domain="localhost"):
+def check_links(url='/ymir', proto='http', base_domain="localhost"):
     """ check the links wget.  """
+    base_url = '{1}://{0}:'.format(base_domain, proto)
+    port = str((PORT if base_domain == 'localhost' else 80))
+    url = base_url + port + url
+    cmd = (
+        "webcheck --force "
+        "--ignore-robots --avoid-external "
+        "--output webcheck ")
+    cmd = cmd + url
+    api.local(cmd)
+    import webbrowser
+    webbrowser.open("file://{0}/badlinks.html".format(
+        os.path.join(os.path.dirname(__file__), 'webcheck/')))
+    return
+
     def parse_lines(lines):
         print colors.red('broken links:')
         links = [x.replace(url, '')[1:] for x in lines]
@@ -112,6 +126,11 @@ def push():
         api.local("find . -type f|xargs git add")
         api.local("git commit . -m'publishing {0}'".format(PROJECT_NAME))
         api.local("git push")
+
+
+def publish():
+    build_prod()
+    push()
 
 
 def build_prod():

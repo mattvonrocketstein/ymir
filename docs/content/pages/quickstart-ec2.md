@@ -45,7 +45,7 @@ In particular you will want to change the `name`, `key_name`, and `pem` fields a
 
 **5. Customize your *service implementation* **
 
-Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](service-implementation.html) section of this documentation.
+Customize your service implementation.  You can do this with shell, ansible, or puppet or fabric tasks depending on your preference.  Consult the [service implementation](service-implementations.html) section of this documentation.
 
 **7.  Customize and synchronize your AWS security groups**
 
@@ -86,3 +86,6 @@ Run the create/setup/provision operations one by one, proceeding at each stage i
 If you have a great internet connection, try running everything at once:
 
     fab create wait:30 setup provision
+
+Footnotes
+=============
