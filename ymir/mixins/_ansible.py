@@ -79,7 +79,8 @@ class AnsibleMixin(object):
                 err = "missing role {0} could not be installed".format(
                     role_name)
                 raise RuntimeError(err)
-        self.report(ydata.SUCCESS + "role '{0}' installed".format(role_name))
+        self.report(ydata.SUCCESS +
+                    "ansible role '{0}' installed".format(role_name))
 
     def _provision_ansible_role(self, role_name, **env):
         """ this provisioner applies a single ansible role.  this is more
@@ -126,11 +127,13 @@ class AnsibleMixin(object):
             msg = "created playbook {0} for applying role: {1}"
             self.report(ydata.SUCCESS + msg.format(tmpf.name, role_name))
             if env_string:
-                self.report("playbook content:")
+                self.report("dynamic playbook content:")
                 eprint(playbook_content)
                 eprint("\n")
+            self.report("applying ansible role: {0}".format(role_name))
             result = self._provision_ansible_playbook(tmpf.name)
-            self.report(ydata.SUCCESS + "applied role: {0}".format(role_name))
+            self.report(ydata.SUCCESS +
+                        "applied ansible role: {0}".format(role_name))
             return result
 
     _apply_ansible_role = _provision_ansible_role

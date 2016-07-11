@@ -64,7 +64,7 @@ Apart from normal system administration or inspecting the service, this is good 
 
 <tr><td class=td_operation>fab mosh</td><td>
 The "mosh" operation connects to the service using <a href="https://mosh.mit.edu/">mosh</a>.  <br/>
-It is required that mosh already be installed on the remote side, and your security group has openings for the correct ports.
+Only defined for Amazon-based services, not supported with vagrant.  It is required that mosh already be installed on the remote side, and your security group has openings for the correct ports.
 </td></tr>
 
 <tr><td class=td_operation>fab run</td><td>

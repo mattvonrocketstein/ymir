@@ -19,6 +19,7 @@ This folder contains "polyglot", a demonstration of a ymir project suitable for 
 5. via demo.pp, puppet pushes a template to `/tmp/puppet_tmp_file`
 6. via demo.pp, puppet installs a system package "nmap"
 7. via demo.pp, puppet appends content to `/etc/motd`
+8. via demo.pp & [a puppet forge recipe](https://forge.puppet.com/ajcrowe/supervisord), puppet installs a service "supervisor"
 
 ### Quickstart: Vagrant
 
