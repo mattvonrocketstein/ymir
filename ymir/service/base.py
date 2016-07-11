@@ -335,7 +335,7 @@ class AbstractService(Reporter,
 
     def _provision_yum(self, pkg_names):
         """ """
-        self._pkg_provisioner(pkg_names, 'yum')
+        return self._pkg_provisioner(pkg_names, 'yum')
 
     def _provision_apt(self, pkg_names):
         """ """
