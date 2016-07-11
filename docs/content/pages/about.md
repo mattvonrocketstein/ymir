@@ -82,11 +82,27 @@ Here's a quick list of features and (equally importantly) non-features.
 Contributing
 =============
 
-Pull requests and feature requests are welcome, just use [the githubs](https://github.com/mattvonrocketstein/ymir/issues).  Tests are run with tox.  To maintain consistent style in the library, please use the same precommit hooks as me.  To install precommit hooks after cloning the source repository, run these commands:
+**Pull requests and feature requests are welcome**, just use [the githubs](https://github.com/mattvonrocketstein/ymir/issues).
+
+**Testing:**.   All tests are run with tox.  Afterwards, you can view the coverage results in the `htmlcov` folder.
+
+    $ pip install tox
+    $ tox
+
+
+**Commit hooks**: To maintain consistent style in the library, please use the same precommit hooks as me.  To install precommit hooks after cloning the source repository, run these commands:
 
     $ pip install pre-commit
     $ pre-commit install
 
+**Documentation:**  Contributions to this documentation (in the `docs` folder of the source root) are also welcome.  If you make significant changes, run the documentation test-server and the script to check for broken links.
+
+    $ cd docs
+    $ fab run # runs the auto-updating test server for the markdown docs
+
+In another terminal, run the crawler script against the test server
+
+    $ fab check_links
 
 Footnotes
 =============

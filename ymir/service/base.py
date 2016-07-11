@@ -18,9 +18,9 @@ from ymir import data as ydata
 from ymir.base import Reporter
 from ymir.util import puppet
 from ymir.caching import cached
+from ymir.data import BadProvisionInstruction
 
 yapi = lazyModule('ymir.api')
-
 
 # capture warnings because Fabric and
 # it's dependencies can be pretty noisy
@@ -165,6 +165,13 @@ class AbstractService(Reporter,
         return util.report(label, msg, *args, **kargs)
 
     @util.declare_operation
+    def top(self):
+        """ display cpu/memory usage information from `top` (noninteractive) """
+        with api.quiet():
+            result = self.run("top -b -n 10|head -15")
+        print result
+
+    @util.declare_operation
     def setup(self):
         """ setup service (invoke after 'create', before 'provision')
         """
@@ -297,7 +304,7 @@ class AbstractService(Reporter,
         except AttributeError:
             self.report(
                 "Fatal: no sucher provisioner `{0}`".format(provisioner_name))
-            raise SystemExit()
+            raise BadProvisionInstruction(provision_instruction)
         else:
             cmd = yapi.str_reflect(
                 provision_instruction,
@@ -310,9 +317,28 @@ class AbstractService(Reporter,
         """ handler for provision-list entries prefixed with `remote://` """
         return self.run(cmd)
 
+    def _pkg_provisioner(self, pkg_name, ansible_module_name, state='present'):
+        self._provision_ansible(
+            '--become --module-name {0} -a "name={1} state={2}"'.format(
+                ansible_module_name, pkg_name, state
+            ))
+
+    def _pkgs_provision(self, pkg_names, ansible_module_name, state='present'):
+        pkg_names = pkg_names.split(',')
+        for pkg in pkg_names:
+            self._pkg_provisioner(pkg, ansible_module_name, state=state)
+
     def _provision_local(self, cmd):
         """ handler for provision-list entries prefixed with `local://` """
         return api.local(cmd)
+
+    def _provision_yum(self, pkg_names):
+        """ """
+        self._pkg_provisioner(pkg_names, 'yum')
+
+    def _provision_apt(self, pkg_names):
+        """ """
+        return self._pkg_provisioner(pkg_names, 'apt')
 
     @property
     def _debug_mode(self):
@@ -374,13 +400,13 @@ class AbstractService(Reporter,
     @util.declare_operation
     def sudo(self, *args, **kargs):
         with self.ssh_ctx():
-            api.sudo(*args, **kargs)
+            return api.sudo(*args, **kargs)
 
     @util.declare_operation
     def run(self, command):
         """ run command on service host """
         with self.ssh_ctx():
-            api.run(command)
+            return api.run(command)
 
     @property
     def _port(self):

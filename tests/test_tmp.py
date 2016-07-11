@@ -6,4 +6,5 @@
 """
 
 import mock
+import pytest
 import tests.common as test_common

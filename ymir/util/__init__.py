@@ -10,6 +10,7 @@ import sys
 import time
 import shutil
 import socket
+import inspect
 from functools import wraps
 
 import yurl
@@ -280,15 +281,21 @@ def get_keypair_names(conn=None):
     return [k.name for k in conn.get_all_key_pairs()]
 
 
-def get_or_guess_service_json_file(args=None):
-    """ """
+def get_or_guess_service_json_file(base_dir=None, default='service.json', insist=True):
+    """ NB: only to be used from fabfiles! """
+    if base_dir is None:
+        frame = inspect.stack()[1]
+        module = inspect.getmodule(frame[0])
+        base_dir = os.path.dirname(module.__file__)
     service_json_file = os.environ.get(
         'YMIR_SERVICE_JSON',
-        os.path.join(os.getcwd(), 'service.json'))
-    if not os.path.exists(service_json_file):
-        raise SystemExit("no service.json found")
-    assert os.path.exists(service_json_file)
+        os.path.join(base_dir, default))
+    if insist and not os.path.exists(service_json_file):
+        raise SystemExit("service JSON does not exist: {0}".format(
+            service_json_file))
     return service_json_file
+
+guess_service_json = get_or_guess_service_json_file
 
 
 def unexpand(path):

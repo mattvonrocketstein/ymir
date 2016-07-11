@@ -55,7 +55,7 @@ def mock_aws(fxn):
 
 
 @contextlib.contextmanager
-def demo_service():
+def demo_service(service_json='service.json'):
     service_name = 'demo_service'
     with TemporaryDirectory() as tmp_dir:
         service_dir = os.path.join(tmp_dir, service_name)
@@ -65,7 +65,7 @@ def demo_service():
             err = '`ymir init` did not create directory'
             assert os.path.exists(service_dir), err
             with api.lcd(service_dir):
-                service_json = os.path.join(service_dir, 'service.json')
+                service_json = os.path.join(service_dir, service_json)
                 sg_json = os.path.join(service_dir, 'security_groups.json')
                 #
 

@@ -132,3 +132,5 @@ Invoke this operation from the root directory of your service with the command
 ### Custom Operations
 
 [See this section of the examples page](examples.html#custom_operation)
+
+### Footnotes

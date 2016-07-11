@@ -5,6 +5,7 @@ from ymir import api
 
 import mock
 from peak.util.imports import lazyModule
+from ymir.data import BadProvisionInstruction
 import tests.common as common
 
 yservice = lazyModule('ymir.service')
@@ -28,3 +29,12 @@ def test_service_has_important_callables():
         assert callable(getattr(service, x))
     assert callable(service.ssh_ctx)
     assert callable(service.fabric_install)
+
+
+@test_common.mock_aws
+def test_run_provisioner():
+    with test_common.demo_service() as ctx:
+        service = ctx.get_service()
+        provisioner_name, provision_instruction = 'foobar', 'baz'
+        with pytest.raises(BadProvisionInstruction):
+            service._run_provisioner(provisioner_name, provision_instruction)

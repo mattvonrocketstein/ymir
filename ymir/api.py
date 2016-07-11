@@ -16,6 +16,8 @@ import jinja2
 
 jinja_env = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
+guess_service_json_file = util.guess_service_json
+
 
 class ReflectionError(Exception):
     pass
@@ -95,7 +97,8 @@ def load_service_from_json(filename=None, quiet=False, die=True):
     """ return a service object from ymir-style service.json file.
         when filename is not given it will be guessed based on cwd.
     """
-    service_json_file = filename or util.get_or_guess_service_json_file()
+    service_json_file = filename or util.get_or_guess_service_json_file(
+        insist=True)
     # report('ymir.api', 'service.json is {0}'.format(
     #    util.unexpand(service_json_file)))
     service_obj = _load_service_from_json_helper(

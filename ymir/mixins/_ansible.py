@@ -30,8 +30,8 @@ ANSIBLE_PLAYBOOK_CMD = (
     # '-e "host_key_checking=False,deprecation_warnings=False" '
     '--ssh-extra-args "-p {port}" '
     '--sftp-extra-args "-P {port}" '
-    '-i {inventory} '
-    '-M "{module_path}" {command}')
+    '--inventory-file {inventory} '
+    '--module-path "{module_path}" {command}')
 
 ANSIBLE_GALAXY_CMD = (
     'ansible-galaxy install '
@@ -128,6 +128,7 @@ class AnsibleMixin(object):
             if env_string:
                 self.report("playbook content:")
                 eprint(playbook_content)
+                eprint("\n")
             result = self._provision_ansible_playbook(tmpf.name)
             self.report(ydata.SUCCESS + "applied role: {0}".format(role_name))
             return result

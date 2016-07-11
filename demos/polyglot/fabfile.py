@@ -4,15 +4,10 @@
 \x1b[31mYmir Automation:\x1b[0m
   This is the \x1b[35mDemo\x1b[0m Service
 """
-import os
 from fabric import api
-from ymir import load_service_from_json
+from ymir import load_service_from_json, guess_service_json_file
 
-YMIR_SERVICE_JSON = os.path.abspath(
-    os.environ.get(
-        'YMIR_SERVICE_JSON',
-        os.path.join(os.path.dirname(__file__),
-                     'service.json')))
+YMIR_SERVICE_JSON = guess_service_json_file(default='service.json')
 
 # Create the ymir service from the service description
 _service = load_service_from_json(YMIR_SERVICE_JSON)

@@ -21,6 +21,16 @@ def test_puppet_support():
 
 
 @test_common.mock_aws
+@mock.patch('ymir.util.puppet.run_puppet')
+def test_provision_puppet(run_puppet):
+    with test_common.demo_service() as ctx:
+        ctx.rewrite_json(ymir_build_puppet=True)
+        service = ctx.get_service()
+        service._provision_puppet("puppet/zoo.pp")
+        assert run_puppet.called
+
+
+@test_common.mock_aws
 @mock.patch('ymir.mixins.puppet.rsync_project')
 @mock.patch('ymir.mixins.puppet.PuppetMixin._require_rsync')
 def test_copy_puppet(rsync_mock, _require_rsync):
@@ -69,3 +79,14 @@ def test_copy_puppet_noop():
         ctx.rewrite_json(ymir_build_puppet=False)
         service = ctx.get_service()
         service.copy_puppet()
+
+from ymir.data import BadProvisionInstruction
+
+
+@test_common.mock_aws
+def test_run_provisioner():
+    with test_common.demo_service() as ctx:
+        service = ctx.get_service()
+        provisioner_name, provision_instruction = 'foobar', 'baz'
+        with pytest.raises(BadProvisionInstruction):
+            service._run_provisioner(provisioner_name, provision_instruction)

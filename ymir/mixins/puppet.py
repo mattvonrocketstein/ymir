@@ -99,7 +99,8 @@ class PuppetMixin(object):
         if not has_rsync:
             self.report(
                 ydata.FAIL + "remote side is missing rsync.  installing it")
-            with api.quiet():
+            self._update_system_packages()
+            with api.settings(warn_only=True):
                 success = self._provision_apt("rsync")
                 if not success:
                     self._provision_yum("rsync")
@@ -114,15 +115,14 @@ class PuppetMixin(object):
         with self.ssh_ctx():
             self.report('  flushing remote puppet codes and refreshing')
             self._require_rsync()
-            with api.hide("output"):
-                rsync_project(
-                    os.path.join(remote_user_home, puppet_dir),
-                    local_dir=os.path.join(lcd, puppet_dir, '*'),
-                    ssh_opts="-o StrictHostKeyChecking=no",
-                    delete=clean,
-                    exclude=[
-                        '.git', 'backups', 'venv',
-                        '.vagrant', '*.pyc', ],)
+            rsync_project(
+                os.path.join(remote_user_home, puppet_dir),
+                local_dir=os.path.join(lcd, puppet_dir, '*'),
+                ssh_opts="-o StrictHostKeyChecking=no",
+                delete=clean,
+                exclude=[
+                    '.git', 'backups', 'venv',
+                    '.vagrant', '*.pyc', ],)
             self.report(ydata.SUCCESS + "sync finished")
 
     @noop_if_no_puppet_support
@@ -210,7 +210,7 @@ class PuppetMixin(object):
                 self._provision_ansible(
                     "-m setup -m apt -a 'name=ruby state=absent'")
             self.report(ydata.SUCCESS + "flushed old ruby")
-            self.report("installing new ruby")
+            self.report("installing new ruby (this might take a while..)")
             with api.hide("output"):
                 self._apply_ansible_role(
                     RUBY_ROLE,

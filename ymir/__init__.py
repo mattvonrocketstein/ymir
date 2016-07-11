@@ -8,8 +8,9 @@
 
 """
 
-from .api import load_service_from_json, _load_service_from_json
+from .api import load_service_from_json, guess_service_json_file
+
 # from ymir import loom
 __all__ = [x.__name__ for x in [
     # loom,
-    load_service_from_json, _load_service_from_json]]
+    load_service_from_json, guess_service_json_file]]

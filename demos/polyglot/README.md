@@ -3,8 +3,12 @@ Polyglot
 
 ### Service Description
 
-This folder contains "polyglot", a demonstration of a ymir project suitable for AWS or
-vagrant, which is provisioned using both ansible and puppet with shared variables.
+This folder contains "polyglot", a demonstration of a ymir project suitable for AWS or vagrant, which is provisioned using both ansible and puppet with shared variables.  It is tested and works with at least the following vagrant base boxes:
+
+* boxcutter/debian80-i386boxcutter/debian80-i386
+* ubuntu/trusty32
+* centos/7
+
 
 ## What gets provisioned on this service
 
