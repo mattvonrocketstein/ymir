@@ -23,7 +23,7 @@ GIT_ROLE = 'geerlingguy.git'
 PUPPET_VERSION = [3, 4, 3]
 PUPPET_URL = 'http://downloads.puppetlabs.com'
 FACTER_TARBALL_URL = '{0}/facter/facter-1.7.5.tar.gz'.format(PUPPET_URL)
-PUPPET_TARBALL_URL = '{0}/puppet/puppet-4.0.0.tar.gz'.format(PUPPET_URL)
+PUPPET_TARBALL_URL = '{0}/puppet/puppet-3.4.3.tar.gz'.format(PUPPET_URL)
 HIERA_TARBALL_URL = '{0}/hiera/hiera-1.3.0.tar.gz'.format(PUPPET_URL)
 PUPPET_TARBALL_FILE = PUPPET_TARBALL_URL.split('/')[-1]
 PUPPET_TARBALL_UNCOMPRESS_DIR = PUPPET_TARBALL_FILE.replace('.tar.gz', '')
@@ -197,7 +197,10 @@ class PuppetMixin(object):
         sync_puppet_librarian("puppet")
 
     def _install_ruby(self):
-        """ installs ruby on the remote service """
+        """ installs ruby on the remote service,
+            requiring at least version 1.9.  if not found,
+            ruby_version: 2.2.3 will be installed
+        """
         with api.quiet():
             has_ruby = api.run("ruby --version")
         ruby_version = has_ruby.succeeded and has_ruby.split()[1]
