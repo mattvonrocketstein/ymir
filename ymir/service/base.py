@@ -318,10 +318,11 @@ class AbstractService(Reporter,
         return self.run(cmd)
 
     def _pkg_provisioner(self, pkg_name, ansible_module_name, state='present'):
-        self._provision_ansible(
-            '--become --module-name {0} -a "name={1} state={2}"'.format(
-                ansible_module_name, pkg_name, state
-            ))
+        cmd = '--become --module-name {0} -a "name={1} state={2}"'
+        cmd = cmd.format(
+            ansible_module_name, pkg_name, state)
+        with api.settings(warn_only=True):
+            return self._provision_ansible(cmd)
 
     def _pkgs_provision(self, pkg_names, ansible_module_name, state='present'):
         pkg_names = pkg_names.split(',')
