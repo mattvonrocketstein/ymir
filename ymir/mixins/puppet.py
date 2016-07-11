@@ -196,6 +196,11 @@ class PuppetMixin(object):
 
         sync_puppet_librarian("puppet")
 
+    def _install_wget(self):
+        """ """
+        self._provision_yum('wget') or self._provision_apt('wget')
+        self.report(ydata.SUCCESS + "installed wget")
+
     def _install_ruby(self):
         """ installs ruby on the remote service,
             requiring at least version 1.9.  if not found,
@@ -206,7 +211,8 @@ class PuppetMixin(object):
         ruby_version = has_ruby.succeeded and has_ruby.split()[1]
         has_ruby = has_ruby.succeeded
         if not has_ruby or not (ruby_version.startswith('1.9') or ruby_version.startswith('2')):
-            self.report(ydata.FAIL + "ruby is missing or old")
+            self.report(
+                ydata.FAIL + "ruby is missing or old: " + str(has_ruby))
             with api.quiet():
                 self._provision_ansible(
                     "-m setup -m yum -a 'name=ruby state=absent'")
@@ -245,8 +251,9 @@ class PuppetMixin(object):
                 api.run('rm "{0}"'.format(x))
 
         def build_puppet():
-            with api.hide('output'):
-                self._apply_ansible_role("azavea.build-essential")
+            # with api.hide('output'):
+            #    self._apply_ansible_role("azavea.build-essential")
+            self._install_wget()
             self._install_ruby()
             run_install = lambda: api.sudo('ruby install.rb')
             download = lambda x: api.run(
