@@ -4,7 +4,7 @@
 from __future__ import print_function
 import sys
 
-from ymir.contrib.backports.get_terminal_size import get_terminal_size
+from pyterminalsize import get_terminal_size
 
 
 def eprint(*args, **kwargs):

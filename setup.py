@@ -48,6 +48,7 @@ setup(
         "retrying==1.3.3",
         "testinfra==1.3.0",
         "voluptuous==0.8.11",
+        "pyterminalsize==0.1.0",
         "Werkzeug==0.11.10",      # used for caching
         "YURL==0.13",
     ],
