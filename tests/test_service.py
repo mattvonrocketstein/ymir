@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 """
-from ymir import api
-
+import pytest
 import mock
 from peak.util.imports import lazyModule
+
+from ymir import api
 from ymir.data import BadProvisionInstruction
+
 import tests.common as test_common
 
 yservice = lazyModule('ymir.service')
