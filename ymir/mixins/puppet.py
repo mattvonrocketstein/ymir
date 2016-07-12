@@ -143,17 +143,20 @@ class PuppetMixin(object):
         facts.update(**extra_facts)
         with self._rvm_ctx():
             return util_puppet.run_puppet(
-       	     provision_item,
-             parser=service_data['puppet_parser'],
-             facts=facts,
-             debug=self._debug_mode,
-             puppet_dir=puppet_dir,         )
+                provision_item,
+                parser=service_data['puppet_parser'],
+                facts=facts,
+                debug=self._debug_mode,
+                puppet_dir=puppet_dir,)
 
-
-    def _rvm_ctx(self, ruby_version='system'):
+    @property
+    def _using_rvm(self):
         with api.quiet():
             has_rvm = api.run('which rvm').succeeded
-        if has_rvm:  # ruby version was old so ymir installed another ruby side-by-side
+        return has_rvm
+
+    def _rvm_ctx(self, ruby_version='system'):
+        if self._using_rvm:  # ruby version was old so ymir installed another ruby side-by-side
             prefix = "rvm use " + ruby_version
         else:
             prefix = "true"
@@ -202,7 +205,8 @@ class PuppetMixin(object):
         if not has_librarian:
             self.report(ydata.FAIL + "puppet librarian not found")
             with self._rvm_ctx("1.9.3"):
-                api.sudo('gem install puppet --no-ri --no-rdoc')
+                if self._using_rvm:
+                    api.sudo('gem install puppet --no-ri --no-rdoc')
                 api.sudo('gem install librarian-puppet --no-ri --no-rdoc')
         else:
             self.report(ydata.SUCCESS + "puppet librarian already installed")

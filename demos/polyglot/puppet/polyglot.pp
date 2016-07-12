@@ -20,4 +20,4 @@ exec { 'tag-motd-with-puppet':
   unless => "cat motd|grep ${puppet_variable}"
 }
 
-class { 'postgresql::server': }
+class { 'postgresql::server': ;}
