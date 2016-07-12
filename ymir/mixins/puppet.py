@@ -15,22 +15,11 @@ from fabric.contrib.project import rsync_project
 from ymir.util import puppet as util_puppet
 from ymir import data as ydata
 
-RUBY_ROLE = "JhovaniC.ruby"
 GIT_ROLE = 'geerlingguy.git'
 
 # if/when puppet build happens, it more or less follows the instructions here:
 #   https://docs.puppetlabs.com/puppet/3.8/reference/install_tarball.html
 PUPPET_VERSION = [3, 4, 3]
-PUPPET_URL = 'http://downloads.puppetlabs.com'
-FACTER_TARBALL_URL = '{0}/facter/facter-1.7.5.tar.gz'.format(PUPPET_URL)
-PUPPET_TARBALL_URL = '{0}/puppet/puppet-3.4.3.tar.gz'.format(PUPPET_URL)
-HIERA_TARBALL_URL = '{0}/hiera/hiera-1.3.0.tar.gz'.format(PUPPET_URL)
-PUPPET_TARBALL_FILE = PUPPET_TARBALL_URL.split('/')[-1]
-PUPPET_TARBALL_UNCOMPRESS_DIR = PUPPET_TARBALL_FILE.replace('.tar.gz', '')
-FACTER_TARBALL_FILE = FACTER_TARBALL_URL.split('/')[-1]
-FACTER_TARBALL_UNCOMPRESS_DIR = FACTER_TARBALL_FILE.replace('.tar.gz', '')
-HIERA_TARBALL_FILE = HIERA_TARBALL_URL.split('/')[-1]
-HIERA_TARBALL_UNCOMPRESS_DIR = HIERA_TARBALL_FILE.replace('.tar.gz', '')
 
 
 def noop_if_no_puppet_support(fxn):
@@ -69,10 +58,6 @@ class PuppetMixin(object):
     @property
     def _puppet_templates(self):
         return self._get_puppet_templates()
-
-    @property
-    def _puppet_template_vars(self):
-        return self._get_puppet_template_vars()
 
     def _get_puppet_templates(self):
         """ return puppet template files relative to working directory """
@@ -212,14 +197,6 @@ class PuppetMixin(object):
             self.report(ydata.SUCCESS + "puppet librarian already installed")
 
         sync_puppet_librarian("puppet")
-
-    def _install_wget(self):
-        """ """
-        with api.settings(warn_only=True):
-            has_wget = api.run('which wget').succeeded
-        if not has_wget:
-            self._provision_yum('wget') or self._provision_apt('wget')
-            self.report(ydata.SUCCESS + "installed wget")
 
     def _install_ruby(self):
         """ installs ruby on the remote service,

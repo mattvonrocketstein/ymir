@@ -121,17 +121,6 @@ class FabricMixin(object):
             fail()
 
     @util.declare_operation
-    def integration_test(self):
-        """ runs integration tests for this service """
-        self.report('running integration tests')
-        data = self._status()
-        if data['status'] == 'running':
-            return self._test_data(data)
-        else:
-            self.report('no instance is running for this'
-                        ' service, start (or create) it first')
-
-    @util.declare_operation
     @util.require_running_instance
     def reboot(self):
         """ TODO: blocking until reboot is complete? """

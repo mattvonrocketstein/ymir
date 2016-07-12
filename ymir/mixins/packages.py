@@ -2,7 +2,6 @@
 """ ymir.mixins.packages
 """
 import os
-import contextlib
 
 from fabric import api
 
@@ -43,7 +42,10 @@ class PackageMixin(object):
         self._require_pacapt_already_run = True
 
     def _update_system_packages(self, quiet=True):
-        """ """
+        """ does not use ansible, hopefully this makes caching easier so
+            updates are faster.  still, this should probably be refactored
+            or deprecated because it's the only reason pacapt is still needed.
+        """
         self._require_pacapt()
         quiet = '> /dev/null' if quiet else ''
         self.report("updating system packages, this might take a while.")
@@ -66,16 +68,39 @@ class PackageMixin(object):
     _update_sys_packages = _update_system_packages
 
     def _install_system_package(self, pkg_name, quiet=False):
-        """ FIXME: only works with ubuntu/debian """
-        self._require_pacapt()
-        quiet = '> /dev/null' if quiet else ''
-        with api.shell_env(DEBIAN_FRONTEND='noninteractive'):
-            return api.sudo('/usr/bin/pacapt --noconfirm -S {0} {1}'.format(
-                pkg_name, quiet)).succeeded
+        """ """
+        with api.settings(warn_only=True):
+            success = self._provision_apt(pkg_name)
+            if not success:
+                success = self._provision_yum(pkg_name)
+        return success
 
-    def _remove_system_package(self, pkg_name, strict=False, quiet=True):
-        self._require_pacapt()
-        quiet = '> /dev/null' if quiet else ''
-        ctx = [api.settings(warn_only=True)] if not strict else []
-        with contextlib.nested(ctx):
-            return api.sudo('/usr/bin/pacapt -R {0} {1}'.format(pkg_name, quiet)).succeeded
+    def _pkg_provisioner(self, pkg_name, ansible_module_name, state='present'):
+        """ """
+        cmd = '--become --module-name {0} -a "name={1} state={2}"'
+        cmd = cmd.format(
+            ansible_module_name, pkg_name, state)
+        with api.settings(warn_only=True):
+            return self._provision_ansible(cmd)
+
+    def _pkgs_provision(self, pkg_names, ansible_module_name, state='present'):
+        pkg_names = pkg_names.split(',')
+        results = []
+        for pkg in pkg_names:
+            results.append(
+                self._pkg_provisioner(pkg, ansible_module_name, state=state))
+        return all(results)
+
+    def _provision_yum(self, pkg_names):
+        """ """
+        return self._pkg_provisioner(pkg_names, 'yum')
+
+    def _provision_apt(self, pkg_names):
+        """ """
+        return self._pkg_provisioner(pkg_names, 'apt')
+
+    def _remove_system_package(self, pkg_name):
+        """ """
+        success = self._pkg_provisioner(pkg_name, "apt", state="absent")
+        if not success:
+            self._pkg_provisioner(pkg_name, "yum", state="absent")

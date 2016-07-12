@@ -317,29 +317,9 @@ class AbstractService(Reporter,
         """ handler for provision-list entries prefixed with `remote://` """
         return self.run(cmd)
 
-    def _pkg_provisioner(self, pkg_name, ansible_module_name, state='present'):
-        cmd = '--become --module-name {0} -a "name={1} state={2}"'
-        cmd = cmd.format(
-            ansible_module_name, pkg_name, state)
-        with api.settings(warn_only=True):
-            return self._provision_ansible(cmd)
-
-    def _pkgs_provision(self, pkg_names, ansible_module_name, state='present'):
-        pkg_names = pkg_names.split(',')
-        for pkg in pkg_names:
-            self._pkg_provisioner(pkg, ansible_module_name, state=state)
-
     def _provision_local(self, cmd):
         """ handler for provision-list entries prefixed with `local://` """
         return api.local(cmd)
-
-    def _provision_yum(self, pkg_names):
-        """ """
-        return self._pkg_provisioner(pkg_names, 'yum')
-
-    def _provision_apt(self, pkg_names):
-        """ """
-        return self._pkg_provisioner(pkg_names, 'apt')
 
     @property
     def _debug_mode(self):

@@ -63,7 +63,8 @@ def test():
 @api.task
 def vulture():
     with api.lcd(os.path.dirname(__file__)):
-        api.local('vulture ymir|grep -v _provision_|grep -v ymir/checks.py')
+        api.local(
+            'vulture ymir --exclude fabfile.py|grep -v _provision_|grep -v ymir/checks.py')
 
 if __name__ == '__main__':
     # a neat hack that makes this file a "self-hosting" fabfile,
