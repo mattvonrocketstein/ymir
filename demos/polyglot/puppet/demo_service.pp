@@ -20,6 +20,5 @@ exec { 'tag-motd-with-puppet':
   unless => "cat motd|grep ${puppet_variable}"
 }
 
-class { 'supervisord':
-  install_pip => true,
-}
+class { 'redis':
+ }

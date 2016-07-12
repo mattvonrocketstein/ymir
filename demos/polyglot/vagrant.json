@@ -84,8 +84,8 @@
           ['file-contains', '/etc/motd,{{puppet_variable}}'],
         "nginx running":
           ['testinfra', 'Service("nginx").is_running'],
-        "supervisor running":
-          ['testinfra', 'Service("supervisor").is_running'],
+        "redis running":
+          ['testinfra', 'Service("redis-server").is_running'],
     },
 
     // Schema-free section for misc. site configuration.
@@ -106,17 +106,18 @@
     //
     // Hints:
     //   Typical values for "box":
-    //     ubuntu/trusty32, puppetlabs/centos-6.6-32-puppet, centos/7, geerlingguy/centos6, boxcutter/debian80-i386
+    //     puppetlabs/centos-6.6-32-puppet, centos/7, geerlingguy/centos6, 
+    //     broken: boxcutter/debian80-i386
+    //     working: ubuntu/trust32
+    //     ?: debian/jessie64
     'vagrant': {
         'boot_timeout': 600,
-        //'box':'boxcutter/debian80-i386',
-        //'box': 'ubuntu/trusty32',
         'box': 'centos/7',
         'box_check_update': false,
         'cpus': 1,
         'insert_key': true,
         'name': 'default',
-        'ram': 1024,
+        'ram': 512,
         'sync_disabled': true,
     }
 }

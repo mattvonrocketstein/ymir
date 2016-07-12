@@ -16,6 +16,6 @@
    ],
   "dependencies": [
     {"name": "puppetlabs/stdlib"},
-    {"name": "ajcrowe/supervisord"}
+    {"name": "arioch/redis"}
   ]
 }
