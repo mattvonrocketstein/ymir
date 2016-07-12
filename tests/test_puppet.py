@@ -58,10 +58,13 @@ def test_puppet_template_vars():
 @mock.patch('ymir.mixins._ansible.AnsibleMixin._provision_ansible')
 @mock.patch('fabric.api.run')
 @mock.patch('ymir.mixins.puppet.PuppetMixin._has_rsync')
-def test_require_rsync(has_rsync, run, _provision_ansible):
+@mock.patch('ymir.mixins.packages.PackageMixin._update_system_packages')
+def test_require_rsync(_update_system_packages, has_rsync, run, _provision_ansible):
     has_rsync.return_value = False
     run.succeeded = False
+    _update_system_packages.return_value = True
     run.success = True
+    _provision_ansible.return_value = True
     with test_common.demo_service() as ctx:
         service = ctx.get_service()
         service._require_rsync()

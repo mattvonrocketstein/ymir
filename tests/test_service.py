@@ -6,20 +6,20 @@ from ymir import api
 import mock
 from peak.util.imports import lazyModule
 from ymir.data import BadProvisionInstruction
-import tests.common as common
+import tests.common as test_common
 
 yservice = lazyModule('ymir.service')
 
 
-@common.mock_aws
+@test_common.mock_aws
 def test_load_skeleton_service():
-    service = api.load_service_from_json(common.skeleton_json_path)
+    service = api.load_service_from_json(test_common.skeleton_json_path)
     assert isinstance(service, yservice.AbstractService)
     return service
 
 
 def test_ssh_config_string_prop():
-    service = common.mock_service()
+    service = test_common.mock_service()
     #assert isinstance(service._ssh_config_string, basestring)
 
 
