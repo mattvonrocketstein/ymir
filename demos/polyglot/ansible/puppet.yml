@@ -4,20 +4,23 @@
 - hosts: all
   become: yes
   become_method: sudo
+  gather_facts: yes
 
   tasks:
-    - script: puppet-bootstrap/debian.sh
+    - name: puppet-bootstrap/debian.sh
+      script: puppet-bootstrap/debian.sh
       when: ansible_distribution == 'Debian'
-    - script: puppet-bootstrap/ubuntu.sh
+    - name: puppet-bootstrap/ubuntu.sh
+      script: puppet-bootstrap/ubuntu.sh
       when: ansible_distribution == 'Ubuntu'
-    - yum: name=redhat-lsb-core state=present
+    - name: Install lsb-core for RedHat
+      yum: name=redhat-lsb-core state=present
       when: ansible_os_family == "RedHat"
-    - name: Reread ansible_lsb facts for redhat
+    - name: Reread ansible_lsb facts for RedHat
       setup: filter=ansible_lsb*
-    - script: puppet-bootstrap/centos_6_x.sh
+    - name: puppet-bootstrap/centos_6_x.sh
+      script: puppet-bootstrap/centos_6_x.sh
       when: ansible_os_family == "RedHat" and ansible_lsb.major_release|int < 7
-    - script: puppet-bootstrap/centos_7_x.sh
+    - name: puppet-bootstrap/centos_7_x.sh
+      script: puppet-bootstrap/centos_7_x.sh
       when: ansible_os_family == "RedHat" and ansible_lsb.major_release|int == 7
-
-  # slow.  disable if possible!
-  gather_facts: yes

@@ -141,13 +141,14 @@ class PuppetMixin(object):
         service_data = self.template_data()
         facts = self.facts
         facts.update(**extra_facts)
-        return util_puppet.run_puppet(
-            provision_item,
-            parser=service_data['puppet_parser'],
-            facts=facts,
-            debug=self._debug_mode,
-            puppet_dir=puppet_dir,
-        )
+        with self._rvm_ctx():
+            return util_puppet.run_puppet(
+       	     provision_item,
+             parser=service_data['puppet_parser'],
+             facts=facts,
+             debug=self._debug_mode,
+             puppet_dir=puppet_dir,         )
+
 
     def _rvm_ctx(self, ruby_version='system'):
         with api.quiet():
@@ -155,7 +156,7 @@ class PuppetMixin(object):
         if has_rvm:  # ruby version was old so ymir installed another ruby side-by-side
             prefix = "rvm use " + ruby_version
         else:
-            prefix = ""
+            prefix = "true"
         return api.prefix(prefix)
 
     @noop_if_no_puppet_support

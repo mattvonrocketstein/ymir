@@ -109,11 +109,11 @@
     //   Typical values for "box":
     //     puppetlabs/centos-6.6-32-puppet, centos/7, geerlingguy/centos6, 
     //     broken: boxcutter/debian80-i386
-    //     working: ubuntu/trusty32, centos/7
+    //     working: ubuntu/trusty32, centos/7, centos/6
     //     ?: debian/jessie64
     'vagrant': {
         'boot_timeout': 600,
-        'box': 'centos/6',
+        'box': 'debian/jessie64',
         'box_check_update': false,
         'cpus': 1,
         'insert_key': true,
