@@ -51,6 +51,7 @@
     // Use `provision_list` for things that are more comfortable to
     // run repeatedly.
     "setup_list" : [
+      "ansible_playbook://ansible/puppet.yml"
     ],
 
     // The `provision_list` field provides a list of  instructions to
@@ -109,8 +110,9 @@
     //     ubuntu/trusty32, puppetlabs/centos-6.6-32-puppet, centos/7, geerlingguy/centos6, boxcutter/debian80-i386
     'vagrant': {
         'boot_timeout': 600,
-        'box':'boxcutter/debian80-i386',
+        //'box':'boxcutter/debian80-i386',
         //'box': 'ubuntu/trusty32',
+        'box': 'centos/7',
         'box_check_update': false,
         'cpus': 1,
         'insert_key': true,

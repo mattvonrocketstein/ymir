@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 \x1b[31mYmir Automation:\x1b[0m
-  This is the \x1b[35mDemo\x1b[0m Service
+  This is the \x1b[35mPolyglot\x1b[0m Service
 """
 from fabric import api
 from ymir import load_service_from_json, guess_service_json_file
