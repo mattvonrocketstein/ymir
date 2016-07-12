@@ -107,7 +107,7 @@ class AnsibleMixin(object):
         env_string = ''
         import json
         for k, v in env.items():
-            if isinstance(v, (bool, basestring)):
+            if isinstance(v, (bool, basestring, list)):
                 v = json.dumps(v)
             else:
                 err = ("Ansible-role apply only supports passing "

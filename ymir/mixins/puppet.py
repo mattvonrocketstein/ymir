@@ -190,7 +190,15 @@ class PuppetMixin(object):
                 "gem list | grep -c librarian-puppet").succeeded
         if not has_librarian:
             self.report(ydata.FAIL + "puppet librarian not found")
-            api.sudo('gem install librarian-puppet --no-ri --no-rdoc')
+            with api.quiet():
+              has_rvm = api.run('which rvm').succeeded
+            if has_rvm: # ruby version was old so ymir installed another ruby side-by-side
+               prefix = "rvm use 1.9.3"
+            else:
+               prefix = ""
+            with api.prefix(prefix):
+                api.sudo('gem install puppet --no-ri --no-rdoc')
+                api.sudo('gem install librarian-puppet --no-ri --no-rdoc')
         else:
             self.report(ydata.SUCCESS + "puppet librarian already installed")
 
@@ -215,19 +223,20 @@ class PuppetMixin(object):
         has_ruby = has_ruby.succeeded
         if not has_ruby or not (ruby_version.startswith('1.9') or ruby_version.startswith('2')):
             self.report(
-                ydata.FAIL + "ruby is missing or old: " + str(has_ruby))
-            with api.quiet():
-                self._provision_ansible(
-                    "-m setup -m yum -a 'name=ruby state=absent'")
-                self._provision_ansible(
-                    "-m setup -m apt -a 'name=ruby state=absent'")
-            self.report(ydata.SUCCESS + "flushed old ruby")
-            self.report("installing new ruby (this might take a while..)")
-            with api.hide("output"):
-                self._apply_ansible_role(
-                    RUBY_ROLE,
-                    ruby_install_from_source=True,)
-            self.report(ydata.SUCCESS + "finished installing new ruby")
+                ydata.FAIL + "ruby is missing or old: " + str(ruby_version))
+            #with api.quiet():
+            self._provision_ansible_role("rvm_io.rvm1-ruby",rvm1_rubies=['ruby-1.9.3']) 
+            #self._provision_ansible(
+            #        "-m setup -m yum -a 'name=ruby state=absent'")
+            #    self._provision_ansible(
+            #        "-m setup -m apt -a 'name=ruby state=absent'")
+            #self.report(ydata.SUCCESS + "flushed old ruby")
+            #self.report("installing new ruby (this might take a while..)")
+            #with api.hide("output"):
+            #    self._apply_ansible_role(
+            #        RUBY_ROLE,
+            #        ruby_install_from_source=True,)
+            self.report(ydata.SUCCESS + "finished installing new ruby with rvm")
         else:
             msg = "ruby is present on the remote side.  version={0}"
             self.report(ydata.SUCCESS + msg.format(ruby_version))

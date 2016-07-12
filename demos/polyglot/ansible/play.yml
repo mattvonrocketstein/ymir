@@ -6,19 +6,21 @@
   become_method: sudo
 
   tasks:
+    - name: Install the libselinux-python package
+      yum: name=libselinux-python state=installed
+      when: ansible_os_family == "RedHat" and ansible_lsb.major_release|int < 7
+
     - name: Push a template to the demo service
       template: src=templates/motd dest=/etc/motd mode="u=rw,g=r,o=r"
+
     - name: Install a system package
       package: pkg=tree state=installed update_cache=no
       register: apt_output
+
     - debug: var=apt_output # show the content of apt_output var
+
     - name: Push a file to the demo service
       copy: src=files/tmp_file dest=/tmp/ansible_tmp_file mode=0644
 
-  # slow.  disable if possible!
-  gather_facts: yes
 
-  # no customization, so we might as well have used apt.
-  # but, this is here to demonstrate the usage of roles
-  roles:
-    - { role: geerlingguy.nginx }
+  gather_facts: yes

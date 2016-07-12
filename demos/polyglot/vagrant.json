@@ -65,7 +65,8 @@
     // template-scoping rules.  File locations are relative to the
     // service-root, i.e. the directory this file is in.
     "provision_list" : [
-        "ansible_playbook://ansible/play.yml",
+        "ansible-playbook://ansible/play.yml",
+	"ansible-role://geerlingguy.nginx",
         "puppet://puppet/polyglot.pp",
     ],
 
@@ -108,11 +109,11 @@
     //   Typical values for "box":
     //     puppetlabs/centos-6.6-32-puppet, centos/7, geerlingguy/centos6, 
     //     broken: boxcutter/debian80-i386
-    //     working: ubuntu/trust32
+    //     working: ubuntu/trusty32, centos/7
     //     ?: debian/jessie64
     'vagrant': {
         'boot_timeout': 600,
-        'box': 'centos/7',
+        'box': 'centos/6',
         'box_check_update': false,
         'cpus': 1,
         'insert_key': true,
