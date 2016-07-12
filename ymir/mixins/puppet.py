@@ -113,7 +113,7 @@ class PuppetMixin(object):
         lcd = lcd or self._ymir_service_root
         remote_user_home = '/home/' + self._username
         with self.ssh_ctx():
-            self.report('  flushing remote puppet codes and refreshing')
+            self.report('  flushing remote puppet code and refreshing')
             self._require_rsync()
             rsync_project(
                 os.path.join(remote_user_home, puppet_dir),
@@ -198,8 +198,11 @@ class PuppetMixin(object):
 
     def _install_wget(self):
         """ """
-        self._provision_yum('wget') or self._provision_apt('wget')
-        self.report(ydata.SUCCESS + "installed wget")
+        with api.settings(warn_only=True):
+            has_wget = api.run('which wget').succeeded
+        if not has_wget:
+            self._provision_yum('wget') or self._provision_apt('wget')
+            self.report(ydata.SUCCESS + "installed wget")
 
     def _install_ruby(self):
         """ installs ruby on the remote service,
@@ -243,42 +246,17 @@ class PuppetMixin(object):
 
     def _install_puppet(self):
         """ """
-        def decompress(x):
-            """ helper to unwrap tarball, removing the
-                original file if it was successful
-            """
-            if not api.run('tar -zxf "{0}"'.format(x)).failed:
-                api.run('rm "{0}"'.format(x))
 
         def build_puppet():
-            # with api.hide('output'):
-            #    self._apply_ansible_role("azavea.build-essential")
-            self._install_wget()
-            self._install_ruby()
-            run_install = lambda: api.sudo('ruby install.rb')
-            download = lambda x: api.run(
-                'wget -O {0} {1}'.format(os.path.basename(x), x))
-
-            work_to_do = [
-                [FACTER_TARBALL_URL, FACTER_TARBALL_FILE,
-                    FACTER_TARBALL_UNCOMPRESS_DIR],
-                [HIERA_TARBALL_URL, HIERA_TARBALL_FILE,
-                    HIERA_TARBALL_UNCOMPRESS_DIR],
-                [PUPPET_TARBALL_URL, PUPPET_TARBALL_FILE,
-                    PUPPET_TARBALL_UNCOMPRESS_DIR],
-            ]
-            self.report("installing puppet pre-reqs")
-            self._install_ruby()
-            # rgen is required for puppet --parser=future,
-            # but the command below only installs it if it's not already found
-            api.sudo('{ gem list|grep rgen; } || gem install rgen')
-
-            for url, tarball, _dir in work_to_do:
-                with api.hide("output"):
-                    download(url)
-                decompress(tarball)
-                with api.cd(_dir):
-                    run_install()
+            cmd = "git clone https://github.com/hashicorp/puppet-bootstrap.git"
+            self.report("checking for bootstrap scripts")
+            if not os.path.exists(
+                os.path.join(
+                    self._ymir_service_root,
+                    'puppet-bootstrap')):
+                with api.lcd(self._ymir_service_root):
+                    api.local(cmd)
+            self._provision_ansible_playbook("ansible/puppet.yml")
 
         with api.quiet():
             puppet_version = api.run('puppet --version')
@@ -292,12 +270,9 @@ class PuppetMixin(object):
             puppet_version = None
             msg = "puppet not installed, building it from scratch"
             self.report(ydata.FAIL + msg)
+            self._provision_ansible("-m install_puppet")
             return build_puppet()
 
         if puppet_version and puppet_version < PUPPET_VERSION:
-            msg = "bad puppet version @ {0}, attempting uninstall"
-            self.report(ydata.FAIL + msg.format(puppet_version))
-            pkgs = 'puppet facter hiera puppet-common'.split()
-            for pkg in pkgs:
-                self._remove_system_package(pkg, quiet=False)
-            return build_puppet()
+            self.report(ydata.FAILED +
+                        "puppet version is older than what is suggested")
