@@ -246,15 +246,14 @@ class PuppetMixin(object):
 
     def _install_puppet(self):
         """ """
-
         def build_puppet():
             cmd = "git clone https://github.com/hashicorp/puppet-bootstrap.git"
             self.report("checking for bootstrap scripts")
             if not os.path.exists(
                 os.path.join(
-                    self._ymir_service_root,
+                    self._ansible_dir,
                     'puppet-bootstrap')):
-                with api.lcd(self._ymir_service_root):
+                with api.lcd(self._ansible_dir):
                     api.local(cmd)
             self._provision_ansible_playbook("ansible/puppet.yml")
 
@@ -270,7 +269,6 @@ class PuppetMixin(object):
             puppet_version = None
             msg = "puppet not installed, building it from scratch"
             self.report(ydata.FAIL + msg)
-            self._provision_ansible("-m install_puppet")
             return build_puppet()
 
         if puppet_version and puppet_version < PUPPET_VERSION:

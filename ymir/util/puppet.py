@@ -27,10 +27,10 @@ def run_puppet(_fname, parser=None, debug=False,
         # thus we are able to pass through the facts
         puppet_cmd = ("sudo -E `which puppet` "
                       "apply {parser} {debug} "
-                      "--hiera_config {hiera_config}"
+                      "--hiera_config {hiera_config} "
                       "--modulepath={pdir}/modules {fname}")
         pdir = puppet_dir or os.path.dirname(_fname)
-        hconfig = hiera_config or '{pdir}/hiera.yaml'.format(pdir)
+        hconfig = hiera_config or '{pdir}/hiera.yaml'.format(pdir=pdir)
         api.run(
             puppet_cmd.format(
                 parser='',  # ('--parser ' + parser) if parser else '',
