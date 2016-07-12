@@ -16,6 +16,6 @@
    ],
   "dependencies": [
     {"name": "puppetlabs/stdlib"},
-    {"name": "arioch/redis"}
+    {"name": "puppetlabs/postgresql"}
   ]
 }

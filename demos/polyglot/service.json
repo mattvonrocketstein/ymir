@@ -87,7 +87,7 @@
     // service-root, i.e. the directory this file is in.
     "provision_list" : [
         "ansible_playbook://ansible/play.yml",
-        "puppet://puppet/demo_service.pp",
+        "puppet://puppet/polyglot.pp",
     ],
 
     // Health checks to execute against this service when the `check`
