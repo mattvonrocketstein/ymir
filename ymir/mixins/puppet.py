@@ -190,7 +190,7 @@ class PuppetMixin(object):
                 "gem list | grep -c librarian-puppet").succeeded
         if not has_librarian:
             self.report(ydata.FAIL + "puppet librarian not found")
-            api.sudo('gem install librarian-puppet')
+            api.sudo('gem install librarian-puppet --no-ri --no-rdoc')
         else:
             self.report(ydata.SUCCESS + "puppet librarian already installed")
 
