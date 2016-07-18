@@ -143,8 +143,7 @@
     // Full docs for the health_check instruction format:  http://tinyurl.com/hljecam
     "health_checks": {
         "homepage" :
-        ['http_200',
-         'http://{{host}}'],
+          'http_200://http://{{host}}',
     },
 
     // Schema-free section for misc. site configuration.

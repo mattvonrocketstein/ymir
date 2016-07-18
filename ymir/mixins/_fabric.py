@@ -89,8 +89,16 @@ class FabricMixin(object):
         self.report('showing webpages')
         health_checks = self.template_data()['health_checks']
         for check_name in health_checks:
-            check, url = health_checks[check_name]
-            _show_url(yapi.str_reflect(url, self.template_data()))
+            # check, url = health_checks[check_name]
+            check_instruction = health_checks[check_name]
+            protocol, check = util.split_check(check_instruction)
+            if protocol in ['http_200']:
+                _show_url(yapi.str_reflect(
+                    check, self.template_data()))
+            else:
+                self.report(
+                    "skipping '{0}' because protocol is unshowable".format(
+                        check))
 
     @util.declare_operation
     @util.require_running_instance
@@ -107,7 +115,9 @@ class FabricMixin(object):
             len(service_health_checks)))
         names = [name] if name is not None else service_health_checks.keys()
         success = True
-        for check_name, (_type, url_t) in service_health_checks.items():
+        # for check_name, (_type, url_t) in service_health_checks.items():
+        for check_name, check_instruction in service_health_checks.items():
+            _type, url_t = util.split_check(check_instruction)
             if check_name in names:
                 check_obj = ychecks.Check(
                     url_t=url_t, check_type=_type, name=check_name)
