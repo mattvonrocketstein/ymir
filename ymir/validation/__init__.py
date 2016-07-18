@@ -174,7 +174,8 @@ def validate_health_checks(service):
     service_json.update(service.facts)
     errors, warnings, messages = [], [], []
     for check_name in service_json['health_checks']:
-        check_type, url = service_json['health_checks'][check_name]
+        check_instruction = service_json['health_checks'][check_name]
+        check_type, url = util.split_check(check_instruction)
         try:
             checker = getattr(checks, check_type.replace('-', '_'))
         except AttributeError:
