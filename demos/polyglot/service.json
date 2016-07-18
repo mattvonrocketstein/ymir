@@ -2,13 +2,19 @@
 // service.json for the `polyglot` demo service
 //
 //  Complete documentation for the file schema is here:
-//   http://mattvonrocketstein.github.io/ymir/pages/service-description.html
+//    http://tinyurl.com/ymir-service-description
 //
 {
-
     // Whether ymir should display extra debugging information.
     // NB: This parameter also controls puppet and ansible debug levels
     "ymir_debug": true,
+
+    // Whether ymir should build puppet on the remote side.
+    // Puppet-builds only occur during the `setup` operation, and
+    // are skipped if a good version of puppet is found to already exist
+    // on the remote side.  When this key is not found in this configuration,
+    // it defaults to true.
+    "ymir_build_puppet": true,
 
     // Sets namespace for this service.
     // This is used in tagging for AWS-based services,
@@ -20,7 +26,6 @@
 
     "name" : "ymir-polyglot-aws-demo",
     "service_description": "Service description goes here",
-
 
     // Sets the AMI for this service.  The default is ubuntu 14.04,
     // amd64 ebs us-east-1.  Other potentially useful hints follow:
@@ -43,13 +48,6 @@
     // This will be used for ssh connections with the service,
     // and if it is not correct then no remote commands can be executed.
     "pem" : "~/.ssh/your_key_file.pem",
-
-    // Whether ymir should build puppet on the remote side.
-    // Puppet-builds only occur during the `setup` operation, and
-    // are skipped if a good version of puppet is found to already exist
-    // on the remote side.  When this key is not found in this configuration,
-    // it defaults to true.
-    "ymir_build_puppet": true,
 
     // Set the puppet parser that will be used.  Currently the only
     // valid value here is `future`, which allows for sane iteration
