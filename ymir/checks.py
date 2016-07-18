@@ -1,28 +1,16 @@
 # -*- coding: utf-8 -*-
 """ ymir.checks
 
-    This file describes 'check_types' which are available for
-    use with integration tests or health checks.
+    This file describes 'check_types' which are available for use with
+    integration tests or health checks.  Documentation is available here:
+    http://tinyurl.com/ymir-health-checks
 
-      | Check type    | Description
-      |---------------|---------------------------------------------------------
-      | http          | check a http, yield status code
-      | http_200      | check for http 200. yield bool
-      | http_301      | check for http 301. yield bool
-      | json          | check that response is json.  yield bool
-      | json_200      | check response is json, code is 200. yield bool
-      | port_open     | check that port is open.  yield bool
-      | file-exists   | check that file exists.  yield bool
-      | file-contains | check that file exists.  yield bool
-      | testinfra     | testinfra assertions.  yield exceptions
-      |---------------|---------------------------------------------------------
-
-   Every checker can optionally include it's own validation, which will be invoked
-   during calls to `ymir validate`.  This validation is NOT run during `fab check`
-   invocations.  Validators should simply return None if everything is fine or a string
-   if there is an error.  Find the ".validate" assignments below for further example.
+   Every checker can optionally include it's own validation, which will be
+   invoked during calls to `ymir validate`.  This validation is NOT run during
+   `fab check` invocations.  Validators should simply return None if everything
+   is fine or a string if there is an error.  Find the ".validate" assignments
+   below for further example.
 """
-
 import requests
 from tempfile import NamedTemporaryFile
 

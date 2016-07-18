@@ -65,14 +65,11 @@ def split_instruction(instruction):
     # protocol is used to determine instance-method for
     # dispatch, so there are no dashes allowed
     protocol = protocol.replace('-', '_')
-    if protocol == '':
-        # for backwards compatability, puppet is the default
-        protocol = 'puppet'
-        raw_instruction = instruction
-    else:
-        raw_instruction = instruction[
-            len(protocol) + len('://'):]
+    assert protocol, "protocol is missing: " + str(instruction)
+    raw_instruction = instruction[
+        len(protocol) + len('://'):]
     return protocol, raw_instruction
+split_check = split_instruction
 
 
 def report(label, msg, *args, **kargs):
