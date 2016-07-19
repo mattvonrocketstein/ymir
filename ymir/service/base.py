@@ -329,9 +329,9 @@ class AbstractService(Reporter,
             src, dest = args
         assert os.path.exists(src)
         if os.path.isdir(src):
-            src = os.path.join(src, '*')
             tmp = [x for x in os.path.split(src) if x]
             tmp = tmp[-1]
+            src = os.path.join(src, '*')
             if not dest.endswith(tmp):
                 dest = os.path.join(dest, tmp)
         return self._rsync(src=src, dest=dest)
