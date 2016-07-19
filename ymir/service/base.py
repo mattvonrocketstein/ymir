@@ -33,7 +33,68 @@ logging.captureWarnings(True)
 api.env.disable_known_hosts = True
 
 
+class RsyncMixin(object):
+
+    def _provision_rsync(self, instruction):
+        """ """
+        args = instruction.split(',')
+        if len(args) > 2:
+            raise BadProvisionInstruction(
+                ("'{0}' should be formatted as "
+                 "'local_path,remote_path' or 'local_path'").format(
+                    instruction))
+        elif len(args) == 1:
+            src, dest = args[0], "~"
+        else:
+            src, dest = args
+        # TODO: move this to _rsync.
+        assert os.path.exists(src)
+        if os.path.isdir(src):
+            tmp = [x for x in os.path.split(src) if x]
+            tmp = tmp[-1]
+            src = os.path.join(src, '*')
+            if not dest.endswith(tmp):
+                dest = os.path.join(dest, tmp)
+        return self._rsync(src=src, dest=dest)
+
+    def _rsync(self, src=None, dest=None, delete=True, **kargs):
+        """ """
+        assert src and dest
+        self._require_rsync()
+        self.report("rsync {0} -> {1}".format(
+            src, dest))
+        with self.ssh_ctx():
+            result = rsync_project(
+                dest,
+                local_dir=src,
+                delete=True,
+                ssh_opts=ydata.RSYNC_SSH_OPTS,
+                exclude=ydata.RSYNC_EXCLUDES,)
+        self.report(ydata.SUCCESS + "sync finished")
+        return result
+
+    def _has_rsync(self):
+        """ answers whether the remote side has rsync """
+        with api.quiet():
+            return api.run('rsync --version').succeeded
+
+    def _require_rsync(self):
+        """ """
+        has_rsync = self._has_rsync()
+        if not has_rsync:
+            self.report(
+                ydata.FAIL + "remote side is missing rsync.  installing it")
+            self._update_system_packages()
+            with api.settings(warn_only=True):
+                success = self._provision_apt("rsync")
+                if not success:
+                    self._provision_yum("rsync")
+        else:
+            self.report(ydata.SUCCESS + "remote side already has rsync")
+
+
 class AbstractService(Reporter,
+                      mixins.RsyncMixin,
                       mixins.PuppetMixin,
                       mixins.AnsibleMixin,
                       mixins.PackageMixin,
@@ -168,7 +229,9 @@ class AbstractService(Reporter,
 
     @util.declare_operation
     def top(self):
-        """ display cpu/memory usage information from `top` (noninteractive) """
+        """ display cpu/memory usage information
+            from `top` (noninteractive)
+        """
         with api.quiet():
             result = self.run("top -b -n 10|head -15")
         print result
@@ -268,7 +331,8 @@ class AbstractService(Reporter,
 
     def _provision_helper(self, instruction=None, force=False, **kargs):
         """ `force` must be True to provision with arguments not
-            mentioned in service's provision_list """
+            mentioned in service's provision_list
+        """
         provision_list = self.template_data()['provision_list']
         if instruction is not None:
             if not force and instruction not in provision_list:
@@ -298,6 +362,7 @@ class AbstractService(Reporter,
                     "using `fab service` or `fab supervisor`")
 
     def _run_provisioner(self, provisioner_name, provision_instruction, **kargs):
+        """ """
         self.report(' {0}'.format(
             blue(provisioner_name + "://") + provision_instruction))
         try:
@@ -305,7 +370,8 @@ class AbstractService(Reporter,
                 self, '_provision_{0}'.format(provisioner_name))
         except AttributeError:
             self.report(
-                "Fatal: no sucher provisioner `{0}`".format(provisioner_name))
+                "Fatal: no sucher provisioner `{0}`".format(
+                    provisioner_name))
             raise BadProvisionInstruction(provision_instruction)
         else:
             cmd = yapi.str_reflect(
@@ -314,43 +380,6 @@ class AbstractService(Reporter,
             if cmd != provision_instruction:
                 self.report(yellow("≈") + "translated to: {0}".format(cmd))
             return provision_fxn(cmd, **kargs)
-
-    def _provision_rsync(self, instruction):
-        """ """
-        args = instruction.split(',')
-        if len(args) > 2:
-            raise BadProvisionInstruction(
-                ("'{0}' should be formatted as "
-                 "'local_path,remote_path' or 'local_path'").format(
-                    instruction))
-        elif len(args) == 1:
-            src, dest = args[0], "~"
-        else:
-            src, dest = args
-        assert os.path.exists(src)
-        if os.path.isdir(src):
-            tmp = [x for x in os.path.split(src) if x]
-            tmp = tmp[-1]
-            src = os.path.join(src, '*')
-            if not dest.endswith(tmp):
-                dest = os.path.join(dest, tmp)
-        return self._rsync(src=src, dest=dest)
-
-    def _rsync(self, src=None, dest=None, delete=True, **kargs):
-        """ """
-        assert src and dest
-        self._require_rsync()
-        self.report("rsync {0} -> {1}".format(
-            src, dest))
-        with self.ssh_ctx():
-            result = rsync_project(
-                dest,
-                local_dir=src,
-                delete=True,
-                ssh_opts=ydata.RSYNC_SSH_OPTS,
-                exclude=ydata.RSYNC_EXCLUDES,)
-        self.report(ydata.SUCCESS + "sync finished")
-        return result
 
     def _provision_remote(self, cmd):
         """ handler for provision-list entries prefixed with `remote://` """

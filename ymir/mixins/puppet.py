@@ -72,25 +72,6 @@ class PuppetMixin(object):
                 out[f] = [x for x in re.findall('<%= @(.*?) %>', content)]
         return out
 
-    def _has_rsync(self):
-        """ answers whether the remote side has rsync """
-        with api.quiet():
-            return api.run('rsync --version').succeeded
-
-    def _require_rsync(self):
-        """ """
-        has_rsync = self._has_rsync()
-        if not has_rsync:
-            self.report(
-                ydata.FAIL + "remote side is missing rsync.  installing it")
-            self._update_system_packages()
-            with api.settings(warn_only=True):
-                success = self._provision_apt("rsync")
-                if not success:
-                    self._provision_yum("rsync")
-        else:
-            self.report(ydata.SUCCESS + "remote side already has rsync")
-
     @noop_if_no_puppet_support
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
