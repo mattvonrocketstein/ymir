@@ -14,6 +14,12 @@ YMIR_SRC = os.path.dirname(os.path.dirname(__file__))
 YMIR_SKELETON = SKELETON_DIR = os.path.join(YMIR_SRC, 'skeleton')
 assert os.path.exists(YMIR_SKELETON)
 
+RSYNC_SSH_OPTS = "-o StrictHostKeyChecking=no"
+
+RSYNC_EXCLUDES = [
+    '.git', 'backups', 'venv',
+    '.vagrant', '*.pyc', ]
+
 
 class BadProvisionInstruction(Exception):
     pass
