@@ -17,7 +17,6 @@ from ymir import util
 from ymir import mixins
 from ymir import data as ydata
 from ymir.base import Reporter
-from ymir.util import puppet
 from ymir.caching import cached
 from ymir.data import BadProvisionInstruction
 
@@ -176,16 +175,16 @@ class AbstractService(Reporter,
         print result
 
     @util.declare_operation
-    def setup(self):
+    def setup(self, instruction=None):
         """ setup service (invoke after 'create', before 'provision')
         """
         self.report('setting up')
         # setup ansible first, because it updates local files and is
         # unusual in that it doesn't require a working  remote service
         self.setup_ansible()
-        return self._setup(failures=0)
+        return self._setup(instruction, failures=0)
 
-    def _setup(self, failures=0):
+    def _setup(self, instruction, failures=0):
         """ """
         def retry(exc=None):
             """ """
@@ -200,11 +199,14 @@ class AbstractService(Reporter,
                 self.report(str(exc))
                 self.report("network error? sleeping and retrying")
                 time.sleep(wait_period)
-            return self._setup(failures=failures + 1)
+            return self._setup(instruction, failures=failures + 1)
         cm_data = self._status()
         if cm_data['status'] == 'running':
             try:
-                self.setup_ip()
+                use_list = self.template_data()['setup_list']
+                return self.setup_ip(
+                    instruction,
+                    use_list=use_list)
             except fabric.exceptions.NetworkError:
                 return retry()
         else:
@@ -242,7 +244,7 @@ class AbstractService(Reporter,
 
     @util.declare_operation
     @util.require_running_instance
-    def provision(self, instruction=None, **kargs):
+    def provision(self, instruction=None, use_list=None, **kargs):
         """ provision this service """
         self.report('preparing to provision: {0}'.format(
             yellow(instruction or '(everything)')))
@@ -251,16 +253,20 @@ class AbstractService(Reporter,
         try:
             instruction_index = int(instruction)
         except:
-            return self._provision_helper(instruction=instruction, **kargs)
+            return self._provision_helper(
+                instruction=instruction, use_list=use_list, **kargs)
         else:
-            return self._provision_from_index(instruction_index, **kargs)
+            return self._provision_from_index(
+                instruction_index, use_list=use_list, **kargs)
 
-    def _provision_from_index(self, instruction_index, **kargs):
+    def _provision_from_index(self, instruction_index, use_list=None, **kargs):
         """ given an integer, run the instruction at
             that index in the provision list
         """
+        use_list = self.template_data()['provision_list'] \
+            if use_list is None else use_list
         try:
-            instruction = self.template_data()['provision_list'][
+            instruction = use_list[
                 instruction_index]
         except IndexError:
             msg = "bad instruction_index passed, not found in provision_list"
@@ -268,11 +274,12 @@ class AbstractService(Reporter,
         else:
             return self._provision_helper(instruction=instruction, **kargs)
 
-    def _provision_helper(self, instruction=None, force=False, **kargs):
+    def _provision_helper(self, instruction=None, use_list=None, force=False, **kargs):
         """ `force` must be True to provision with arguments not
             mentioned in service's provision_list
         """
-        provision_list = self.template_data()['provision_list']
+        provision_list = self.template_data()['provision_list'] \
+            if use_list is None else use_list
         if instruction is not None:
             if not force and instruction not in provision_list:
                 err = ('ERROR: Provisioning a single file requires that '
@@ -345,24 +352,6 @@ class AbstractService(Reporter,
         self._clean_puppet_tmp_dir()
         self.copy_puppet(clean=True)
         self._setup_puppet_deps(force=True)
-
-    def setup_ip(self):
-        """ """
-        with self.ssh_ctx():
-            with api.lcd(self._ymir_service_root):
-                self.setup_puppet()
-                setup_list = self.template_data()['setup_list']
-                for setup_item in setup_list:
-                    self.report(' .. setup_list[{0}]: "{1}"'.format(
-                        setup_list.index(setup_item),
-                        setup_item
-                    ))
-                    puppet.run_puppet(
-                        setup_item,
-                        puppet_dir='puppet',
-                        facts=self.facts,
-                        debug=self._debug_mode,)
-        self.report(ydata.SUCCESS + "Setup complete.  Now run `fab provision`")
 
     @property
     def facts(self):
