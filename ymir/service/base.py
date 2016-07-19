@@ -214,6 +214,17 @@ class AbstractService(Reporter,
             self.report(ydata.FAIL + msg)
             return retry()
 
+    def setup_ip(self, instruction):
+        """ """
+        with self.ssh_ctx():
+            with api.lcd(self._ymir_service_root):
+                self.setup_puppet()
+                setup_list = self.template_data()['setup_list']
+                self.provision(
+                    instruction,
+                    use_list=setup_list)
+        self.report(ydata.SUCCESS + "Setup complete.  Now run `fab provision`")
+
     @property
     @cached('service._instance', 60 * 20)
     def _instance(self):
