@@ -11,7 +11,6 @@ import functools
 
 from fabric import api
 from fabric.contrib.files import exists
-from fabric.contrib.project import rsync_project
 from ymir.util import puppet as util_puppet
 from ymir import data as ydata
 
@@ -96,19 +95,13 @@ class PuppetMixin(object):
     def copy_puppet(self, clean=True, puppet_dir='puppet', lcd=None):
         """ copy puppet code to remote host (refreshes any dependencies) """
         lcd = lcd or self._ymir_service_root
-        remote_user_home = '/home/' + self._username
-        with self.ssh_ctx():
-            self.report('  flushing remote puppet code and refreshing')
-            self._require_rsync()
-            rsync_project(
-                os.path.join(remote_user_home, puppet_dir),
-                local_dir=os.path.join(lcd, puppet_dir, '*'),
-                ssh_opts="-o StrictHostKeyChecking=no",
-                delete=clean,
-                exclude=[
-                    '.git', 'backups', 'venv',
-                    '.vagrant', '*.pyc', ],)
-            self.report(ydata.SUCCESS + "sync finished")
+        # remote_user_home = '/home/' + self._username
+        self.report('  flushing remote puppet code and refreshing')
+        return self._rsync(
+            src=os.path.join(lcd, puppet_dir, '*'),
+            dest=os.path.join('~', puppet_dir),
+            delete=clean,
+        )
 
     @noop_if_no_puppet_support
     def _clean_puppet_tmp_dir(self):

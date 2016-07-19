@@ -10,6 +10,8 @@ import demjson
 import fabric
 from fabric import api
 from fabric.colors import blue, yellow
+from fabric.contrib.project import rsync_project
+
 from peak.util.imports import lazyModule
 
 from ymir import util
@@ -312,6 +314,43 @@ class AbstractService(Reporter,
             if cmd != provision_instruction:
                 self.report(yellow("≈") + "translated to: {0}".format(cmd))
             return provision_fxn(cmd, **kargs)
+
+    def _provision_rsync(self, instruction):
+        """ """
+        args = instruction.split(',')
+        if len(args) > 2:
+            raise BadProvisionInstruction(
+                ("'{0}' should be formatted as "
+                 "'local_path,remote_path' or 'local_path'").format(
+                    instruction))
+        elif len(args) == 1:
+            src, dest = args[0], "~"
+        else:
+            src, dest = args
+        assert os.path.exists(src)
+        if os.path.isdir(src):
+            tmp = [x for x in os.path.split(src) if x]
+            tmp = tmp[-1]
+            src = os.path.join(src, '*')
+            if not dest.endswith(tmp):
+                dest = os.path.join(dest, tmp)
+        return self._rsync(src=src, dest=dest)
+
+    def _rsync(self, src=None, dest=None, delete=True, **kargs):
+        """ """
+        assert src and dest
+        self._require_rsync()
+        self.report("rsync {0} -> {1}".format(
+            src, dest))
+        with self.ssh_ctx():
+            result = rsync_project(
+                dest,
+                local_dir=src,
+                delete=True,
+                ssh_opts=ydata.RSYNC_SSH_OPTS,
+                exclude=ydata.RSYNC_EXCLUDES,)
+        self.report(ydata.SUCCESS + "sync finished")
+        return result
 
     def _provision_remote(self, cmd):
         """ handler for provision-list entries prefixed with `remote://` """
