@@ -290,11 +290,11 @@ class AbstractService(Reporter,
         provision_list = self.template_data()['provision_list'] \
             if use_list is None else use_list
         if instruction is not None:
-            if not force and instruction not in provision_list:
-                err = ('ERROR: Provisioning a single file requires that '
-                       'the file should be mentioned in service.json, '
-                       'but "{0}" was not found.').format(util.unexpand(instruction))
-                raise SystemExit(err)
+            #    if not force and instruction not in provision_list:
+            #        err = ('ERROR: Provisioning a single file requires that '
+            #               'the file should be mentioned in service.json, '
+            #               'but "{0}" was not found.').format(util.unexpand(instruction))
+            #        raise SystemExit(err)
             provision_list = [instruction]
         with self.ssh_ctx():
             with api.lcd(self._ymir_service_root):
