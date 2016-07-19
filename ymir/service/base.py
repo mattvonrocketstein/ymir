@@ -347,7 +347,7 @@ class AbstractService(Reporter,
                 dest,
                 local_dir=src,
                 delete=True,
-                ssh_opts=ydata.RSYNC_EXCLUDES,
+                ssh_opts=ydata.RSYNC_SSH_OPTS,
                 exclude=ydata.RSYNC_EXCLUDES,)
         self.report(ydata.SUCCESS + "sync finished")
         return result
