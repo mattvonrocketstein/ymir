@@ -203,10 +203,8 @@ class AbstractService(Reporter,
         cm_data = self._status()
         if cm_data['status'] == 'running':
             try:
-                use_list = self.template_data()['setup_list']
                 return self.setup_ip(
-                    instruction,
-                    use_list=use_list)
+                    instruction,)
             except fabric.exceptions.NetworkError:
                 return retry()
         else:
