@@ -94,11 +94,12 @@ class AnsibleMixin(object):
                         '--inventory-file {inventory} '
                         '--module-path "{module_path}" ')
         ansible_args = ansible_args.format(**self._ansible_env)
-        return util._ansible.apply_ansible_role(
-            role_name, self._ansible_roles_dir,
-            ansible_args=ansible_args,
-            report=self.report,
-            **env)
+        with self._ansible_ctx():
+            return util._ansible.apply_ansible_role(
+                role_name, self._ansible_roles_dir,
+                ansible_args=ansible_args,
+                report=self.report,
+                **env)
     _apply_ansible_role = _provision_ansible_role
 
     @util.declare_operation
