@@ -32,7 +32,10 @@ setup(
     keywords=['ymir'],
     entry_points={
         'console_scripts':
-        ['ymir = ymir.bin._ymir:entry', ]},
+        [
+            'ymir = ymir.bin._ymir:entry',
+            'ansible-role-apply = ymir.bin.ansible_role:entry',
+        ]},
     # install_requires=reqs,
     install_requires=[
         "ansible==2.1.0.0",

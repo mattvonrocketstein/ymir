@@ -5,14 +5,13 @@
 """
 import os
 import json
-from tempfile import NamedTemporaryFile
 
 from fabric import api
 from fabric.colors import yellow
 from peak.util.imports import lazyModule
 from ymir import util
 from ymir import data as ydata
-from ymir.base import eprint
+
 yapi = lazyModule('ymir.api')
 
 ANSIBLE_CMD = (
@@ -71,16 +70,10 @@ class AnsibleMixin(object):
 
     def _require_role(self, role_name):
         """ """
-        if role_name not in os.listdir(self._ansible_roles_dir):
-            self.report(ydata.FAIL + "role '{0}' not found".format(role_name))
-            result = api.local('ansible-galaxy install -p {role_dir} {role_name}'.format(
-                role_dir=self._ansible_roles_dir, role_name=role_name))
-            if not result.succeeded:
-                err = "missing role {0} could not be installed".format(
-                    role_name)
-                raise RuntimeError(err)
-        self.report(ydata.SUCCESS +
-                    "ansible role '{0}' installed".format(role_name))
+        return util._ansible.require_ansible_role(
+            role_name,
+            self._ansible_roles_dir, report=self.report
+        )
 
     def _provision_ansible_role(self, role_name, **env):
         """ this provisioner applies a single ansible role.  this is more
@@ -94,48 +87,18 @@ class AnsibleMixin(object):
             see also:
               https://groups.google.com/forum/#!topic/ansible-project/h-SGLuPDRrs
         """
-        self._require_role(role_name)
-        playbook_content = '\n'.join([
-            "- hosts: all",
-            # "  user: {{user}}",
-            "  become: yes",
-            "  become_method: sudo",
-            "  roles:",
-            "  - {role: {{role_path}}{{env}}}",
-        ])
-        env = env.copy()
-        env_string = ''
-        import json
-        for k, v in env.items():
-            if isinstance(v, (bool, basestring, list)):
-                v = json.dumps(v)
-            else:
-                err = ("Ansible-role apply only supports passing "
-                       "simple environment variables (strings or bools). "
-                       "Found type '{0}' at name '{1}'")
-                raise SystemExit(err.format(type(v), k))
-            env_string += ', ' + ': '.join([k, v])
-        ctx = dict(
-            env=env_string,
-            role_path=os.path.join(self._ansible_roles_dir, role_name),
-            user=self._username)
-        playbook_content = yapi.jinja_env.from_string(
-            playbook_content).render(**ctx)
-        with NamedTemporaryFile() as tmpf:
-            tmpf.write(playbook_content)
-            tmpf.seek(0)
-            msg = "created playbook {0} for applying role: {1}"
-            self.report(ydata.SUCCESS + msg.format(tmpf.name, role_name))
-            if env_string:
-                self.report("dynamic playbook content:")
-                eprint(playbook_content)
-                eprint("\n")
-            self.report("applying ansible role: {0}".format(role_name))
-            result = self._provision_ansible_playbook(tmpf.name)
-            self.report(ydata.SUCCESS +
-                        "applied ansible role: {0}".format(role_name))
-            return result
-
+        ansible_args = (' {debug} -u {user} '
+                        '--private-key "{pem}" '
+                        '--ssh-extra-args "-p {port}" '
+                        '--sftp-extra-args "-P {port}" '
+                        '--inventory-file {inventory} '
+                        '--module-path "{module_path}" ')
+        ansible_args = ansible_args.format(**self._ansible_env)
+        return util._ansible.apply_ansible_role(
+            role_name, self._ansible_roles_dir,
+            ansible_args=ansible_args,
+            report=self.report,
+            **env)
     _apply_ansible_role = _provision_ansible_role
 
     @util.declare_operation

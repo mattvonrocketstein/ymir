@@ -78,11 +78,14 @@
     // vagrant variables are included here.. for other kinds of virtualmachine hackery
     // you'll need to modify the Vagrantfile directly.
     //
-    // Hints:
-    //    ubuntu/trusty32
-    //    centos/7  (NB: i can't ssh into this box, maybe only 64bit?)
-    //    boxcutter/debian82-i386
-    //    puppetlabs/centos-6.6-32-puppet
+    // Typical values for "box" are mentioned below.  Make sure that if you
+    // use a 64 bit box then your host supports it, otherwise vagrant is likely
+    // to have strange problems and silent errors
+    //
+    //    - ubuntu/trusty32
+    //    - debbian/jessie64
+    //    - centos/7
+
     'vagrant': {
         'boot_timeout': 400,
         'box': 'ubuntu/trusty32',

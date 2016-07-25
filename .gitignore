@@ -59,3 +59,4 @@ target/
 .coverage*
 .vagrant
 .DS_Store
+.vagrant.d
