@@ -6,28 +6,32 @@
 from __future__ import print_function
 
 import os
-import sys
-import time
+import inspect
 import shutil
 import socket
-import inspect
 from functools import wraps
 
 import yurl
-import boto.ec2
 from fabric import api
-from fabric import colors
-from boto.exception import EC2ResponseError
-from boto.provider import ProfileNotFoundError
 from fabric.contrib.files import exists as remote_exists
 
-from ymir import data as ydata
+from ._report import eprint
+from ._fabric import has_gem, list_dir
+from .aws import get_conn
+from .shell import unexpand
 from .backports import TemporaryDirectory
-
+from ._ansible import apply_ansible_role
 NOOP = lambda *args, **kargs: None
 
 remote_path_exists = remote_exists
-__all__ = [x.__name__ for x in [TemporaryDirectory, NOOP]]
+
+__all__ = [x.__name__ for x in [
+    TemporaryDirectory, NOOP,
+    apply_ansible_role,
+    get_conn,
+    unexpand, list_dir,
+    has_gem,
+]]
 
 OPERATION_MAGIC = '_declared_ymir_operation'
 
@@ -51,10 +55,6 @@ def is_operation(obj, name):
         # on the parent class
         return False
     return callable(obj) and hasattr(obj, OPERATION_MAGIC)
-
-
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
 
 
 def split_instruction(instruction):
@@ -104,16 +104,6 @@ def require_running_instance(fxn):
     return newf
 
 
-def list_dir(dir_=None):
-    """ returns a list of files in a directory (dir_) as absolute paths """
-    dir_ = dir_ or api.env.cwd
-    if not dir_.endswith('/'):
-        dir_ += '/'
-    string_ = api.run("for i in %s*; do echo $i; done" % dir_)
-    files = string_.replace("\r", "").split("\n")
-    return files
-
-
 def shell(**namespace):
     """ """
     try:
@@ -157,152 +147,6 @@ def ssh_ctx(ip, user='ubuntu', pem=None):
     return api.settings(**ctx)
 
 
-def get_instance_by_id(id, conn):
-    """ returns the id for the instance """
-    tmp = conn.get_only_instances([id])
-    if not tmp:
-        return
-    else:
-        # WARNING: do NOT use STATUS_DEAD here,
-        #          block_while_terminating depends
-        #          on this working as written
-        if tmp[0].update() not in ['terminated']:
-            return tmp
-
-
-def has_gem(name):
-    """ tests whether localhost has a gem by the given name """
-    with api.quiet():
-        x = api.local('gem list|grep {0}'.format(name), capture=True)
-    error = x.return_code != 0
-    return not error
-
-
-def get_conn(key_name=None, region='us-east-1'):
-    """ get ec2 connection for aws API """
-    region = os.environ.get('AWS_REGION', region)
-    try:
-        conn = boto.ec2.connect_to_region(
-            region,
-            profile_name=os.environ['AWS_PROFILE'])
-    except (KeyError, boto.exception.NoAuthHandlerFound):
-        err = ("ERROR: no AWS credentials could be found.\n  "
-               "Set AWS_PROFILE environment variable, or "
-               "use ~/.boto, then try again")
-        raise SystemExit(err)
-    except (ProfileNotFoundError,) as exc:
-        err = ("ERROR: found AWS_PROFILE {0}, but boto raises "
-               "ProfileNotFound.  Set AWS_PROFILE environment "
-               "variable, or use ~/.boto, then try again.  Original"
-               " Exception follows: {0}").format(exc)
-        raise SystemExit(err)
-    if key_name is not None:
-        keypair = conn.get_key_pair(key_name)
-        if keypair is None:
-            msg = "WARNING: could not retrieve default keypair '{0}'!!"
-            msg = msg.format(key_name)
-            eprint(msg)
-    return conn
-
-
-def show_instances(conn=None):
-    """ """
-    conn = conn or get_conn()
-    results = get_tags(None, conn).items()
-    for i, tags in results:
-        if i:
-            eprint(i)
-        for k in tags:
-            eprint('  ', k, tags[k])
-    if not results:
-        eprint("nothing to show")
-
-
-def get_instance_by_name(name, conn):
-    """ returns the id for the instance """
-    for i, tags in get_tags(None, conn).items():
-        if tags.get('Name') == name and tags['status'] not in ydata.STATUS_DEAD:
-            return conn.get_only_instances([i.id])[0]
-
-
-def get_tags(instance, conn):
-    """ returns { instance_id: instance_tags } """
-    assert conn is not None
-    if instance is None:
-        reservations = conn.get_only_instances()
-    else:
-        reservations = conn.get_only_instances([instance.id])
-    out = {}
-    for inst in reservations:
-        tags = inst.tags.copy()
-        tags.update(status=inst.update())
-        out[inst] = tags
-    return out
-
-
-def _block_while_pending(instance):
-    """ """
-    # Check up on its status every so often
-    status = instance.update()
-    while status == 'pending':
-        eprint('  polling reservation [status is "pending"]')
-        time.sleep(4)
-        status = instance.update()
-
-
-def _block_while_terminating(instance, conn):
-    """ """
-    eprint('  terminating instance:', instance)
-    assert get_instance_by_id(instance.id, conn) is not None
-    conn.terminate_instances([instance.id])
-    time.sleep(2)
-    while get_instance_by_id(instance.id, conn):
-        eprint('  polling for terminate completion')
-        time.sleep(3)
-    eprint('  terminated successfully')
-
-
-def catch_ec2_error(fxn):
-    """ """
-    try:
-        fxn()
-    except EC2ResponseError as e:
-        eprint(colors.red('failed:') + str([e, fxn]))
-    else:
-        eprint(ydata.OK)
-
-
-def get_keypair_names(conn=None):
-    """ return all keypair names associated with current $AWS_PROFILE """
-    conn = conn or get_conn()
-    return [k.name for k in conn.get_all_key_pairs()]
-
-
-def get_or_guess_service_json_file(base_dir=None, default='service.json', insist=True):
-    """ NB: only to be used from fabfiles! """
-    if base_dir is None:
-        frame = inspect.stack()[1]
-        module = inspect.getmodule(frame[0])
-        base_dir = os.path.dirname(module.__file__)
-    service_json_file = os.environ.get(
-        'YMIR_SERVICE_JSON',
-        os.path.join(base_dir, default))
-    if insist and not os.path.exists(service_json_file):
-        raise SystemExit("service JSON does not exist: {0}".format(
-            service_json_file))
-    return service_json_file
-
-guess_service_json = get_or_guess_service_json_file
-
-
-def unexpand(path):
-    """ the opposite of os.path.expanduser """
-    home = os.environ.get('HOME')
-    if home:
-        path = path.replace(home, '~')
-    return path
-
-
 def is_port_open(host, port):
     """ used by ymir.checks """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -329,6 +173,23 @@ def copytree(src, dst, symlinks=False, ignore=None):
 
 class InvalidValidator(Exception):
     pass
+
+
+def get_or_guess_service_json_file(base_dir=None, default='service.json', insist=True):
+    """ NB: only to be used from fabfiles! """
+    if base_dir is None:
+        frame = inspect.stack()[1]
+        module = inspect.getmodule(frame[0])
+        base_dir = os.path.dirname(module.__file__)
+    service_json_file = os.environ.get(
+        'YMIR_SERVICE_JSON',
+        os.path.join(base_dir, default))
+    if insist and not os.path.exists(service_json_file):
+        raise SystemExit("service JSON does not exist: {0}".format(
+            service_json_file))
+    return service_json_file
+
+guess_service_json = get_or_guess_service_json_file
 
 
 def declare_validator(fxn):
