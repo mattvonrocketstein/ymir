@@ -46,7 +46,12 @@ def entry(settings=None):
         temporary = True
         report("ansible module-path not given, using {0}".format(module_path))
     else:
-        extra_ansible_args = ['--module-path', module_path]
+        extra_ansible_args += ['--module-path', module_path]
+    import shellescape
+    extra_ansible_args = [
+        shellescape.quote(x) if ' ' in x else x
+        for x in extra_ansible_args]
+    # raise Exception, extra_ansible_args
     role_dir = os.path.join(module_path, 'roles')
     if not os.path.exists(role_dir):
         msg = "ansible role-dir does not exist at '{0}', creating it"
