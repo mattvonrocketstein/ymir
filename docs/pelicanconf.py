@@ -34,10 +34,15 @@ DISPLAY_PAGES_ON_MENU = True
 MD_EXTENSIONS = [
     'codehilite(css_class=highlight)',
     'admonition',
-    'tables', 'toc', 'wikilinks'
+    'tables',
+    'wikilinks',
 ]
 PLUGIN_PATHS = ["."]
-PLUGINS = ['extract_toc', 'simple_footnotes']
+PLUGINS = [
+    # 'extract_toc',
+    'toc',
+    'simple_footnotes'
+]
 
 LINKS = (
     ('Source code', 'https://github.com/mattvonrocketstein/ymir/'),

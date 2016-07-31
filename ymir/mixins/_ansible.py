@@ -14,23 +14,22 @@ from ymir import data as ydata
 
 yapi = lazyModule('ymir.api')
 
-ANSIBLE_CMD = (
-    'ansible all {debug} -u {user} '
+ANSIBLE_BASE_ARGS = (
+    '{debug} -u {user} '
     '--private-key "{pem}" '
     # '--extra-vars "host_key_checking=False," '
     '--ssh-extra-args "-p {port}" '
     '--sftp-extra-args "-P {port}" '
     '--inventory-file {inventory} '
-    '--module-path "{module_path}" {command}')
+    '--module-path "{module_path}" '
+)
+ANSIBLE_CMD = ('ansible all ' + ANSIBLE_BASE_ARGS + ' {command}')
 
-ANSIBLE_PLAYBOOK_CMD = (
-    'ansible-playbook {debug} -u {user} '
-    '--private-key "{pem}" '
-    # '-e "host_key_checking=False,deprecation_warnings=False" '
-    '--ssh-extra-args "-p {port}" '
-    '--sftp-extra-args "-P {port}" '
-    '--inventory-file {inventory} '
-    '--module-path "{module_path}" {command}')
+# requires ansible-role from pypi, but this is guaranteed
+# to be installed because it is listed in ymir's setup.py
+ANSIBLE_ROLE_CMD = ('ansible-role {role_name} all ' + ANSIBLE_BASE_ARGS)
+
+ANSIBLE_PLAYBOOK_CMD = ('ansible-playbook ' + ANSIBLE_BASE_ARGS + '{command}')
 
 ANSIBLE_GALAXY_CMD = (
     'ansible-galaxy install '
@@ -75,7 +74,7 @@ class AnsibleMixin(object):
             self._ansible_roles_dir, report=self.report
         )
 
-    def _provision_ansible_role(self, role_name, **env):
+    def _provision_ansible_role(self, role_name):
         """ this provisioner applies a single ansible role.  this is more
             complicated than it sounds because there's no way to do this
             without a playbook, and so a temporary playbook is created just
@@ -87,20 +86,17 @@ class AnsibleMixin(object):
             see also:
               https://groups.google.com/forum/#!topic/ansible-project/h-SGLuPDRrs
         """
-        ansible_args = (' {debug} -u {user} '
-                        '--private-key "{pem}" '
-                        '--ssh-extra-args "-p {port}" '
-                        '--sftp-extra-args "-P {port}" '
-                        '--inventory-file {inventory} '
-                        '--module-path "{module_path}" ')
-        ansible_args = ansible_args.format(**self._ansible_env)
+        return self._apply_ansible_role(role_name)
+
+    def _apply_ansible_role(self, role_name, **env):
+        """ """
         with self._ansible_ctx():
-            return util._ansible.apply_ansible_role(
-                role_name, self._ansible_roles_dir,
-                ansible_args=ansible_args,
-                report=self.report,
-                **env)
-    _apply_ansible_role = _provision_ansible_role
+            result = api.local(
+                ANSIBLE_ROLE_CMD.format(
+                    role_name=role_name,
+                    role_env=json.dumps(env),
+                    **self._ansible_env))
+            return result.succeeded
 
     @util.declare_operation
     def setup_ansible(self):
