@@ -20,14 +20,12 @@ from ._fabric import has_gem, list_dir
 from .aws import get_conn
 from .shell import unexpand
 from .backports import TemporaryDirectory
-from ._ansible import apply_ansible_role
 NOOP = lambda *args, **kargs: None
 
 remote_path_exists = remote_exists
 
 __all__ = [x.__name__ for x in [
     TemporaryDirectory, NOOP,
-    apply_ansible_role,
     get_conn,
     unexpand, list_dir,
     has_gem,

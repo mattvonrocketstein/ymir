@@ -74,18 +74,15 @@
     // This section is parsed directly by vagrant (see the Vagrantfile).
     // Do NOT use {{templating}} inside here, it won't work.  Each variable
     // must be defined, and any changes will be picked up by vagrant immediately
-    // NOT during the next call to ymir's' `setup` operation.  Only the most common
-    // vagrant variables are included here.. for other kinds of virtualmachine hackery
-    // you'll need to modify the Vagrantfile directly.
+    // NOT during the next call to ymir's' `setup` operation.  Only the most
+    // common vagrant variables are included here.. for other kinds of
+    // virtualmachine hackery you'll want to modify the Vagrantfile directly.
     //
-    // Typical values for "box" are mentioned below.  Make sure that if you
-    // use a 64 bit box then your host supports it, otherwise vagrant is likely
-    // to have strange problems and silent errors
-    //
+    // Hints:
+    //  Typical values for "box":
     //    - ubuntu/trusty32
-    //    - debbian/jessie64
+    //    - debian/jessie64
     //    - centos/7
-
     'vagrant': {
         'boot_timeout': 400,
         'box': 'ubuntu/trusty32',

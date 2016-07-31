@@ -71,14 +71,24 @@ class VagrantService(AbstractService):
         else:
             self._vagrant = tmp
 
-    @util.declare_operation
-    def up(self):
-        """ shortcut for `vagrant up` """
-        self.report("invoking `vagrant up`")
+    def _run_vagrant_cmd(self, cmd):
+        """ """
+        self.report("invoking `vagrant {0}`".format(cmd))
         with api.lcd(self._ymir_service_root):
             with api.shell_env(YMIR_SERVICE_JSON=self._ymir_service_json_file):
-                api.local('vagrant up')
+                return api.local('vagrant {0}'.format(cmd))
+
+    @util.declare_operation
+    def halt(self):
+        """ same as `vagrant halt` """
+        return self._run_vagrant_cmd('halt')
+
+    @util.declare_operation
+    def up(self):
+        """ same as `vagrant up` """
+        result = self._run_vagrant_cmd('up')
         self._cache_vagrant_handle()
+        return result
 
     def _status(self):
         """ retrieves service status information.

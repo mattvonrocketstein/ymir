@@ -33,7 +33,7 @@ BASE_DATA = {
     Required("health_checks"): dict,
     Optional("logs", default=[]): validators.list_of_strings,
     Optional("ymir_debug", default=False): bool,
-    Optional("ymir_build_puppet", default=True): bool,
+    Optional("ymir_build_puppet", default=False): bool,
     Optional("volumes", default=[]): dict,
     Optional("org_name", default="org"): unicode,
     Optional("app_name", default="app"): unicode,
