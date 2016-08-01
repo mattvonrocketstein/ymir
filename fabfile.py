@@ -9,17 +9,15 @@
 #
 # summary of commands/arguments:
 #
-#   * fab pypi_repackage: update this package on pypi
+#   * fab release: update this package on pypi
 #   * fab version_bump: bump the package version
 
 #
 import os
 
-from fabric import api
+from fabric import api, colors
 from fabric.contrib.console import confirm
-from fabric.colors import red
 
-from ymir.loom import create_version_bump_cmd
 
 _ope = os.path.exists
 _mkdir = os.mkdir
@@ -27,29 +25,40 @@ _expanduser = os.path.expanduser
 _dirname = os.path.dirname
 
 ldir = _dirname(__file__)
-
+PKG_NAME = 'ymir'
 VERSION_DELTA = .01
-
-version_bump = create_version_bump_cmd(
-    pkg_name='ymir', version_delta=VERSION_DELTA)
-version_bump = api.task(version_bump)
 
 
 @api.task
-def pypi_repackage():
-    ldir = _dirname(__file__)
-    print red("warning:") + (" by now you should have commited local"
-                             " master and bumped version string")
-    ans = confirm('proceed with pypi update in "{0}"?'.format(ldir))
-    if not ans:
-        return
-    with api.lcd(ldir):
-        with api.settings(warn_only=True):
-            # in case this has never been done before
-            api.local("git checkout -b pypi")
-        api.local("git reset --hard master")
-        api.local("python setup.py register -r pypi")
-        api.local("python setup.py sdist upload -r pypi")
+def version_bump(force=False):
+    """ bump the version number for """ + PKG_NAME
+    sandbox = {}
+    version_file = os.path.join(PKG_NAME, 'version.py')
+    err = 'version file not found in expected location: ' + version_file
+    assert os.path.exists(version_file), err
+    # running "import pkg.version" should have no side-effects,
+    # so there's little point in ASTing the file.  just exec it
+    execfile(version_file, sandbox)
+    current_version = sandbox['__version__']
+    new_version = current_version + VERSION_DELTA
+    with open(version_file, 'r') as fhandle:
+        version_file_contents = [
+            x for x in fhandle.readlines() if x.strip()]
+    new_file = version_file_contents[:-1] + \
+        ["__version__={0}".format(new_version)]
+    new_file = '\n'.join(new_file)
+    if not force:
+        print colors.red("warning:"),
+        print " version will be changed to {0}\n".format(new_version)
+        print colors.red("new version file will look like this:\n")
+        print new_file
+        ans = confirm('proceed with version change?')
+        if not ans:
+            print 'aborting.'
+            raise SystemExit(1)
+    with open(version_file, 'w') as fhandle:
+        fhandle.write(new_file)
+        print 'version rewritten to {0}'.format(new_version)
 
 
 @api.task
