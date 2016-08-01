@@ -17,21 +17,20 @@ from fabric.contrib.files import exists as remote_exists
 
 from ._report import eprint
 from ._fabric import has_gem, list_dir
-from .aws import get_conn
 from .shell import unexpand
 from .backports import TemporaryDirectory
+from ymir.data import OPERATION_MAGIC
+
 NOOP = lambda *args, **kargs: None
 
 remote_path_exists = remote_exists
 
 __all__ = [x.__name__ for x in [
     TemporaryDirectory, NOOP,
-    get_conn,
+
     unexpand, list_dir,
     has_gem,
 ]]
-
-OPERATION_MAGIC = '_declared_ymir_operation'
 
 
 def declare_operation(fxn):

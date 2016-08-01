@@ -30,7 +30,7 @@ def test_get_conn_with_AWS_PROFILE_as_nonsense():
     """ """
     with mock.patch.dict(os.environ, {}):
         with pytest.raises(SystemExit):
-            util.get_conn()
+            util.aws.get_conn()
     with mock.patch.dict(os.environ, {'AWS_PROFILE': 'bd11cce2'}):
         with pytest.raises(SystemExit):
-            util.get_conn()
+            util.aws.get_conn()

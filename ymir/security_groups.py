@@ -62,7 +62,7 @@ def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
     logger.debug("Synchronizing security group: {0} -- {1}".format(
         name, description))
     assert rules and name
-    conn = conn or util.get_conn()
+    conn = conn or util.aws.get_conn()
     description = description or name
     csg_kargs = {}
     if vpc is not None:
@@ -87,9 +87,9 @@ def sg_sync(name=None, description=None, rules=[], vpc=None, conn=None):
 
     for rule in new_rules:
         print colors.blue('authorizing') + ' new rule: {0}'.format(rule),
-        util.catch_ec2_error(lambda rule=rule: sg.authorize(*rule))
+        util.aws.catch_ec2_error(lambda rule=rule: sg.authorize(*rule))
 
     for rule in stale_rules:
         print colors.red('revoking:') + \
             ' old rule: {0}'.format(rule)
-        util.catch_ec2_error(lambda rule=rule: sg.revoke(*rule))
+        util.aws.catch_ec2_error(lambda rule=rule: sg.revoke(*rule))

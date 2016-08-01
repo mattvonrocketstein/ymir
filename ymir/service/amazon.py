@@ -16,14 +16,14 @@ class AmazonService(AbstractService):
 
     def __init__(self, conn=None, **kargs):
         """"""
-        self.conn = conn or util.get_conn()
+        self.conn = conn or util.aws.get_conn()
         super(AmazonService, self).__init__(**kargs)
 
     def _get_instance(self, strict=False):
         """ """
         conn = self.conn
         name = self.template_data()['name']
-        i = util.get_instance_by_name(name, conn)
+        i = util.aws.get_instance_by_name(name, conn)
         if strict and i is None:
             err = "Could not acquire instance! Is the name '{0}' correct?"
             err = err.format(name)
@@ -172,7 +172,8 @@ class AmazonService(AbstractService):
             self.report("AWS profile: {0}".format(yellow(
                 os.environ.get('AWS_PROFILE', 'default'))))
         name = tdata['name']
-        instance = util.get_instance_by_name(name, self.conn)
+        # DON'T use self._get_instance(); recursion
+        instance = util.aws.get_instance_by_name(name, self.conn)
         result = dict(
             instance=None, ip=None,
             private_ip=None, tags=[],

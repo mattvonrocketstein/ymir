@@ -42,7 +42,7 @@ setup(
     # install_requires=reqs,
     install_requires=[
         "ansible==2.1.0.0",
-        "ansible-role==0.23",
+        "ansible-role==0.24",
         "awsebcli==3.1.2",
         "boto==2.36.0",
         "demjson==2.2.4",

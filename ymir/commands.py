@@ -39,7 +39,7 @@ def ymir_sg(args):
         return False
 
     def list_groups():
-        print [sg.name for sg in util.get_conn().get_all_security_groups()]
+        print [sg.name for sg in util.aws.get_conn().get_all_security_groups()]
 
     if args.list:
         return list_groups()
@@ -107,7 +107,7 @@ def ymir_shell(args):
     service = yapi.load_service_from_json()
     report("starting shell")
     user_ns = dict(
-        conn=util.get_conn(),
+        conn=util.aws.get_conn(),
         service=service)
     report("namespace: \n\n{0}\n\n".format(user_ns))
     try:
@@ -151,7 +151,7 @@ def ymir_list(args):
         $AWS_PROFILE
     """
     if args.keypairs:
-        print util.get_keypair_names()
+        print util.aws.get_keypair_names()
     elif args.instances:
         print util.show_instances()
     else:

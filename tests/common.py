@@ -47,9 +47,9 @@ def mock_aws(fxn):
     def newf(*args, **kargs):
         with contextlib.nested(
                 mock.patch.dict(os.environ, dict(AWS_PROFILE="!nonsense!")),
-                mock.patch('ymir.util.get_conn', fake_aws_conn),
-                mock.patch('ymir.util.get_tags', lambda *args: {}),
-                mock.patch('ymir.util.get_keypair_names', lambda *args: [])):
+                mock.patch('ymir.util.aws.get_tags', lambda *args: {}),
+                mock.patch('ymir.util.aws.get_conn', fake_aws_conn),
+                mock.patch('ymir.util.aws.get_keypair_names', lambda *args: [])):
             return fxn(*args, **kargs)
     return newf
 

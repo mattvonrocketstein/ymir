@@ -99,7 +99,7 @@ def validate_keypairs(service):
     pem_file = os.path.expanduser(pem_file)
     if not os.path.exists(pem_file):
         errors.append('pem file is not present: ' + pem_file)
-    keys = util.get_keypair_names()
+    keys = util.aws.get_keypair_names()
     key_name = service._service_json['key_name']
     if key_name not in keys:
         errors.append(

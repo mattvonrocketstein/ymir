@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""
+""" ymir.util.aws
+    boto helpers for doing various AWS stuff
 """
 import os
 import time
@@ -14,7 +15,7 @@ from ._report import eprint
 
 
 def get_instance_by_id(id, conn):
-    """ returns the id for the instance """
+    """ return the instance for the given ID """
     tmp = conn.get_only_instances([id])
     if not tmp:
         return
@@ -54,7 +55,7 @@ def get_conn(key_name=None, region='us-east-1'):
 
 
 def show_instances(conn=None):
-    """ """
+    """ shows all AWS instances on the given connection """
     conn = conn or get_conn()
     results = get_tags(None, conn).items()
     for i, tags in results:
@@ -67,7 +68,7 @@ def show_instances(conn=None):
 
 
 def get_instance_by_name(name, conn):
-    """ returns the id for the instance """
+    """ returns the id for the given instance """
     for i, tags in get_tags(None, conn).items():
         if tags.get('Name') == name and tags['status'] not in ydata.STATUS_DEAD:
             return conn.get_only_instances([i.id])[0]
