@@ -20,14 +20,15 @@ from ._fabric import has_gem, list_dir
 from .shell import unexpand
 from .backports import TemporaryDirectory
 from ymir.data import OPERATION_MAGIC
+from . import aws
 
 NOOP = lambda *args, **kargs: None
 
 remote_path_exists = remote_exists
 
 __all__ = [x.__name__ for x in [
+    aws,
     TemporaryDirectory, NOOP,
-
     unexpand, list_dir,
     has_gem,
 ]]

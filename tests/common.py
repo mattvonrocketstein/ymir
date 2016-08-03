@@ -42,6 +42,9 @@ def mock_service():
     service._status = mock.Mock(return_value=dict(ip=''))
     return service
 
+from contextlib import contextmanager
+noop_ctx = contextmanager(lambda *args, **kargs: (yield))
+
 
 def mock_aws(fxn):
     def newf(*args, **kargs):

@@ -24,7 +24,8 @@ def test_validate_health_checks():
             service = ctx.get_service()
         bad_check_type = 'nonexistant_check_type'
         service_json['health_checks'] = {
-            "foo": [bad_check_type, 'localhost']}  # should be dict
+            "foo": "{0}://{1}".format(
+                bad_check_type, 'localhost')}
         ctx.rewrite_json(service_json)
         service = ctx.get_service()
         errors, warnings, messages = validation.validate_health_checks(service)

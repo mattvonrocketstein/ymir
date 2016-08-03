@@ -22,7 +22,6 @@ def test_split_instruction():
         'ansible-playbook://foo') == ('ansible_playbook', 'foo')
     assert util.split_instruction(
         'ansible_playbook://foo') == ('ansible_playbook', 'foo')
-    assert util.split_instruction('foo') == ('puppet', 'foo')
     assert util.split_instruction('puppet://foo') == ('puppet', 'foo')
 
 

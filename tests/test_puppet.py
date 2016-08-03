@@ -6,6 +6,7 @@ import pytest
 import requests
 
 import tests.common as test_common
+noop_ctx = test_common.noop_ctx
 
 
 @test_common.mock_aws
@@ -22,17 +23,24 @@ def test_puppet_support():
 
 @test_common.mock_aws
 @mock.patch('ymir.util.puppet.run_puppet')
+@mock.patch('ymir.mixins.puppet.PuppetMixin._rvm_ctx', new=noop_ctx)
 def test_provision_puppet(run_puppet):
     with test_common.demo_service() as ctx:
         ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
-        service._provision_puppet("puppet/zoo.pp")
-        assert run_puppet.called
+        pfile = "puppet/zoo.pp"
+        service._provision_puppet(pfile)
+        run_puppet.assert_called_once_with(
+            pfile,
+            debug=service._debug_mode,
+            facts=service.facts,
+            parser=u'future',
+            puppet_dir='puppet')
 
 
 @test_common.mock_aws
-@mock.patch('ymir.mixins.puppet.rsync_project')
-@mock.patch('ymir.mixins.puppet.PuppetMixin._require_rsync')
+@mock.patch('ymir.mixins.rsync.rsync_project')
+@mock.patch('ymir.mixins.rsync.RsyncMixin._require_rsync')
 def test_copy_puppet(rsync_mock, _require_rsync):
     with test_common.demo_service() as ctx:
         ctx.rewrite_json(ymir_build_puppet=True)
@@ -47,7 +55,7 @@ def test_puppet_template_vars():
     with test_common.demo_service() as ctx:
         ctx.rewrite_json(ymir_build_puppet=True)
         service = ctx.get_service()
-        file_to_vars_map = service._puppet_template_vars
+        file_to_vars_map = service._get_puppet_template_vars()
         aggreg = lambda x, y: x + y
         all_vars = reduce(aggreg, file_to_vars_map.values())
         # operatingsystem variable is used in motd.erb templates
@@ -57,7 +65,7 @@ def test_puppet_template_vars():
 @test_common.mock_aws
 @mock.patch('ymir.mixins._ansible.AnsibleMixin._provision_ansible')
 @mock.patch('fabric.api.run')
-@mock.patch('ymir.mixins.puppet.PuppetMixin._has_rsync')
+@mock.patch('ymir.mixins.rsync.RsyncMixin._has_rsync')
 @mock.patch('ymir.mixins.packages.PackageMixin._update_system_packages')
 def test_require_rsync(_update_system_packages, has_rsync, run, _provision_ansible):
     has_rsync.return_value = False
