@@ -52,7 +52,7 @@ setup(
         "pycrypto==2.6.1",
         "pyterminalsize==0.1.0",
         "python-vagrant==0.5.13",
-        "requests==2.5.1",
+        "requests==2.20.0",
         "retrying==1.3.3",
         "testinfra==1.3.0",
         "voluptuous==0.8.11",
