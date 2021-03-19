@@ -48,7 +48,7 @@ setup(
         "demjson==2.2.4",
         "Fabric==1.10.1",
         "Importing==1.10",
-        "Jinja2==2.8",
+        "Jinja2==2.11.3",
         "pycrypto==2.6.1",
         "pyterminalsize==0.1.0",
         "python-vagrant==0.5.13",
